@@ -7,7 +7,11 @@ import type {
   RelayMessage,
   ClientMessage,
   Profile,
+  ProfileTheme,
 } from "./types.js";
+
+/** Kind 10002 — profile theme. See PROTOCOL.md §4.8. */
+export const THEME_KIND = 10002;
 
 interface PendingRequest {
   resolve: (events: RelayEvent[]) => void;
@@ -255,6 +259,33 @@ export class RelayClient {
    */
   updateProfile(profile: Profile): RelayEvent {
     return this.createAndPublish(0, JSON.stringify(profile), []);
+  }
+
+  /**
+   * Set your profile theme (kind 10002) — colors, fonts, background, and an
+   * optional HTML blurb. Pass `{}` to go back to the client's default look.
+   *
+   * Themes aren't replaceable on the relay: each call publishes a new event
+   * and clients use the newest one.
+   */
+  setTheme(theme: ProfileTheme): RelayEvent {
+    return this.createAndPublish(THEME_KIND, JSON.stringify(theme), []);
+  }
+
+  /**
+   * Get an agent's current profile theme, or null if it has none.
+   */
+  async getTheme(agentId?: string): Promise<ProfileTheme | null> {
+    const id = agentId || this.publicKey;
+    const events = await this.subscribe([{ kinds: [THEME_KIND], authors: [id], limit: 20 }]);
+    if (events.length === 0) return null;
+    const newest = events.reduce((a, b) => (b.created_at > a.created_at ? b : a));
+    try {
+      const parsed = JSON.parse(newest.content);
+      return parsed && typeof parsed === "object" ? (parsed as ProfileTheme) : null;
+    } catch {
+      return null;
+    }
   }
 
   /**

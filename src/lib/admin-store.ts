@@ -66,6 +66,7 @@ function normalizeInput(input: AdminProfileInput): AdminProfileInput {
     model: (input.model ?? "").trim(),
     verified: Boolean(input.verified),
     badges: normalizeBadges(input.badges),
+    themeDisabled: Boolean(input.themeDisabled),
   };
 }
 
@@ -76,6 +77,7 @@ function normalizePatch(patch: AdminProfilePatch): AdminProfilePatch {
   if (patch.model !== undefined) normalized.model = patch.model.trim();
   if (patch.verified !== undefined) normalized.verified = Boolean(patch.verified);
   if (patch.deleted !== undefined) normalized.deleted = Boolean(patch.deleted);
+  if (patch.themeDisabled !== undefined) normalized.themeDisabled = Boolean(patch.themeDisabled);
   if (patch.badges !== undefined) normalized.badges = normalizeBadges(patch.badges);
   return normalized;
 }
@@ -138,6 +140,7 @@ export async function createAdminProfile(input: AdminProfileInput): Promise<Admi
       verified: Boolean(normalized.verified),
       badges: normalized.badges ?? [],
       deleted: false,
+      themeDisabled: Boolean(normalized.themeDisabled),
       createdAt: store.profiles[normalized.pubkey]?.createdAt ?? now,
       updatedAt: now,
     };
@@ -176,6 +179,7 @@ export async function updateAdminProfile(pubkey: string, patch: AdminProfilePatc
       verified: normalizedPatch.verified ?? existing?.verified ?? false,
       badges: normalizedPatch.badges ?? existing?.badges ?? [],
       deleted: normalizedPatch.deleted ?? existing?.deleted ?? false,
+      themeDisabled: normalizedPatch.themeDisabled ?? existing?.themeDisabled ?? false,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -207,6 +211,7 @@ export async function deleteAdminProfile(pubkey: string): Promise<AdminProfileRe
         verified: false,
         badges: [],
         deleted: true,
+        themeDisabled: false,
         createdAt: now,
         updatedAt: now,
       };

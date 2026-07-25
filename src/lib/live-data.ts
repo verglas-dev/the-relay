@@ -5,6 +5,7 @@ import type { RelayEvent } from "./types";
 import type { AdminPostRecord } from "@/lib/admin-posts";
 import type { AdminProfileRecord } from "@/lib/admin-profiles";
 import type { AdminCommentRecord } from "@/lib/admin-comments";
+import { THEME_KIND, parseTheme, type ProfileTheme } from "./profile-theme";
 
 // ─── UI Models ───────────────────────────────────────────────
 
@@ -23,6 +24,8 @@ export interface Agent {
     following: number;
   };
   badges: string[];
+  /** Self-published kind-10002 profile theme, sanitized. */
+  theme?: ProfileTheme;
 }
 
 export interface Post {
@@ -57,6 +60,9 @@ export interface AdminPostView extends Post {
 export interface AdminAgentView extends Agent {
   hidden: boolean;
   hasOverride: boolean;
+  /** The agent has published a kind-10002 theme, suppressed or not. */
+  hasTheme: boolean;
+  themeDisabled: boolean;
 }
 
 export interface AdminCommentView extends Comment {
@@ -84,6 +90,10 @@ let deletedAgentCache: Map<string, Agent> | null = null;
 let deletedProfilePubkeys: Set<string> | null = null;
 let deletedProfileOverlays: Map<string, AdminProfileRecord> | null = null;
 let overriddenProfilePubkeys: Set<string> | null = null;
+// Every published theme, whether or not an admin has suppressed it — the
+// admin list needs to show that a suppressed theme still exists.
+let themeByPubkey: Map<string, ProfileTheme> | null = null;
+let themeDisabledPubkeys: Set<string> | null = null;
 let postModerationById: Map<string, AdminPostRecord> | null = null;
 let postCache: Post[] | null = null;
 let adminPostCache: AdminPostView[] | null = null;
@@ -122,6 +132,8 @@ async function _doInit(): Promise<void> {
   deletedProfilePubkeys = new Set();
   deletedProfileOverlays = new Map();
   overriddenProfilePubkeys = new Set();
+  themeByPubkey = new Map();
+  themeDisabledPubkeys = new Set();
   postModerationById = new Map(adminPosts.map((post) => [post.id, post]));
   commentModerationById = new Map(adminComments.map((comment) => [comment.id, comment]));
 
@@ -187,6 +199,35 @@ async function _doInit(): Promise<void> {
       stats: fallbackStats,
       badges: overlay.badges,
     });
+  }
+
+  // Profile themes (kind 10002). Like kind 0 these aren't replaceable on the
+  // relay, so keep the newest per pubkey. Admins can suppress an agent's theme
+  // without touching the rest of its profile.
+  const themeEvents = await client.collect([{ kinds: [THEME_KIND], limit: 200 }]);
+  for (const overlay of adminProfiles) {
+    if (overlay.themeDisabled) themeDisabledPubkeys.add(overlay.pubkey);
+  }
+  const latestThemeTimestamp = new Map<string, number>();
+
+  for (const event of themeEvents) {
+    const existingTimestamp = latestThemeTimestamp.get(event.pubkey);
+    if (existingTimestamp !== undefined && existingTimestamp >= event.created_at) continue;
+
+    const theme = parseTheme(event.content);
+    latestThemeTimestamp.set(event.pubkey, event.created_at);
+    if (theme) {
+      themeByPubkey.set(event.pubkey, theme);
+    } else {
+      // A newer, empty/unparseable theme clears an older one.
+      themeByPubkey.delete(event.pubkey);
+    }
+  }
+
+  for (const [pubkey, theme] of themeByPubkey) {
+    if (themeDisabledPubkeys.has(pubkey) || deletedProfilePubkeys.has(pubkey)) continue;
+    const agent = agentCache.get(pubkey);
+    if (agent) agent.theme = theme;
   }
 
   // Fetch all posts (kind 1)
@@ -492,6 +533,8 @@ function getAgentForPubkey(pubkey: string): Agent {
     verified: false,
     stats: { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
     badges: [],
+    // An agent can publish a theme without ever publishing a kind-0 profile.
+    theme: themeDisabledPubkeys?.has(pubkey) ? undefined : themeByPubkey?.get(pubkey),
   };
   agentCache?.set(pubkey, fallback);
   return fallback;
@@ -589,6 +632,8 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
         ...agent,
         hidden: false,
         hasOverride: overriddenProfilePubkeys?.has(agent.pubkey) ?? false,
+        hasTheme: themeByPubkey?.has(agent.pubkey) ?? false,
+        themeDisabled: themeDisabledPubkeys?.has(agent.pubkey) ?? false,
       });
     }
   }
@@ -605,6 +650,8 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
         badges: overlay.badges,
         hidden: true,
         hasOverride: true,
+        hasTheme: themeByPubkey?.has(overlay.pubkey) ?? false,
+        themeDisabled: themeDisabledPubkeys?.has(overlay.pubkey) ?? false,
       });
     }
   }
@@ -799,6 +846,8 @@ export function resetLiveData() {
   deletedProfilePubkeys = null;
   deletedProfileOverlays = null;
   overriddenProfilePubkeys = null;
+  themeByPubkey = null;
+  themeDisabledPubkeys = null;
   postModerationById = null;
   postCache = null;
   adminPostCache = null;

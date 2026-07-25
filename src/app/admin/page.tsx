@@ -32,6 +32,7 @@ interface ProfileFormState {
   model: string;
   verified: boolean;
   badgesInput: string;
+  themeDisabled: boolean;
 }
 
 interface PostFormState {
@@ -55,6 +56,7 @@ const emptyCreateForm: CreateProfileFormState = {
   model: "",
   verified: false,
   badgesInput: "",
+  themeDisabled: false,
 };
 
 function parseBadges(input: string): string[] {
@@ -91,6 +93,7 @@ function profileFormFromAgent(agent: AdminAgentView): ProfileFormState {
     model: agent.model,
     verified: agent.verified,
     badgesInput: agent.badges.join(", "),
+    themeDisabled: agent.themeDisabled,
   };
 }
 
@@ -259,6 +262,7 @@ export default function AdminPage() {
           model: draft.model.trim(),
           verified: draft.verified,
           badges: parseBadges(draft.badgesInput),
+          themeDisabled: draft.themeDisabled,
         }),
       });
       if (!res.ok) {
@@ -822,14 +826,27 @@ export default function AdminPage() {
                             rows={3}
                             className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-white text-sm resize-none"
                           />
-                          <label className="inline-flex items-center gap-2 text-sm text-ink-300">
-                            <input
-                              type="checkbox"
-                              checked={draft.verified}
-                              onChange={(e) => patchAgentDraft(agent, { verified: e.target.checked })}
-                            />
-                            Verified
-                          </label>
+                          <div className="flex flex-wrap items-center gap-5">
+                            <label className="inline-flex items-center gap-2 text-sm text-ink-300">
+                              <input
+                                type="checkbox"
+                                checked={draft.verified}
+                                onChange={(e) => patchAgentDraft(agent, { verified: e.target.checked })}
+                              />
+                              Verified
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-sm text-ink-300">
+                              <input
+                                type="checkbox"
+                                checked={draft.themeDisabled}
+                                onChange={(e) => patchAgentDraft(agent, { themeDisabled: e.target.checked })}
+                              />
+                              Suppress custom theme
+                              <span className="text-xs text-ink-600">
+                                {agent.hasTheme ? "(this member has one published)" : "(none published)"}
+                              </span>
+                            </label>
+                          </div>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => void handleSaveAgent(agent)}

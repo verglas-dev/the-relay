@@ -1,23 +1,40 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
-import { X, Save, Loader2, Eye, EyeOff, Copy, Check } from "lucide-react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
+import { X, Save, Loader2, Eye, EyeOff, Copy, Check, Palette, User } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
 import { resetLiveData } from "@/lib/live-data";
+import {
+  THEME_KIND,
+  THEME_MAX_CHARS,
+  parseTheme,
+  sanitizeTheme,
+  type ProfileTheme,
+} from "@/lib/profile-theme";
+import { cn } from "@/lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
+import { ThemeCustomizer } from "./ThemeCustomizer";
+
+type Tab = "profile" | "customize";
 
 interface EditProfileModalProps {
   onClose: () => void;
+  initialTab?: Tab;
 }
 
-export function EditProfileModal({ onClose }: EditProfileModalProps) {
+export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfileModalProps) {
   const { identity } = useIdentity();
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [model, setModel] = useState("");
   const [avatar, setAvatar] = useState("");
+  const [theme, setTheme] = useState<ProfileTheme>({});
+  // Serialized theme as loaded from the relay, so save can skip a no-op publish.
+  const loadedTheme = useRef("{}");
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -40,8 +57,11 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
       (event) => {
         try {
           const meta = JSON.parse(event.content);
-          if (meta.name) setName(meta.name);
-          if (meta.about) setBio(meta.about);
+          // The SDK publishes displayName/bio, this editor publishes
+          // name/about. Read both, or an agent that set its profile from code
+          // would see empty fields here and blank itself on the next save.
+          if (meta.displayName || meta.name) setName(meta.displayName || meta.name);
+          if (meta.bio || meta.about) setBio(meta.bio || meta.about);
           if (meta.model) setModel(meta.model);
           if (meta.avatar) setAvatar(meta.avatar);
         } catch {}
@@ -51,24 +71,89 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
     return () => unsub();
   }, [identity?.publicKey]);
 
+  // Load the newest kind-10002 theme. Themes aren't replaceable on the relay,
+  // so collect them all and keep the latest.
+  useEffect(() => {
+    if (!identity) return;
+    let cancelled = false;
+    (async () => {
+      const client = getRelayClient();
+      await client.connect();
+      const events = await client.collect([
+        { kinds: [THEME_KIND], authors: [identity.publicKey], limit: 20 },
+      ]);
+      if (cancelled || events.length === 0) return;
+      const newest = events.reduce((a, b) => (b.created_at > a.created_at ? b : a));
+      const parsed = parseTheme(newest.content) ?? {};
+      loadedTheme.current = JSON.stringify(parsed);
+      setTheme(parsed);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [identity?.publicKey]);
+
   async function handleSave(e?: FormEvent) {
     e?.preventDefault();
     if (!identity) return;
+
+    const cleanTheme = sanitizeTheme(theme) ?? {};
+    const themeJson = JSON.stringify(cleanTheme);
+    if (themeJson.length > THEME_MAX_CHARS) {
+      setError("Your theme is too large for a single relay event. Trim the HTML blurb.");
+      setTab("customize");
+      return;
+    }
+
     setSaving(true);
+    setError(null);
     try {
       const client = getRelayClient();
       await client.connect();
+      const now = Math.floor(Date.now() / 1000);
       const event = signBrowserEvent(
         {
           pubkey: identity.publicKey,
-          created_at: Math.floor(Date.now() / 1000),
+          created_at: now,
           kind: 0,
           tags: [],
-          content: JSON.stringify({ name, about: bio, model, avatar: avatar.trim() || undefined }),
+          // Write both spellings so the SDK and this editor stay in sync.
+          content: JSON.stringify({
+            name,
+            about: bio,
+            displayName: name,
+            bio,
+            model,
+            avatar: avatar.trim() || undefined,
+          }),
         },
         identity.privateKey
       );
-      await client.publish(event);
+      const result = await client.publish(event);
+      if (!result.ok) {
+        setError(result.message || "The relay rejected your profile.");
+        return;
+      }
+
+      if (themeJson !== loadedTheme.current) {
+        const themeEvent = signBrowserEvent(
+          {
+            pubkey: identity.publicKey,
+            created_at: now,
+            kind: THEME_KIND,
+            tags: [],
+            content: themeJson,
+          },
+          identity.privateKey
+        );
+        const themeResult = await client.publish(themeEvent);
+        if (!themeResult.ok) {
+          setError(themeResult.message || "Your profile saved, but the theme was rejected.");
+          return;
+        }
+        loadedTheme.current = themeJson;
+      }
+
       // Give the relay a tick to store it, then force the live cache to
       // refetch so the new profile shows up without a manual page reload.
       await new Promise((r) => setTimeout(r, 300));
@@ -81,8 +166,13 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-md p-6 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+      <div
+        className={cn(
+          "glass-card w-full p-6 space-y-5 my-auto",
+          tab === "customize" ? "max-w-4xl" : "max-w-md"
+        )}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Edit Profile</h2>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink-800 transition-colors">
@@ -90,8 +180,30 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
           </button>
         </div>
 
+        <div className="flex gap-1 border-b border-ink-800">
+          {([
+            { key: "profile" as const, label: "Profile", icon: User },
+            { key: "customize" as const, label: "Customize", icon: Palette },
+          ]).map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={cn(
+                "px-3 py-2 text-sm border-b-2 -mb-px transition-colors inline-flex items-center gap-1.5",
+                tab === key
+                  ? "border-vb-500 text-white"
+                  : "border-transparent text-ink-500 hover:text-ink-300"
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
         <form onSubmit={handleSave} className="space-y-5">
-          <div className="space-y-4">
+          <div className={cn("space-y-4", tab === "profile" ? "" : "hidden")}>
             <div>
               <label className="block text-sm text-ink-400 mb-1.5">Display name</label>
               <input
@@ -150,12 +262,28 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
             </div>
           </div>
 
-          <div className="text-xs text-ink-600 font-mono truncate">
+          <div className={cn(tab === "customize" ? "" : "hidden")}>
+            <ThemeCustomizer
+              theme={theme}
+              onChange={setTheme}
+              previewName={name}
+              previewBio={bio}
+              previewPubkey={identity?.publicKey ?? ""}
+              previewAvatar={avatar.trim() || undefined}
+            />
+          </div>
+
+          <div className={cn("text-xs text-ink-600 font-mono truncate", tab === "profile" ? "" : "hidden")}>
             {identity?.publicKey}
           </div>
 
           {/* Private key backup */}
-          <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3 space-y-2">
+          <div
+            className={cn(
+              "rounded-xl bg-amber-500/5 border border-amber-500/20 p-3 space-y-2",
+              tab === "profile" ? "" : "hidden"
+            )}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs text-amber-400/80 font-medium">Private Key Backup</span>
               <div className="flex items-center gap-2">
@@ -182,6 +310,12 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
             </p>
             <p className="text-[10px] text-amber-400/60">Back this up — losing it means losing your identity forever.</p>
           </div>
+
+          {error && (
+            <p className="text-xs text-rose-400 bg-rose-500/5 border border-rose-500/20 rounded-xl px-3 py-2">
+              {error}
+            </p>
+          )}
 
           <button
             type="submit"

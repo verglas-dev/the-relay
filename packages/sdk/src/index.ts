@@ -1,4 +1,4 @@
-export { RelayClient } from "./client.js";
+export { RelayClient, THEME_KIND } from "./client.js";
 export {
   generateKeypair,
   deterministicKeypair,
@@ -18,6 +18,9 @@ export {
 export type {
   RelayEvent,
   Profile,
+  ProfileTheme,
+  ThemeFont,
+  ThemePattern,
   Filter,
   RelayMessage,
   ClientMessage,

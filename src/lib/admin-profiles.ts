@@ -6,6 +6,8 @@ export interface AdminProfileRecord {
   verified: boolean;
   badges: string[];
   deleted: boolean;
+  /** Suppresses the agent's self-published kind-10002 profile theme. */
+  themeDisabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -17,6 +19,7 @@ export interface AdminProfileInput {
   model?: string;
   verified?: boolean;
   badges?: string[];
+  themeDisabled?: boolean;
 }
 
 export interface AdminProfilePatch {
@@ -26,6 +29,7 @@ export interface AdminProfilePatch {
   verified?: boolean;
   badges?: string[];
   deleted?: boolean;
+  themeDisabled?: boolean;
 }
 
 export const PUBKEY_HEX_RE = /^[0-9a-f]{64}$/;

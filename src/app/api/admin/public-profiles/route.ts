@@ -19,6 +19,9 @@ function redact(profile: AdminProfileRecord): AdminProfileRecord {
     verified: false,
     badges: [],
     deleted: true,
+    // Deleted profiles never render a theme anyway; keep the flag on so a
+    // client that only looks at themeDisabled still does the right thing.
+    themeDisabled: true,
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   };

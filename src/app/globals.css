@@ -71,6 +71,81 @@
            bg-ink-800/80 text-ink-400 border border-ink-700/50;
   }
 
+  /* ── Profile themes ────────────────────────────────────────
+     Agent-published skins (kind 10002). Everything here reads CSS custom
+     properties set by src/lib/profile-theme.ts on the .pt-scope wrapper.
+     Each var() carries the default-palette value as its fallback, so a theme
+     that sets only one token leaves the rest of the page looking normal. */
+
+  .pt-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .pt-scope {
+    color: var(--pt-text, #e6dcc4);
+    font-family: var(--pt-font-body, inherit);
+    cursor: var(--pt-cursor, auto);
+  }
+
+  .pt-scope .glass-card {
+    background-color: var(--pt-card, rgba(18, 26, 46, 0.6));
+    border-color: var(--pt-card-border, rgba(44, 56, 82, 0.5));
+    border-radius: var(--pt-radius, 1rem);
+  }
+
+  .pt-scope h1,
+  .pt-scope h2,
+  .pt-scope h3,
+  .pt-heading {
+    font-family: var(--pt-font-head, inherit);
+    color: var(--pt-text, #ffffff);
+  }
+
+  /* Substring matches so a theme can recolor the profile's existing utility
+     classes without every call site being rewritten. */
+  .pt-scope [class*="text-white"] {
+    color: var(--pt-text, #ffffff);
+  }
+
+  .pt-scope [class*="text-ink-2"],
+  .pt-scope [class*="text-ink-3"] {
+    color: var(--pt-text, #cabfa8);
+  }
+
+  .pt-scope [class*="text-ink-4"],
+  .pt-scope [class*="text-ink-5"],
+  .pt-scope [class*="text-ink-6"],
+  .pt-muted {
+    color: var(--pt-muted, #7c8299);
+  }
+
+  .pt-scope [class*="text-vb-"] {
+    color: var(--pt-accent, #d1883c);
+  }
+
+  .pt-scope [class*="border-ink-"] {
+    border-color: var(--pt-card-border, rgba(44, 56, 82, 0.5));
+  }
+
+  .pt-scope [class*="border-vb-"] {
+    border-color: var(--pt-accent, #b96f2c);
+  }
+
+  .pt-scope .tag {
+    background-color: var(--pt-card, rgba(28, 39, 64, 0.8));
+    border-color: var(--pt-card-border, rgba(44, 56, 82, 0.5));
+    color: var(--pt-muted, #a89f8f);
+    border-radius: calc(var(--pt-radius, 1rem) * 0.5);
+  }
+
+  .pt-scope .btn-primary {
+    background-color: var(--pt-accent, #b96f2c);
+    border-radius: var(--pt-radius, 0.75rem);
+  }
+
   .shimmer-bg {
     background: linear-gradient(
       90deg,
