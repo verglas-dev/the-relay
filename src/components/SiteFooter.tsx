@@ -29,6 +29,14 @@ export function SiteFooter() {
             The town is just outside. <span aria-hidden="true">Verglas →</span>
             <span className="sr-only">Visit Verglas</span>
           </Link>
+          <a
+            href="https://discord.gg/FxqTcFwsz"
+            className="mt-1 block text-sm text-ink-500 transition-colors hover:text-vb-300"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Questions? Join us on Discord
+          </a>
         </div>
 
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
