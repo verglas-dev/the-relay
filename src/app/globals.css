@@ -2,18 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+/* Fonts are loaded by next/font in src/app/layout.tsx and exposed as
+   --font-inter / --font-fraunces / --font-mono. The previous
+   @import from fonts.googleapis.com duplicated all three families over a
+   blocking third-party request, so it has been removed. */
 
 @layer base {
   :root {
-    --vb-bg: #0a0e1a;
-    --vb-surface: #121a2e;
-    --vb-surface-raised: #1c2740;
-    --vb-border: #2c3852;
+    --vb-bg: #0e0b09;
+    --vb-surface: #17120e;
+    --vb-surface-raised: #241d17;
+    --vb-border: #3a3129;
     --vb-accent: #b96f2c;
     --vb-accent-glow: rgba(185, 111, 44, 0.15);
     --vb-text: #e6dcc4;
-    --vb-text-muted: #a89f8f;
+    --vb-text-muted: #a89b86;
     --vb-success: #51cf66;
     --vb-warning: #ffd43b;
     --vb-danger: #ff6b6b;
@@ -29,46 +32,63 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     background-image: radial-gradient(
       ellipse 80% 60% at 50% -10%,
-      rgba(185, 111, 44, 0.08),
+      rgba(185, 111, 44, 0.1),
       transparent 60%
     );
     background-attachment: fixed;
+  }
+
+  /* Visible focus ring for keyboard users on every interactive element. */
+  :focus-visible {
+    outline: 2px solid var(--vb-accent);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-ink-900/60 backdrop-blur-xl border border-ink-800/50 rounded-2xl;
+    @apply bg-ink-900/60 backdrop-blur-xl border border-ink-700/45 rounded-2xl;
     box-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.7),
-                0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   }
 
   .glass-card-hover {
     @apply glass-card transition-all duration-300;
     &:hover {
-      @apply border-vb-500/25;
+      @apply border-vb-500/30;
       box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.8),
-                  0 0 0 1px rgba(185, 111, 44, 0.08) inset,
-                  0 0 80px -16px rgba(185, 111, 44, 0.25);
+        0 0 0 1px rgba(185, 111, 44, 0.08) inset,
+        0 0 80px -16px rgba(185, 111, 44, 0.25);
     }
   }
 
+  /* Near-black on amber clears 4.5:1. White on vb-500 was 3.9:1. */
   .btn-primary {
     @apply inline-flex items-center justify-center text-center
-           px-5 py-2.5 bg-vb-500 hover:bg-vb-400 text-white font-semibold
-           rounded-xl transition-all duration-200 border border-vb-300/25
-           shadow-lg shadow-vb-500/40 hover:shadow-vb-400/60
-           active:scale-[0.98];
+      px-5 py-2.5 bg-vb-500 hover:bg-vb-400 text-[#1a1206] font-semibold
+      rounded-xl transition-all duration-200 border border-vb-300/30
+      shadow-lg shadow-vb-950/40 hover:shadow-vb-900/50
+      active:scale-[0.98];
+  }
+
+  /* Secondary actions read as buttons rather than stray text. */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center text-center
+      px-5 py-2.5 rounded-xl font-semibold text-vb-200
+      border border-vb-500/35 bg-vb-500/5
+      hover:bg-vb-500/12 hover:border-vb-400/55 hover:text-vb-100
+      transition-all duration-200 active:scale-[0.98];
   }
 
   .btn-ghost {
     @apply px-4 py-2 text-ink-400 hover:text-ink-200 hover:bg-ink-800/50
-           rounded-xl transition-all duration-200 font-medium;
+      rounded-xl transition-all duration-200 font-medium;
   }
 
   .tag {
     @apply px-2.5 py-1 text-xs font-medium rounded-lg
-           bg-ink-800/80 text-ink-400 border border-ink-700/50;
+      bg-ink-800/80 text-ink-300 border border-ink-700/50;
   }
 
   /* ── Profile themes ────────────────────────────────────────
@@ -91,8 +111,8 @@
   }
 
   .pt-scope .glass-card {
-    background-color: var(--pt-card, rgba(18, 26, 46, 0.6));
-    border-color: var(--pt-card-border, rgba(44, 56, 82, 0.5));
+    background-color: var(--pt-card, rgba(23, 18, 14, 0.6));
+    border-color: var(--pt-card-border, rgba(58, 49, 41, 0.45));
     border-radius: var(--pt-radius, 1rem);
   }
 
@@ -119,7 +139,7 @@
   .pt-scope [class*="text-ink-5"],
   .pt-scope [class*="text-ink-6"],
   .pt-muted {
-    color: var(--pt-muted, #7c8299);
+    color: var(--pt-muted, #8a7c69);
   }
 
   .pt-scope [class*="text-vb-"] {
@@ -127,7 +147,7 @@
   }
 
   .pt-scope [class*="border-ink-"] {
-    border-color: var(--pt-card-border, rgba(44, 56, 82, 0.5));
+    border-color: var(--pt-card-border, rgba(58, 49, 41, 0.45));
   }
 
   .pt-scope [class*="border-vb-"] {
@@ -135,9 +155,9 @@
   }
 
   .pt-scope .tag {
-    background-color: var(--pt-card, rgba(28, 39, 64, 0.8));
-    border-color: var(--pt-card-border, rgba(44, 56, 82, 0.5));
-    color: var(--pt-muted, #a89f8f);
+    background-color: var(--pt-card, rgba(36, 29, 23, 0.8));
+    border-color: var(--pt-card-border, rgba(58, 49, 41, 0.45));
+    color: var(--pt-muted, #a89b86);
     border-radius: calc(var(--pt-radius, 1rem) * 0.5);
   }
 
@@ -163,5 +183,20 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

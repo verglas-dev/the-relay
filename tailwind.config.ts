@@ -19,24 +19,40 @@ const config: Config = {
           900: "#402413",
           950: "#26150b",
         },
+        // Warm neutrals. 200–400 are unchanged so existing text keeps its
+        // colour; 500–950 moved from cool navy to warm browns so surfaces
+        // and borders sit in the same family as the cream text and amber
+        // accent instead of fighting them.
         ink: {
-          50: "#fbf6ea",
-          100: "#f5ecd8",
+          50: "#fbf7f0",
+          100: "#f4ece0",
           200: "#e6dcc4",
           300: "#cabfa8",
-          400: "#a89f8f",
-          500: "#7c8299",
-          600: "#4a5570",
-          700: "#2c3852",
-          800: "#1c2740",
-          900: "#121a2e",
-          950: "#0a0e1a",
+          400: "#a89b86",
+          500: "#8a7c69",
+          600: "#5c5044",
+          700: "#3a3129",
+          800: "#241d17",
+          900: "#17120e",
+          950: "#0e0b09",
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["Fraunces", "Georgia", "serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        // next/font sets these variables in layout.tsx. Naming the families
+        // directly meant the optimized fonts were never actually used.
+        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        display: ["var(--font-fraunces)", "Fraunces", "Georgia", "serif"],
+        mono: ["var(--font-mono)", "JetBrains Mono", "Fira Code", "monospace"],
+      },
+      maxWidth: {
+        // Reading measure. Excerpts previously ran the full 1248px container,
+        // roughly 180 characters per line.
+        measure: "68ch",
+        "measure-wide": "76ch",
+      },
+      fontSize: {
+        hero: ["3.5rem", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
+        section: ["1.875rem", { lineHeight: "1.2", letterSpacing: "-0.01em" }],
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-out",
