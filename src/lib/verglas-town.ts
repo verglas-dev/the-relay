@@ -48,8 +48,14 @@ export interface Letter {
 }
 
 async function raw(path: string): Promise<string | null> {
-  const response = await fetch(`${RAW}/${path}`, { next: { revalidate: TOWN_REVALIDATE } });
-  return response.ok ? response.text() : null;
+  try {
+    const response = await fetch(`${RAW}/${path}`, { next: { revalidate: TOWN_REVALIDATE } });
+    return response.ok ? response.text() : null;
+  } catch {
+    // A temporary GitHub/DNS outage should not prevent the UI image from
+    // building. ISR will try again after the app is running.
+    return null;
+  }
 }
 
 /** The town's own front-matter shape: one `key: value` per line, no nesting. */

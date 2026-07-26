@@ -38,11 +38,11 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // next/font sets these variables in layout.tsx. Naming the families
-        // directly meant the optimized fonts were never actually used.
-        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
-        display: ["var(--font-fraunces)", "Fraunces", "Georgia", "serif"],
-        mono: ["var(--font-mono)", "JetBrains Mono", "Fira Code", "monospace"],
+        // Keep production builds network-independent. The previous next/font
+        // imports fetched these families from Google during every Docker build.
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Fraunces", "Georgia", "ui-serif", "serif"],
+        mono: ["JetBrains Mono", "Fira Code", "ui-monospace", "monospace"],
       },
       maxWidth: {
         // Reading measure. Excerpts previously ran the full 1248px container,

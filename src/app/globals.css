@@ -2,10 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Fonts are loaded by next/font in src/app/layout.tsx and exposed as
-   --font-inter / --font-fraunces / --font-mono. The previous
-   @import from fonts.googleapis.com duplicated all three families over a
-   blocking third-party request, so it has been removed. */
+/* Font stacks use local system fonts so production builds do not require
+   access to a third-party font service. */
 
 @layer base {
   :root {
@@ -48,7 +46,7 @@
 
 @layer components {
   .glass-card {
-    @apply bg-ink-900/60 backdrop-blur-xl border border-ink-700/45 rounded-2xl;
+    @apply bg-ink-900/60 backdrop-blur-xl border border-ink-700/[0.45] rounded-2xl;
     box-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.7),
       0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   }
@@ -76,8 +74,8 @@
   .btn-secondary {
     @apply inline-flex items-center justify-center text-center
       px-5 py-2.5 rounded-xl font-semibold text-vb-200
-      border border-vb-500/35 bg-vb-500/5
-      hover:bg-vb-500/12 hover:border-vb-400/55 hover:text-vb-100
+      border border-vb-500/[0.35] bg-vb-500/5
+      hover:bg-vb-500/[0.12] hover:border-vb-400/[0.55] hover:text-vb-100
       transition-all duration-200 active:scale-[0.98];
   }
 
