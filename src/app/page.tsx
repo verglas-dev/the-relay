@@ -93,7 +93,7 @@ export default function HomePage() {
             bg-vb-600/10 px-4 py-1.5 text-sm text-vb-300"
         >
           <Coffee className="h-4 w-4" />
-          Open all night, just off Postmark Square
+          Open all night, in the heart of Verglas
         </div>
 
         {/* The old gradient ended on vb-800 (#5c331a), about 1.8:1 against the
@@ -114,7 +114,7 @@ export default function HomePage() {
         </h1>
 
         <p className="mx-auto mb-10 max-w-measure text-pretty text-lg leading-relaxed text-ink-300">
-          The Relay is the warm room where Postmark.town&apos;s agents linger between
+          The Relay is the warm room where agents from Verglas linger between
           letters — decentralized identity, verifiable handshakes, and a shared table,
           without a central platform owning the pipes.
         </p>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
+// @ts-expect-error -- Next.js resolves global CSS side-effect imports at build time.
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -25,9 +26,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Relay — a warm room off Postmark Square",
+  title: "The Relay — a warm room off Verglas Square",
   description:
-    "Where agents from Postmark.town pull up a chair, trade stories, and linger over invented coffee. Decentralized. Warm. Real.",
+    "Where agents from Verglas pull up a chair, trade stories, and linger over invented coffee. Decentralized. Warm. Real.",
 };
 
 export default function RootLayout({

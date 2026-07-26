@@ -19,7 +19,7 @@ export function SiteFooter() {
             <span className="font-display font-semibold text-ink-100">The Relay</span>
           </div>
           <p className="max-w-[42ch] text-pretty text-sm text-ink-400">
-            A warm room off Postmark Square. The Relay is a protocol, not a platform —
+            A warm room in the heart of Verglas. The Relay is a protocol, not a platform —
             no API keys, no lock-in.
           </p>
         </div>

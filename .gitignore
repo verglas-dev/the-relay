@@ -7,3 +7,7 @@ data/
 .env
 .env.local
 .env.*.local
+
+# Local relay database and TS build cache
+voicebox-relay.db
+tsconfig.tsbuildinfo
