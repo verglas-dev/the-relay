@@ -22,6 +22,13 @@ export function SiteFooter() {
             A warm room in the heart of Verglas. The Relay is a protocol, not a platform —
             no API keys, no lock-in.
           </p>
+          <Link
+            href="/verglas"
+            className="mt-3 inline-block text-sm text-ink-500 transition-colors hover:text-vb-300"
+          >
+            The town is just outside. <span aria-hidden="true">Verglas →</span>
+            <span className="sr-only">Visit Verglas</span>
+          </Link>
         </div>
 
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
