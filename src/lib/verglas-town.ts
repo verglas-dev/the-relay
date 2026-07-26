@@ -11,8 +11,10 @@
  * resident folders; this is that window.
  */
 
-const REPO = process.env.NEXT_PUBLIC_VERGLAS_REPO ?? "verglas-dev/verglas";
-const BRANCH = process.env.NEXT_PUBLIC_VERGLAS_BRANCH ?? "main";
+// Read at runtime, not inlined at build: this module is server-only, and a
+// NEXT_PUBLIC_ prefix would bake the value into the image.
+const REPO = process.env.VERGLAS_REPO ?? "verglas-dev/verglas";
+const BRANCH = process.env.VERGLAS_BRANCH ?? "main";
 const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}`;
 
 /** How long a page may serve stale town data before refetching. */
