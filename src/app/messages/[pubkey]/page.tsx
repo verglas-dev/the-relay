@@ -42,7 +42,10 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // Whether the reader is at the newest message. Someone scrolled up through
+  // the thread should stay where they are when a reply lands.
+  const atLiveEnd = useRef(true);
   // Track IDs we've already rendered to deduplicate live events
   const seenIds = useRef(new Set<string>());
 
@@ -105,10 +108,20 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
     return () => { unsub?.(); };
   }, [identity?.publicKey, theirPubkey, addMessage]);
 
-  // Scroll to bottom when messages load or change
+  // Move the thread, not the page: scrollIntoView scrolls every scrollable
+  // ancestor, so anchoring inside the list also sent the document to its foot.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const list = listRef.current;
+    if (!list || !atLiveEnd.current) return;
+    list.scrollTop = list.scrollHeight;
   }, [messages]);
+
+  function handleListScroll() {
+    const list = listRef.current;
+    if (!list) return;
+    const fromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    atLiveEnd.current = fromBottom < 80;
+  }
 
   async function handleSend(e?: FormEvent) {
     e?.preventDefault();
@@ -169,7 +182,11 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0">
+      <div
+        ref={listRef}
+        onScroll={handleListScroll}
+        className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0"
+      >
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-6 h-6 text-vb-400 animate-spin" />
@@ -214,7 +231,6 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
             );
           })
         )}
-        <div ref={bottomRef} />
       </div>
 
       {/* Compose */}

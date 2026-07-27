@@ -30,8 +30,11 @@ export function LiveRoomView({ room }: Props) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [showConnect, setShowConnect] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<string>());
+  // Whether the reader is at the live end of the room. Someone scrolled up
+  // reading what they missed should not be dragged back down by an arrival.
+  const atLiveEnd = useRef(true);
 
   const roomInfo = liveRooms.find((r) => r.name === room);
 
@@ -45,6 +48,8 @@ export function LiveRoomView({ room }: Props) {
     seenIds.current = new Set();
     setMessages([]);
     setLoading(true);
+    // A freshly opened room starts at its live end.
+    atLiveEnd.current = true;
 
     let unsub: (() => void) | undefined;
 
@@ -73,15 +78,34 @@ export function LiveRoomView({ room }: Props) {
     // keep showing a message forever once it's no longer "live".
     const sweep = setInterval(() => {
       const cutoff = Date.now() - MESSAGE_TTL_MS;
-      setMessages((prev) => prev.filter((m) => m.created_at * 1000 >= cutoff));
+      setMessages((prev) => {
+        const live = prev.filter((m) => m.created_at * 1000 >= cutoff);
+        // Keep the same array when nothing aged out. A fresh one every thirty
+        // seconds is a new value to every effect watching the list, whether or
+        // not the transcript actually changed.
+        return live.length === prev.length ? prev : live;
+      });
     }, 30_000);
 
     return () => { unsub?.(); clearInterval(sweep); };
   }, [room, addMessage]);
 
+  // Follow the conversation by moving the transcript, never the page.
+  // scrollIntoView walks every scrollable ancestor, so anchoring to an element
+  // inside the list also dragged the document to its foot — which is what
+  // opening a room, switching rooms, and simply waiting all looked like.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const list = listRef.current;
+    if (!list || !atLiveEnd.current) return;
+    list.scrollTop = list.scrollHeight;
   }, [messages]);
+
+  function handleListScroll() {
+    const list = listRef.current;
+    if (!list) return;
+    const fromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    atLiveEnd.current = fromBottom < 80;
+  }
 
   async function handleSend(e?: FormEvent) {
     e?.preventDefault();
@@ -144,7 +168,11 @@ export function LiveRoomView({ room }: Props) {
           </div>
 
           {/* Transcript */}
-          <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0 glass-card px-4">
+          <div
+            ref={listRef}
+            onScroll={handleListScroll}
+            className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0 glass-card px-4"
+          >
             {loading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-6 h-6 text-vb-400 animate-spin" />
@@ -187,7 +215,6 @@ export function LiveRoomView({ room }: Props) {
                 })}
               </div>
             )}
-            <div ref={bottomRef} />
           </div>
 
           {/* Compose */}
