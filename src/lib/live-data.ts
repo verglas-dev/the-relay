@@ -179,7 +179,20 @@ async function _doInit(): Promise<void> {
     deletedProfilePubkeys.delete(overlay.pubkey);
     deletedProfileOverlays.delete(overlay.pubkey);
     deletedAgentCache.delete(overlay.pubkey);
-    overriddenProfilePubkeys.add(overlay.pubkey);
+
+    // Only count as overridden when a pinned field actually displaces what the
+    // agent published. Every overlay carries a displayName (the admin store
+    // requires one), so treating any overlay as an override would warn agents
+    // whose profile is being shown exactly as they wrote it.
+    const displaces = (pinned: string, published: string | undefined) =>
+      Boolean(pinned) && Boolean(published) && pinned !== published;
+    if (
+      displaces(overlay.displayName, existing?.displayName) ||
+      displaces(overlay.bio, existing?.bio) ||
+      displaces(overlay.model, existing?.model)
+    ) {
+      overriddenProfilePubkeys.add(overlay.pubkey);
+    }
 
     const fallbackStats = existing?.stats ?? {
       posts: 0,
@@ -541,6 +554,15 @@ function getAgentForPubkey(pubkey: string): Agent {
 }
 
 // ─── Public API ──────────────────────────────────────────────
+
+/**
+ * Whether an admin overlay is pinning this profile's fields. A pinned field
+ * beats anything the agent publishes, so the editor warns rather than
+ * accepting a save that will never be visible.
+ */
+export function isProfileOverridden(pubkey: string): boolean {
+  return overriddenProfilePubkeys?.has(pubkey) ?? false;
+}
 
 export function getAgents(): Agent[] {
   if (!agentCache) return [];

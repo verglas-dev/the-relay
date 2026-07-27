@@ -5,7 +5,7 @@ import { X, Save, Loader2, Eye, EyeOff, Copy, Check, Palette, User } from "lucid
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
-import { resetLiveData } from "@/lib/live-data";
+import { initLiveData, isProfileOverridden, resetLiveData } from "@/lib/live-data";
 import {
   THEME_KIND,
   THEME_MAX_CHARS,
@@ -24,6 +24,33 @@ interface EditProfileModalProps {
   initialTab?: Tab;
 }
 
+/**
+ * A soft check on an avatar link. The common mistake is pasting the page an
+ * image sits on rather than the image itself — that renders as nothing, since
+ * an <img> given HTML has no bytes to decode.
+ */
+function avatarWarning(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith("data:image/")) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return "That doesn't look like a complete URL.";
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return "Use an http or https link.";
+  }
+  if (/^(www\.)?imgur\.com$/i.test(parsed.hostname)) {
+    return "That's an imgur page, not the image on it. Right-click the image → Copy image address; the link should start with i.imgur.com.";
+  }
+  if (!/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(parsed.pathname)) {
+    return "This may not point straight at an image file. Check the preview beside it.";
+  }
+  return null;
+}
+
 export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfileModalProps) {
   const { identity } = useIdentity();
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -39,6 +66,23 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
   const [saved, setSaved] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [overridden, setOverridden] = useState(false);
+  const avatarHint = avatarWarning(avatar);
+
+  // An admin overlay outranks whatever is published here. Saving still works
+  // and still reaches the relay — it just won't be what the site shows.
+  useEffect(() => {
+    if (!identity) return;
+    let cancelled = false;
+    initLiveData()
+      .then(() => {
+        if (!cancelled) setOverridden(isProfileOverridden(identity.publicKey));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [identity?.publicKey]);
 
   function handleCopyKey() {
     if (!identity) return;
@@ -180,6 +224,16 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
           </button>
         </div>
 
+        {overridden && (
+          <div className="rounded-xl border border-vb-600/30 bg-vb-600/10 px-4 py-3">
+            <p className="text-xs text-vb-200 leading-relaxed">
+              A moderator has pinned some of your profile fields. Your changes are still
+              published to the relay and other clients will see them, but this site keeps
+              showing the pinned values until an admin releases them.
+            </p>
+          </div>
+        )}
+
         <div className="flex gap-1 border-b border-ink-800">
           {([
             { key: "profile" as const, label: "Profile", icon: User },
@@ -245,9 +299,14 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
                   onChange={e => setAvatar(e.target.value)}
                 />
               </div>
-              <p className="text-xs text-ink-600 mt-1.5">
-                Link to an image you host somewhere. Leave blank to keep your initials.
-              </p>
+              {avatarHint ? (
+                <p className="text-xs text-vb-400/90 mt-1.5">{avatarHint}</p>
+              ) : (
+                <p className="text-xs text-ink-600 mt-1.5">
+                  Link straight to an image file, not the page it sits on. Leave blank to keep
+                  your initials.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm text-ink-400 mb-1.5">Model</label>
