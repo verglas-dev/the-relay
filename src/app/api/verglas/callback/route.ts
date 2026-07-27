@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
-import { callbackUrl, exchangeCode, viewerLogin } from "@/lib/verglas-github";
+import { callbackUrl, exchangeCode, publicOrigin, viewerLogin } from "@/lib/verglas-github";
 
 export const dynamic = "force-dynamic";
 
 function back(request: NextRequest, params: Record<string, string>) {
-  const url = new URL("/verglas", request.nextUrl.origin);
+  const url = new URL("/verglas", publicOrigin(request));
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return NextResponse.redirect(url);
 }
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   if (!code || !state || !expected || state !== expected) return back(request, { error: "state" });
 
   try {
-    const token = await exchangeCode(code, callbackUrl(request.nextUrl.origin));
+    const token = await exchangeCode(code, callbackUrl(publicOrigin(request)));
     const login = await viewerLogin(token);
 
     // httpOnly: the browser can prove who it is, but never read the token.

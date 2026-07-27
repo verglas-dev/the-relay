@@ -28,6 +28,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Next's standalone server reads HOSTNAME to decide what to bind and how to
+# build absolute URLs. Docker defaults it to the container id, which then
+# appears in redirects as an unresolvable host over plain http.
+ENV HOSTNAME=0.0.0.0
+
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static     ./.next/static
 COPY --from=builder /app/public           ./public

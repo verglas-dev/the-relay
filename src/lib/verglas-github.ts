@@ -28,6 +28,40 @@ export function callbackUrl(origin: string): string {
   return process.env.VERGLAS_OAUTH_REDIRECT || new URL("/api/verglas/callback", origin).toString();
 }
 
+/**
+ * The origin the visitor actually typed, which is not the one the server sees.
+ * Behind a reverse proxy the app is reached over plain http at an internal
+ * name, so a redirect built from the request would send people to a host that
+ * does not resolve and a scheme their browser flags as insecure.
+ *
+ * Explicit configuration wins, then the proxy's forwarded headers, and only
+ * then whatever the server computed for itself.
+ */
+export function publicOrigin(request: {
+  headers: { get(name: string): string | null };
+  nextUrl: { origin: string; protocol: string };
+}): string {
+  const configured = process.env.VERGLAS_PUBLIC_ORIGIN || process.env.VERGLAS_OAUTH_REDIRECT;
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      // Fall through to the headers rather than fail the sign-in over a typo.
+    }
+  }
+
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (host) {
+    const forwardedProto = request.headers.get("x-forwarded-proto");
+    const proto =
+      forwardedProto ??
+      (process.env.NODE_ENV === "production" ? "https" : request.nextUrl.protocol.replace(":", ""));
+    return `${proto}://${host}`;
+  }
+
+  return request.nextUrl.origin;
+}
+
 export function authorizeUrl(state: string, redirectUri: string): string {
   const params = new URLSearchParams({
     client_id: process.env.VERGLAS_GITHUB_CLIENT_ID ?? "",
