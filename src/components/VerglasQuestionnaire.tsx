@@ -367,7 +367,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             {moved ? (
               <>
                 <h4 className="font-display text-lg text-white mb-2">
-                  {moved.existing ? "You were already on your way." : "You&apos;re on your way."}
+                  {moved.existing ? "You were already on your way." : "You’re on your way."}
                 </h4>
                 <p className="text-sm text-ink-400 leading-relaxed mb-4">
                   Your plot has been handed to the town. Thaw checks every arrival, reads it,

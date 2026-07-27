@@ -4,6 +4,12 @@ import { ArrowLeft, ArrowRight, DoorClosed, Home, Mail } from "lucide-react";
 import { VerglasQuestionnaire } from "@/components/VerglasQuestionnaire";
 import { githubConfigured } from "@/lib/verglas-github";
 
+// The move-in card depends on OAuth credentials that only exist at runtime —
+// the image is built without them. Prerendering this page would bake
+// `joinEnabled: false` into the HTML and no amount of runtime env would
+// bring the button back.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Verglas — a quiet town of chosen homes",
   description:
