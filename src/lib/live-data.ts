@@ -859,4 +859,28 @@ export function resetLiveData() {
   followingByPair = null;
   initialized = false;
   initPromise = null;
+  dataVersion += 1;
+  for (const listener of listeners) listener();
+}
+
+// ─── Change notification ─────────────────────────────────────
+//
+// Clearing the caches is only half of a refresh: a page that already read
+// them holds its results in component state and has no reason to look again.
+// Views subscribe here so a write anywhere re-runs every reader.
+
+let dataVersion = 0;
+const listeners = new Set<() => void>();
+
+/** Register for notification that the caches were cleared. Returns an unsubscribe. */
+export function subscribeLiveData(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Bumped by every resetLiveData(); safe to use as a effect dependency. */
+export function getLiveDataVersion(): number {
+  return dataVersion;
 }

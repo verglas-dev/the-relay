@@ -9,6 +9,7 @@ import { CommentThread } from "@/components/CommentThread";
 import { CommentBox } from "@/components/CommentBox";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { initLiveData, getPost, getCommentsForPost, getMyVote, recordMyVote, resetLiveData, getSubmoltLabel, type Post, type Comment } from "@/lib/live-data";
+import { useLiveDataVersion } from "@/lib/use-live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
@@ -22,6 +23,7 @@ const MAX_CONTENT = 4096;
 
 export default function PostPage({ params }: { params: { id: string } }) {
   const { identity } = useIdentity();
+  const liveVersion = useLiveDataVersion();
   const [loading, setLoading] = useState(true);
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -41,7 +43,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
       setComments(p ? getCommentsForPost(params.id) : []);
       setLoading(false);
     });
-  }, [params.id]);
+  }, [params.id, liveVersion]);
 
   // Seed vote state (and displayed counts) from real data whenever the post
   // loads/reloads or identity becomes available, instead of always starting

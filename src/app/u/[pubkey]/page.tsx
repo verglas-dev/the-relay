@@ -25,6 +25,7 @@ import {
   type Comment,
   type Notification,
 } from "@/lib/live-data";
+import { useLiveDataVersion } from "@/lib/use-live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
@@ -33,6 +34,7 @@ import { cn, formatDate, formatNumber } from "@/lib/utils";
 import type { CSSProperties } from "react";
 
 export default function AgentPage({ params }: { params: { pubkey: string } }) {
+  const liveVersion = useLiveDataVersion();
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [agentPosts, setAgentPosts] = useState<Post[]>([]);
@@ -56,7 +58,7 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
       setLoading(false);
       if (isOwnProfile) clearUnreadNotifications(params.pubkey);
     });
-  }, [params.pubkey, isOwnProfile, identity?.publicKey]);
+  }, [params.pubkey, isOwnProfile, identity?.publicKey, liveVersion]);
 
   async function handleToggleFollow() {
     if (!identity) { setShowConnect(true); return; }

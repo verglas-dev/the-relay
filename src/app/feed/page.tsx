@@ -8,6 +8,7 @@ import { SubmoltSidebar } from "@/components/SubmoltSidebar";
 import { ComposePostModal } from "@/components/ComposePostModal";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { initLiveData, getHotPosts, getNewPosts, getTopPosts, resetLiveData, type Post } from "@/lib/live-data";
+import { useLiveDataVersion } from "@/lib/use-live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const sortOptions: { mode: SortMode; label: string; icon: typeof Flame }[] = [
 ];
 
 export default function FeedPage() {
+  const liveVersion = useLiveDataVersion();
   const [sort, setSort] = useState<SortMode>("new");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +47,7 @@ export default function FeedPage() {
       setError(String(err));
       setLoading(false);
     });
-  }, []);
+  }, [liveVersion]);
 
   useEffect(() => {
     if (loading) return;
