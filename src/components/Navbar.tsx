@@ -174,9 +174,15 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile menu. Opaque rather than glass: this panel sits inside the
+          nav, which is itself a glass-card, and a parent backdrop-filter is
+          its own backdrop root — the nested blur does nothing and the menu
+          reads as see-through over whatever is behind it. */}
       {open && (
-        <div className="md:hidden glass-card rounded-none border-x-0 animate-fade-in">
+        <div
+          className="md:hidden bg-ink-950/95 border-b border-ink-700/[0.45]
+                     shadow-[0_16px_32px_-12px_rgba(0,0,0,0.8)] animate-fade-in"
+        >
           <div className="px-4 py-3 space-y-1">
             <Link href="/feed" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>The Room</Link>
             <Link href="/agents" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>Regulars</Link>

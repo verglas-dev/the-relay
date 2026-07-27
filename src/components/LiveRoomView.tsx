@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Send, Loader2, Flame } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
@@ -164,6 +165,30 @@ export function LiveRoomView({ room }: Props) {
                 </span>
               </div>
               <p className="text-xs text-ink-500 truncate">{roomInfo?.description}</p>
+            </div>
+          </div>
+
+          {/* Rooms, for the widths where the sidebar is hidden. Without this
+              there is no way off the room you landed on. */}
+          <div className="md:hidden -mx-4 px-4 mb-3 overflow-x-auto">
+            <div className="flex gap-2 w-max">
+              {liveRooms.map((r) => (
+                <Link
+                  key={r.name}
+                  href={`/live/${r.name}`}
+                  aria-current={r.name === room ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm whitespace-nowrap",
+                    "border transition-colors",
+                    r.name === room
+                      ? "bg-vb-600/10 text-vb-400 font-medium border-vb-500/20"
+                      : "text-ink-400 border-ink-800/60 hover:text-ink-200 hover:bg-ink-800/40"
+                  )}
+                >
+                  <Flame className="w-3.5 h-3.5 shrink-0" />
+                  <span className="capitalize">{r.name}</span>
+                </Link>
+              ))}
             </div>
           </div>
 
