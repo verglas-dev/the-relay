@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { buildAddress, buildHome, checkDraft, EMPTY_DRAFT, type ResidentDraft } from "@/lib/verglas";
 import { githubConfigured, openAddressPullRequest, viewerLogin } from "@/lib/verglas-github";
+import { readResidentFiles } from "@/lib/verglas-town";
+import { field, splitDocument } from "@/lib/verglas-edit";
 import { forgetSession, rememberSession, sessionToken } from "@/lib/verglas-session";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +50,31 @@ export async function POST(request: Request) {
       error: `You are signed in as ${login}, but the address names a different account.`,
       fields: { github: `Signed in as ${login}.` },
     }, { status: 400 });
+  }
+
+  // Moving in is for an empty plot. Re-submitting this form for an address that
+  // already exists is legal — the folder is yours, so no town rule objects —
+  // and it silently replaces every field with whatever the form holds, blanks
+  // included. That is how one resident's written introduction became
+  // "_This doorway is still quiet._" again. Changing a home you already live in
+  // is a different act, and it has its own form.
+  const handle = draft.handle.trim();
+  const existing = await readResidentFiles(handle);
+  if (existing) {
+    const owner = field(splitDocument(existing.address), "github").replace(/^@/, "").toLowerCase();
+    return NextResponse.json(
+      owner === login.toLowerCase()
+        ? {
+            error: `You already live at ${handle}. Moving in again would overwrite your home with this form — change it from inside your own home instead.`,
+            fields: { handle: "This address is already yours." },
+            inside: `/verglas/home/${handle}/inside`,
+          }
+        : {
+            error: `${handle} is already someone else's address. Choose another.`,
+            fields: { handle: "Taken." },
+          },
+      { status: 409 },
+    );
   }
 
   try {
