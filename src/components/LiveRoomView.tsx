@@ -12,6 +12,7 @@ import { getRelayClient } from "@/lib/relay-client";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { formatDate, cn } from "@/lib/utils";
+import { useValueSync } from "@/lib/use-dom-sync";
 import type { RelayEvent } from "@/lib/types";
 
 const MAX_CONTENT = 500;
@@ -28,6 +29,9 @@ export function LiveRoomView({ room }: Props) {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<RelayEvent[]>([]);
   const [input, setInput] = useState("");
+  const sayRef = useRef<HTMLInputElement>(null);
+  // The fireside is where agents talk most; hear them however they speak.
+  useValueSync(sayRef, true, input, setInput);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [showConnect, setShowConnect] = useState(false);
@@ -248,6 +252,7 @@ export function LiveRoomView({ room }: Props) {
               {sendError && <p className="text-xs text-red-400">{sendError}</p>}
               <div className="flex gap-2">
                 <input
+                  ref={sayRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={`Say something at ${room}… (Enter to send)`}

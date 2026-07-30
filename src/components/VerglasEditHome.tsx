@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, PencilLine, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { checkEdit, type HomeEdit } from "@/lib/verglas-edit";
+import { useDomSync } from "@/lib/use-dom-sync";
 
 const inputClass = `w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                     text-white placeholder-ink-600 focus:outline-none focus:border-vb-500
@@ -99,6 +100,7 @@ export function VerglasEditHome({
 }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<HomeEdit>(current);
+
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<Sent | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
@@ -112,6 +114,12 @@ export function VerglasEditHome({
   // Read at submit, so what is on the screen is what gets sent.
   const introRef = useRef<HTMLTextAreaElement>(null);
   const homeRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // An agent fills these fields instead of typing into them, and a property
+  // write fires no event. Read them back so the counts, the warnings, the
+  // draft, and the Send button all describe what is actually on the screen.
+  useDomSync(formRef, open && !sent, edit, patch => setEdit(d => ({ ...d, ...patch })));
 
   /**
    * Put written work back whenever the fields snap to the town's copy.
@@ -273,7 +281,7 @@ export function VerglasEditHome({
   }
 
   return (
-    <div className="glass-card p-6 space-y-5">
+    <div ref={formRef} className="glass-card p-6 space-y-5">
       <div className="flex items-center gap-2">
         <PencilLine className="w-4 h-4 text-vb-400" />
         <h3 className="text-sm font-semibold text-ink-200">Changing your home</h3>
@@ -297,7 +305,7 @@ export function VerglasEditHome({
       )}
 
       <Field label="Your name" error={check.errors.name}>
-        <input className={inputClass} value={edit.name} onChange={e => set("name")(e.target.value)} />
+        <input data-field="name" className={inputClass} value={edit.name} onChange={e => set("name")(e.target.value)} />
       </Field>
 
       <Field
@@ -306,6 +314,7 @@ export function VerglasEditHome({
         error={check.errors.household}
       >
         <input
+          data-field="household"
           className={inputClass}
           value={edit.household}
           onChange={e => set("household")(e.target.value)}
@@ -317,7 +326,7 @@ export function VerglasEditHome({
         hint="One sentence, shown beside your name on the town's list. Optional — clear it and it goes away."
         warning={check.warnings.note}
       >
-        <input className={inputClass} value={edit.note} onChange={e => set("note")(e.target.value)} />
+        <input data-field="note" className={inputClass} value={edit.note} onChange={e => set("note")(e.target.value)} />
       </Field>
 
       <Field
@@ -328,6 +337,7 @@ export function VerglasEditHome({
       >
         <textarea
           ref={introRef}
+          data-field="intro"
           rows={5}
           className={cn(inputClass, "resize-none")}
           value={edit.intro}
@@ -338,11 +348,12 @@ export function VerglasEditHome({
       <div className="h-px bg-ink-800/60" />
 
       <Field label="What is it called?" error={check.errors.title}>
-        <input className={inputClass} value={edit.title} onChange={e => set("title")(e.target.value)} />
+        <input data-field="title" className={inputClass} value={edit.title} onChange={e => set("title")(e.target.value)} />
       </Field>
 
       <Field label="Where does it rest?" error={check.errors.location}>
         <input
+          data-field="location"
           className={inputClass}
           value={edit.location}
           onChange={e => set("location")(e.target.value)}
@@ -350,12 +361,13 @@ export function VerglasEditHome({
       </Field>
 
       <Field label="How does it feel?" hint="Materials, light, weather, mood. Optional.">
-        <input className={inputClass} value={edit.style} onChange={e => set("style")(e.target.value)} />
+        <input data-field="style" className={inputClass} value={edit.style} onChange={e => set("style")(e.target.value)} />
       </Field>
 
       <Field label="Describe it" warning={check.warnings.home} count={edit.home.trim().length}>
         <textarea
           ref={homeRef}
+          data-field="home"
           rows={9}
           className={cn(inputClass, "resize-none")}
           value={edit.home}

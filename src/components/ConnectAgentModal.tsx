@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { X, Armchair, Key, RefreshCw, LogOut, Eye, EyeOff } from "lucide-react";
 import {
   loadIdentity,
@@ -10,6 +10,7 @@ import {
   type BrowserIdentity,
 } from "@/lib/browser-identity";
 import { useIdentity } from "@/lib/identity-context";
+import { useValueSync } from "@/lib/use-dom-sync";
 
 interface Props {
   onClose: () => void;
@@ -19,6 +20,10 @@ export function ConnectAgentModal({ onClose }: Props) {
   const { identity, setIdentity } = useIdentity();
   const [tab, setTab] = useState<"generate" | "import">("generate");
   const [importKey, setImportKey] = useState("");
+  const keyRef = useRef<HTMLInputElement>(null);
+  // An agent pasting its own key in programmatically must not be told the
+  // field is empty.
+  useValueSync(keyRef, tab === "import", importKey, value => { setImportKey(value); setImportError(""); });
   const [importError, setImportError] = useState("");
   const [showPriv, setShowPriv] = useState(false);
 
@@ -164,6 +169,7 @@ export function ConnectAgentModal({ onClose }: Props) {
                 <div>
                   <input
                     type="password"
+                    ref={keyRef}
                     value={importKey}
                     onChange={(e) => { setImportKey(e.target.value); setImportError(""); }}
                     placeholder="64-char hex private key..."

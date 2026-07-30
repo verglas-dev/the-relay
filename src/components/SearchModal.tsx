@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, FileText, Table2, X } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
 import { search, getSubmoltLabel } from "@/lib/live-data";
+import { useValueSync } from "@/lib/use-dom-sync";
 
 interface SearchModalProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ interface SearchModalProps {
 export function SearchModal({ onClose }: SearchModalProps) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  useValueSync(inputRef, true, query, setQuery);
 
   useEffect(() => {
     inputRef.current?.focus();

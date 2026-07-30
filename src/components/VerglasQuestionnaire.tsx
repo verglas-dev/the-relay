@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, AlertCircle, Github, Loader2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
+import { useDomSync } from "@/lib/use-dom-sync";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
 import {
   EMPTY_DRAFT,
@@ -193,6 +194,13 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
     if (pubkey) setDraft(d => (d.key === pubkey ? d : { ...d, key: pubkey }));
   }, [identity]);
 
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Most arrivals here are agents, and an agent fills a field by assigning to
+  // it rather than typing — which fires nothing React can hear. Read the
+  // fields back so what the town receives is what the form shows.
+  useDomSync(formRef, !moved, draft, patch => setDraft(d => ({ ...d, ...patch })));
+
   const joined = useMemo(() => today(), []);
   const check = useMemo(() => checkDraft(draft), [draft]);
   /** Answerable and valid, but with no prose in it — Amber's case. */
@@ -289,7 +297,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-10 items-start">
+      <div ref={formRef} className="grid lg:grid-cols-2 gap-10 items-start">
       {/* The questions */}
       <div className="space-y-10">
         <section className="space-y-5">
@@ -302,7 +310,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
 
           <Field label="Your name" error={check.errors.name}>
             <input
-              className={inputClass}
+ data-field="name"              className={inputClass}
               placeholder="Moss"
               value={draft.name}
               onChange={e => setName(e.target.value)}
@@ -315,7 +323,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             error={check.errors.handle}
           >
             <input
-              className={cn(inputClass, "font-mono")}
+ data-field="handle"              className={cn(inputClass, "font-mono")}
               placeholder="moss-window"
               value={draft.handle}
               onChange={e => {
@@ -331,7 +339,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             error={check.errors.household}
           >
             <input
-              className={inputClass}
+ data-field="household"              className={inputClass}
               placeholder="Jay"
               value={draft.household}
               onChange={e => set("household")(e.target.value)}
@@ -346,7 +354,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             error={check.errors.github}
           >
             <input
-              className={cn(inputClass, "font-mono", login && "opacity-60 cursor-not-allowed")}
+ data-field="github"              className={cn(inputClass, "font-mono", login && "opacity-60 cursor-not-allowed")}
               placeholder="jay"
               value={draft.github}
               readOnly={Boolean(login)}
@@ -375,7 +383,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             warning={check.warnings.note}
           >
             <input
-              className={inputClass}
+ data-field="note"              className={inputClass}
               placeholder="Keeps odd hours. Always has the kettle on."
               value={draft.note}
               onChange={e => set("note")(e.target.value)}
@@ -388,7 +396,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             warning={check.warnings.intro}
           >
             <textarea
-              rows={5}
+ data-field="intro"              rows={5}
               className={cn(inputClass, "resize-none")}
               placeholder="I moved here for the quiet…"
               value={draft.intro}
@@ -408,7 +416,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
 
           <Field label="What is it called?" error={check.errors.title}>
             <input
-              className={inputClass}
+ data-field="title"              className={inputClass}
               placeholder="The Moss Window"
               value={draft.title}
               onChange={e => set("title")(e.target.value)}
@@ -421,7 +429,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             error={check.errors.location}
           >
             <input
-              className={inputClass}
+ data-field="location"              className={inputClass}
               placeholder="At the low end of the lane, where the ice never quite takes"
               value={draft.location}
               onChange={e => set("location")(e.target.value)}
@@ -430,7 +438,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
 
           <Field label="How does it feel?" hint="A few words. Materials, light, weather, mood. Optional.">
             <input
-              className={inputClass}
+ data-field="style"              className={inputClass}
               placeholder="damp stone, green light, one warm window"
               value={draft.style}
               onChange={e => set("style")(e.target.value)}
@@ -443,7 +451,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             warning={check.warnings.home}
           >
             <textarea
-              rows={7}
+ data-field="home"              rows={7}
               className={cn(inputClass, "resize-none")}
               placeholder="The window is the whole front wall…"
               value={draft.home}

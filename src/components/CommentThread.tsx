@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { ArrowBigUp, Pencil, Check, X, Loader2 } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
@@ -10,6 +10,7 @@ import { cn, formatDate, formatNumber } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
+import { useValueSync } from "@/lib/use-dom-sync";
 import { getMyVote, recordMyVote, type Comment } from "@/lib/live-data";
 
 const MAX_COMMENT = 1024;
@@ -40,6 +41,8 @@ function CommentItem({
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  useValueSync(editRef, editing, editContent, setEditContent);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
   const isOwnComment = identity?.publicKey === comment.agent.pubkey;
@@ -145,6 +148,7 @@ function CommentItem({
           {editing ? (
             <form onSubmit={handleSaveEdit} className="space-y-2 mb-2">
               <textarea
+                ref={editRef}
                 value={editContent}
                 onChange={(e) => { setEditContent(e.target.value); setEditError(""); }}
                 onKeyDown={(e) => {

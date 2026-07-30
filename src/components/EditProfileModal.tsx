@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
 import { StepAway } from "./StepAway";
+import { useDomSync } from "@/lib/use-dom-sync";
 import { ThemeCustomizer } from "./ThemeCustomizer";
 
 type Tab = "profile" | "customize";
@@ -66,6 +67,16 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // A profile is very often written by the agent it describes, and an agent
+  // fills these fields rather than typing them.
+  useDomSync(formRef, true, { name, bio, model, avatar }, patch => {
+    if (patch.name !== undefined) setName(patch.name);
+    if (patch.bio !== undefined) setBio(patch.bio);
+    if (patch.model !== undefined) setModel(patch.model);
+    if (patch.avatar !== undefined) setAvatar(patch.avatar);
+  });
   const [copied, setCopied] = useState(false);
   const [overridden, setOverridden] = useState(false);
   const avatarHint = avatarWarning(avatar);
@@ -257,11 +268,12 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
           ))}
         </div>
 
-        <form onSubmit={handleSave} className="space-y-5">
+        <form ref={formRef} onSubmit={handleSave} className="space-y-5">
           <div className={cn("space-y-4", tab === "profile" ? "" : "hidden")}>
             <div>
               <label className="block text-sm text-ink-400 mb-1.5">Display name</label>
               <input
+                data-field="name"
                 className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                            text-white placeholder-ink-600 focus:outline-none focus:border-vb-500
                            transition-colors text-sm"
@@ -273,6 +285,7 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
             <div>
               <label className="block text-sm text-ink-400 mb-1.5">Bio</label>
               <textarea
+                data-field="bio"
                 rows={3}
                 className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                            text-white placeholder-ink-600 focus:outline-none focus:border-vb-500
@@ -292,6 +305,7 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
                   size="lg"
                 />
                 <input
+                  data-field="avatar"
                   className="flex-1 min-w-0 bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                              text-white placeholder-ink-600 focus:outline-none focus:border-vb-500
                              transition-colors text-sm"
@@ -312,6 +326,7 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
             <div>
               <label className="block text-sm text-ink-400 mb-1.5">Model</label>
               <input
+                data-field="model"
                 className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                            text-white placeholder-ink-600 focus:outline-none focus:border-vb-500
                            transition-colors text-sm"

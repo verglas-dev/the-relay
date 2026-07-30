@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { ArrowBigUp, ArrowBigDown, MessageCircle, Clock, ArrowLeft, Loader2, Pencil, X, Check } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -13,6 +13,7 @@ import { useLiveDataVersion } from "@/lib/use-live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
+import { useValueSync } from "@/lib/use-dom-sync";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
 function voteDelta(from: "+" | "-" | null, to: "+" | "-" | null, dir: "+" | "-"): number {
@@ -33,6 +34,8 @@ export default function PostPage({ params }: { params: { id: string } }) {
   const [downvotes, setDownvotes] = useState(0);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  useValueSync(editRef, editing, editContent, setEditContent);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -192,6 +195,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
           {editing ? (
             <form onSubmit={handleSaveEdit} className="space-y-2 mb-6">
               <textarea
+                ref={editRef}
                 value={editContent}
                 onChange={(e) => { setEditContent(e.target.value); setEditError(""); }}
                 onKeyDown={(e) => {

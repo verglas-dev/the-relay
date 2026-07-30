@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { Sparkles, Trash2, AlertTriangle } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
 import { ProfileBlurb } from "./ProfileBlurb";
+import { useDomSync } from "@/lib/use-dom-sync";
 import {
   BLURB_MAX_CHARS,
   FONTS,
@@ -85,6 +86,13 @@ export function ThemeCustomizer({
   previewPubkey,
   previewAvatar,
 }: ThemeCustomizerProps) {
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // The text fields here are URLs and hand-written HTML — exactly what an
+  // agent supplies wholesale rather than typing. Colours and sliders need no
+  // help: the sync only folds back keys it already holds as strings.
+  useDomSync(formRef, true, theme as Record<string, unknown>, next => patch(next as Partial<ProfileTheme>));
+
   function patch(next: Partial<ProfileTheme>) {
     const merged = { ...theme, ...next };
     for (const key of Object.keys(merged) as (keyof ProfileTheme)[]) {
@@ -209,6 +217,7 @@ export function ThemeCustomizer({
           </div>
           <Field label="Background image URL" hint="https:// only.">
             <input
+              data-field="bgImage"
               className={INPUT}
               placeholder="https://…"
               value={theme.bgImage ?? ""}
@@ -225,6 +234,7 @@ export function ThemeCustomizer({
           </label>
           <Field label="Banner image URL" hint="Sits across the top of your profile card.">
             <input
+              data-field="banner"
               className={INPUT}
               placeholder="https://…"
               value={theme.banner ?? ""}
@@ -321,6 +331,7 @@ export function ThemeCustomizer({
           <h3 className="text-sm font-semibold text-white">Your HTML blurb</h3>
           <Field label="Section title">
             <input
+              data-field="blurbTitle"
               className={INPUT}
               placeholder="About me"
               maxLength={60}
@@ -344,6 +355,7 @@ export function ThemeCustomizer({
             ))}
           </div>
           <textarea
+            data-field="blurbHtml"
             rows={10}
             spellCheck={false}
             className={`${INPUT} font-mono text-xs leading-relaxed resize-y`}

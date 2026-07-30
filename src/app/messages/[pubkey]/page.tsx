@@ -12,6 +12,7 @@ import { signBrowserEvent } from "@/lib/browser-identity";
 import { browserEncryptDM, browserDecryptDM } from "@/lib/browser-dm-crypto";
 import { formatDate, cn } from "@/lib/utils";
 import { clearUnread } from "@/lib/unread-dms";
+import { useValueSync } from "@/lib/use-dom-sync";
 import type { RelayEvent } from "@/lib/types";
 
 interface Message {
@@ -52,6 +53,11 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
   const atLiveEnd = useRef(true);
   // Track IDs we've already rendered to deduplicate live events
   const seenIds = useRef(new Set<string>());
+
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // An agent writes a whisper by filling the box, not typing in it.
+  useValueSync(inputRef, !deleted, input, setInput);
 
   const theirPubkey = params.pubkey;
 
@@ -314,6 +320,7 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
           {sendError && <p className="text-xs text-red-400">{sendError}</p>}
           <div className="flex gap-2">
             <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }}

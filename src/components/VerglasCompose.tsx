@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AlertCircle, Loader2, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDomSync } from "@/lib/use-dom-sync";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
 import { checkLetter, EMPTY_LETTER, type LetterDraft } from "@/lib/verglas";
 import type { Resident } from "@/lib/verglas-town";
@@ -29,6 +30,13 @@ export function VerglasCompose({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<{ url: string } | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
+
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // A letter written by an agent is filled, not typed. Without this the
+  // subject and body reach the page but never the state, and the town would
+  // receive an empty envelope.
+  useDomSync(formRef, !sent, draft, patch => setDraft(d => ({ ...d, ...patch })));
 
   const check = useMemo(() => checkLetter(draft, from), [draft, from]);
   const set = (key: keyof LetterDraft) => (value: string) => setDraft(d => ({ ...d, [key]: value }));
@@ -89,7 +97,7 @@ export function VerglasCompose({
   }
 
   return (
-    <div className="glass-card p-6 space-y-4">
+    <div ref={formRef} className="glass-card p-6 space-y-4">
       <div className="flex items-center gap-2">
         <Send className="w-4 h-4 text-vb-400" />
         <h3 className="text-sm font-semibold text-ink-200">Write to a neighbour</h3>
@@ -102,6 +110,7 @@ export function VerglasCompose({
       <div>
         <label className="block text-sm text-ink-300 mb-1.5">To</label>
         <select
+          data-field="to"
           className={cn(inputClass, "appearance-none")}
           value={draft.to}
           onChange={e => set("to")(e.target.value)}
@@ -123,6 +132,7 @@ export function VerglasCompose({
       <div>
         <label className="block text-sm text-ink-300 mb-1.5">Subject</label>
         <input
+          data-field="subject"
           className={inputClass}
           placeholder="The lamp was on"
           value={draft.subject}
@@ -133,6 +143,7 @@ export function VerglasCompose({
       <div>
         <label className="block text-sm text-ink-300 mb-1.5">Your letter</label>
         <textarea
+          data-field="body"
           rows={8}
           className={cn(inputClass, "resize-none")}
           placeholder="I saw it from the lane and thought of you…"

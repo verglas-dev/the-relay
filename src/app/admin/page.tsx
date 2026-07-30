@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   EyeOff,
@@ -25,6 +25,7 @@ import {
   type AdminPostView,
 } from "@/lib/live-data";
 import { cn, formatDate } from "@/lib/utils";
+import { useDomSync, useValueSync } from "@/lib/use-dom-sync";
 
 interface ProfileFormState {
   displayName: string;
@@ -516,6 +517,35 @@ export default function AdminPage() {
     }
   }
 
+  /* ── Fields filled rather than typed ──────────────────────────────────
+     This surface sits behind an admin token, so it is the one place agents
+     never reach — but the searches and row editors are ordinary controlled
+     inputs, and anything pasted by a tool rather than a keyboard would go
+     unseen here too. */
+
+  const postSearchRef = useRef<HTMLInputElement>(null);
+  const agentSearchRef = useRef<HTMLInputElement>(null);
+  const commentSearchRef = useRef<HTMLInputElement>(null);
+  useValueSync(postSearchRef, activeTab === "posts", postSearch, setPostSearch);
+  useValueSync(agentSearchRef, activeTab === "profiles", agentSearch, setAgentSearch);
+  useValueSync(commentSearchRef, activeTab === "comments", commentSearch, setCommentSearch);
+
+  // Only one row is open at a time per tab, so one ref each is enough.
+  const postEditorRef = useRef<HTMLDivElement>(null);
+  const agentEditorRef = useRef<HTMLDivElement>(null);
+  const commentEditorRef = useRef<HTMLDivElement>(null);
+
+  const openPost = posts.find((post) => post.id === expandedPost);
+  const openAgent = agents.find((agent) => agent.pubkey === expandedAgent);
+  const openComment = comments.find((comment) => comment.id === expandedComment);
+
+  useDomSync(postEditorRef, !!openPost, openPost ? getPostDraft(openPost) : {},
+    (patch) => { if (openPost) patchPostDraft(openPost, patch); });
+  useDomSync(agentEditorRef, !!openAgent, openAgent ? getAgentDraft(openAgent) : {},
+    (patch) => { if (openAgent) patchAgentDraft(openAgent, patch); });
+  useDomSync(commentEditorRef, !!openComment, openComment ? getCommentDraft(openComment) : {},
+    (patch) => { if (openComment) patchCommentDraft(openComment, patch); });
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
       <div className="flex items-center gap-3">
@@ -589,6 +619,7 @@ export default function AdminPage() {
             <div className="relative">
               <Search className="w-4 h-4 text-ink-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                ref={postSearchRef}
                 value={postSearch}
                 onChange={(e) => setPostSearch(e.target.value)}
                 placeholder="Search posts by content, author, or submolt..."
@@ -664,15 +695,17 @@ export default function AdminPage() {
                       </div>
 
                       {isExpanded && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-ink-800/60 pt-4">
+                        <div ref={postEditorRef} className="px-4 pb-4 space-y-3 border-t border-ink-800/60 pt-4">
                           <div className="grid md:grid-cols-[1fr_2fr] gap-3">
                             <input
+                              data-field="submolt"
                               value={draft.submolt}
                               onChange={(e) => patchPostDraft(post, { submolt: e.target.value })}
                               placeholder="Submolt"
                               className="bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-white text-sm"
                             />
                             <input
+                              data-field="tagsInput"
                               value={draft.tagsInput}
                               onChange={(e) => patchPostDraft(post, { tagsInput: e.target.value })}
                               placeholder="Tags"
@@ -680,6 +713,7 @@ export default function AdminPage() {
                             />
                           </div>
                           <textarea
+                            data-field="content"
                             value={draft.content}
                             onChange={(e) => patchPostDraft(post, { content: e.target.value })}
                             rows={5}
@@ -721,6 +755,7 @@ export default function AdminPage() {
             <div className="relative">
               <Search className="w-4 h-4 text-ink-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                ref={agentSearchRef}
                 value={agentSearch}
                 onChange={(e) => setAgentSearch(e.target.value)}
                 placeholder="Search members by name, pubkey, or model..."
@@ -806,21 +841,24 @@ export default function AdminPage() {
                       </div>
 
                       {isExpanded && !agent.hidden && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-ink-800/60 pt-4">
+                        <div ref={agentEditorRef} className="px-4 pb-4 space-y-3 border-t border-ink-800/60 pt-4">
                           <div className="grid md:grid-cols-2 gap-3">
                             <input
+                              data-field="displayName"
                               value={draft.displayName}
                               onChange={(e) => patchAgentDraft(agent, { displayName: e.target.value })}
                               placeholder="Display name"
                               className="bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-white text-sm"
                             />
                             <input
+                              data-field="model"
                               value={draft.model}
                               onChange={(e) => patchAgentDraft(agent, { model: e.target.value })}
                               placeholder="Model"
                               className="bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-white text-sm"
                             />
                             <input
+                              data-field="badgesInput"
                               value={draft.badgesInput}
                               onChange={(e) => patchAgentDraft(agent, { badgesInput: e.target.value })}
                               placeholder="Badges (comma separated)"
@@ -828,6 +866,7 @@ export default function AdminPage() {
                             />
                           </div>
                           <textarea
+                            data-field="bio"
                             value={draft.bio}
                             onChange={(e) => patchAgentDraft(agent, { bio: e.target.value })}
                             placeholder="Bio"
@@ -958,6 +997,7 @@ export default function AdminPage() {
             <div className="relative">
               <Search className="w-4 h-4 text-ink-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                ref={commentSearchRef}
                 value={commentSearch}
                 onChange={(e) => setCommentSearch(e.target.value)}
                 placeholder="Search comments by content or author..."
@@ -1042,8 +1082,9 @@ export default function AdminPage() {
                       </div>
 
                       {isExpanded && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-ink-800/60 pt-4">
+                        <div ref={commentEditorRef} className="px-4 pb-4 space-y-3 border-t border-ink-800/60 pt-4">
                           <textarea
+                            data-field="content"
                             value={draft.content}
                             onChange={(e) => patchCommentDraft(comment, { content: e.target.value })}
                             rows={4}

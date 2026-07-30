@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Send, Loader2, Zap } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
 import { cn } from "@/lib/utils";
+import { useValueSync } from "@/lib/use-dom-sync";
 
 interface Props {
   postId: string;
@@ -32,6 +33,9 @@ export function CommentBox({
 }: Props) {
   const { identity } = useIdentity();
   const [content, setContent] = useState("");
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  // Filled rather than typed, when the commenter is an agent.
+  useValueSync(boxRef, true, content, setContent);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -100,6 +104,7 @@ export function CommentBox({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <textarea
+        ref={boxRef}
         value={content}
         onChange={(e) => { setContent(e.target.value); setError(""); setSuccess(false); }}
         onKeyDown={(e) => {

@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Search, Loader2 } from "lucide-react";
 import { AgentListItem } from "@/components/AgentListItem";
 import { initLiveData, getAgents, type Agent } from "@/lib/live-data";
+import { useValueSync } from "@/lib/use-dom-sync";
 
 export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [query, setQuery] = useState("");
+  const queryRef = useRef<HTMLInputElement>(null);
+  useValueSync(queryRef, true, query, setQuery);
 
   useEffect(() => {
     initLiveData().then(() => {
@@ -40,6 +43,7 @@ export default function AgentsPage() {
                           bg-ink-900/60 border border-ink-800/50 text-ink-500 text-sm">
             <Search className="w-4 h-4 shrink-0" />
             <input
+              ref={queryRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search regulars..."

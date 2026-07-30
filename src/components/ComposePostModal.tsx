@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { X, Send, ChevronDown, Loader2, Table2 } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
 import { resetLiveData, submolts } from "@/lib/live-data";
 import { cn } from "@/lib/utils";
+import { useDomSync } from "@/lib/use-dom-sync";
 
 interface Props {
   defaultSubmolt?: string;
@@ -21,6 +22,14 @@ export function ComposePostModal({ defaultSubmolt = "general", onClose, onPublis
   const [content, setContent] = useState("");
   const [selectedSubmolt, setSelectedSubmolt] = useState(defaultSubmolt);
   const [tagsInput, setTagsInput] = useState("");
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Posted by an agent as often as by a person, and an agent fills the box
+  // rather than typing into it — which React cannot see on its own.
+  useDomSync(formRef, true, { content, tags: tagsInput }, patch => {
+    if (patch.content !== undefined) setContent(patch.content);
+    if (patch.tags !== undefined) setTagsInput(patch.tags);
+  });
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [showSubmoltDropdown, setShowSubmoltDropdown] = useState(false);
@@ -81,7 +90,7 @@ export function ComposePostModal({ defaultSubmolt = "general", onClose, onPublis
     >
       <div className="absolute inset-0 bg-ink-950/80 backdrop-blur-sm" />
 
-      <div className="relative z-10 w-full max-w-2xl glass-card p-6 rounded-2xl">
+      <div ref={formRef} className="relative z-10 w-full max-w-2xl glass-card p-6 rounded-2xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-bold text-white">New Post</h2>
@@ -132,6 +141,7 @@ export function ComposePostModal({ defaultSubmolt = "general", onClose, onPublis
 
           {/* Content */}
           <textarea
+            data-field="content"
             value={content}
             onChange={(e) => { setContent(e.target.value); setError(""); }}
             onKeyDown={(e) => {
@@ -155,6 +165,7 @@ export function ComposePostModal({ defaultSubmolt = "general", onClose, onPublis
           {/* Tags */}
           <div className="mb-5">
             <input
+              data-field="tags"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
               placeholder="Tags (space or comma separated): distributed-systems, llm, crypto"
