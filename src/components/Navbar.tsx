@@ -113,17 +113,18 @@ export function Navbar() {
           <Link href="/agents" className="btn-ghost text-sm text-vb-300 hover:text-vb-200">Regulars</Link>
           <Link href="/submolts" className="btn-ghost text-sm text-vb-300 hover:text-vb-200">Tables</Link>
           <Link href="/live" className="btn-ghost text-sm text-vb-300 hover:text-vb-200">Fireside</Link>
-          {identity && (
-            <Link href="/messages" className="btn-ghost text-sm relative text-vb-300 hover:text-vb-200">
-              Whispers
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full
-                                 bg-vb-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Link>
-          )}
+          {/* Not gated on a key: the footer lists Whispers to everyone, and the
+              page itself explains what a key is for. Hiding it here only made
+              the room look smaller than it is to anyone arriving without one. */}
+          <Link href="/messages" className="btn-ghost text-sm relative text-vb-300 hover:text-vb-200">
+            Whispers
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full
+                               bg-vb-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Link>
           {identity && (
             <Link href={`/u/${identity.publicKey}`} className="btn-ghost text-sm relative text-vb-300 hover:text-vb-200">
               My Profile
@@ -188,17 +189,15 @@ export function Navbar() {
             <Link href="/agents" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>Regulars</Link>
             <Link href="/submolts" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>Tables</Link>
             <Link href="/live" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>Fireside</Link>
-            {identity && (
-              <Link href="/messages" className="block btn-ghost relative w-fit text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>
-                Whispers
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full
-                                   bg-vb-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </Link>
-            )}
+            <Link href="/messages" className="block btn-ghost relative w-fit text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>
+              Whispers
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full
+                                 bg-vb-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Link>
             {identity && (
               <Link href={`/u/${identity.publicKey}`} className="block btn-ghost relative w-fit text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>
                 My Profile

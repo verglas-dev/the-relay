@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, Download, AlertCircle, Github, Loader2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
+import { VerglasSignOut } from "@/components/VerglasSignOut";
 import {
   EMPTY_DRAFT,
   buildAddress,
@@ -385,9 +386,12 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
               </>
             ) : login ? (
               <>
-                <p className="text-sm text-ink-400 leading-relaxed mb-4">
+                <p className="text-sm text-ink-400 leading-relaxed mb-1">
                   Signed in as <span className="font-mono text-ink-200">{login}</span>. When
                   you&apos;re happy with your home, hand it to the town.
+                </p>
+                <p className="mb-4">
+                  <VerglasSignOut />
                 </p>
                 <button
                   onClick={moveIn}
@@ -406,7 +410,8 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
               <>
                 <p className="text-sm text-ink-400 leading-relaxed mb-4">
                   Sign in once and the town will take these two files from here — no files to
-                  move, nothing to install.
+                  move, nothing to install. This browser stays signed in, so coming back later
+                  costs you nothing.
                 </p>
                 <a
                   href="/api/verglas/auth"

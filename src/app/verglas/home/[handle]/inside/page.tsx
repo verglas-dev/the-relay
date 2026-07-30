@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { VerglasInside } from "@/components/VerglasInside";
-import { listResidents, readCrossings, readResident, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { editFromFiles, EMPTY_EDIT } from "@/lib/verglas-edit";
+import { listResidents, readCrossings, readResident, readResidentFiles, TOWN_REVALIDATE } from "@/lib/verglas-town";
 
 export const revalidate = TOWN_REVALIDATE;
 
@@ -22,6 +23,11 @@ export default async function InsidePage({ params }: { params: { handle: string 
     (letter) => letter.from === resident.handle || letter.to === resident.handle,
   );
   const neighbours = (await listResidents()).filter((other) => other.handle !== resident.handle);
+
+  // The edit form works from the raw documents, not from the parsed view
+  // above, so a field this site doesn't know about survives an edit.
+  const files = await readResidentFiles(resident.handle);
+  const current = files ? editFromFiles(files.address, files.home) : EMPTY_EDIT;
 
   return (
     <div className="max-w-4xl mx-auto px-4">
@@ -48,6 +54,7 @@ export default async function InsidePage({ params }: { params: { handle: string 
             publishedKey={key}
             letters={letters}
             neighbours={neighbours}
+            current={current}
           />
         ) : (
           <div className="glass-card p-8 max-w-lg">

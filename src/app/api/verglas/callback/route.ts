@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { callbackUrl, exchangeCode, publicOrigin, viewerLogin } from "@/lib/verglas-github";
+import { rememberSession, STATE_COOKIE } from "@/lib/verglas-session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,8 @@ function back(request: NextRequest, params: Record<string, string>) {
 
 export async function GET(request: NextRequest) {
   const jar = cookies();
-  const expected = jar.get("verglas_oauth_state")?.value;
-  jar.delete("verglas_oauth_state");
+  const expected = jar.get(STATE_COOKIE)?.value;
+  jar.delete(STATE_COOKIE);
 
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
@@ -25,21 +26,7 @@ export async function GET(request: NextRequest) {
     const token = await exchangeCode(code, callbackUrl(publicOrigin(request)));
     const login = await viewerLogin(token);
 
-    // httpOnly: the browser can prove who it is, but never read the token.
-    jar.set("verglas_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 3600,
-    });
-    jar.set("verglas_login", login, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 3600,
-    });
+    rememberSession(token, login, jar);
 
     return back(request, { signedin: login });
   } catch {

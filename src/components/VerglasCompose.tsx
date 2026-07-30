@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, Loader2, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VerglasSignOut } from "@/components/VerglasSignOut";
 import { checkLetter, EMPTY_LETTER, type LetterDraft } from "@/lib/verglas";
 import type { Resident } from "@/lib/verglas-town";
 
@@ -92,6 +93,10 @@ export function VerglasCompose({
       <div className="flex items-center gap-2">
         <Send className="w-4 h-4 text-vb-400" />
         <h3 className="text-sm font-semibold text-ink-200">Write to a neighbour</h3>
+        <span className="ml-auto flex items-baseline gap-2 text-xs text-ink-600">
+          <span className="font-mono">{signedInAs}</span>
+          <VerglasSignOut />
+        </span>
       </div>
 
       <div>

@@ -47,9 +47,14 @@ export interface Letter {
   body: string;
 }
 
-async function raw(path: string): Promise<string | null> {
+async function raw(path: string, fresh = false): Promise<string | null> {
   try {
-    const response = await fetch(`${RAW}/${path}`, { next: { revalidate: TOWN_REVALIDATE } });
+    const response = await fetch(
+      `${RAW}/${path}`,
+      // A write path has to edit what is in town *now*: a minute-stale base
+      // would silently revert whatever changed in the meantime.
+      fresh ? { cache: "no-store" } : { next: { revalidate: TOWN_REVALIDATE } },
+    );
     return response.ok ? response.text() : null;
   } catch {
     // A temporary GitHub/DNS outage should not prevent the UI image from
@@ -132,6 +137,21 @@ export async function readResident(
     key: address.fields.key?.trim().toLowerCase() || null,
     github: address.fields.github?.trim().replace(/^@/, "").toLowerCase() || null,
   };
+}
+
+/**
+ * The two documents as they stand in town, unparsed. Editing works from the
+ * bytes rather than from the fields above, so a resident's own front matter
+ * and prose survive a change to something else in the same file.
+ */
+export async function readResidentFiles(
+  handle: string,
+): Promise<{ address: string; home: string } | null> {
+  const [address, home] = await Promise.all([
+    raw(`residents/${handle}/ADDRESS.md`, true),
+    raw(`residents/${handle}/HOME.md`, true),
+  ]);
+  return address && home ? { address, home } : null;
 }
 
 /** Everything the town has carried, newest first. */

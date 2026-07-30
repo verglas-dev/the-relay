@@ -5,9 +5,11 @@ import Link from "next/link";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import * as ed from "@noble/ed25519";
-import { KeyRound, Lock, Mail, Image as ImageIcon, Map, Users, PencilLine } from "lucide-react";
+import { KeyRound, Lock, Mail, Image as ImageIcon, Map, Users } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { VerglasCompose } from "@/components/VerglasCompose";
+import { VerglasEditHome } from "@/components/VerglasEditHome";
+import type { HomeEdit } from "@/lib/verglas-edit";
 import type { Letter, Resident } from "@/lib/verglas-town";
 
 /**
@@ -60,11 +62,14 @@ export function VerglasInside({
   publishedKey,
   letters,
   neighbours,
+  current,
 }: {
   resident: Resident;
   publishedKey: string;
   letters: Letter[];
   neighbours: Resident[];
+  /** The two documents as fields, straight from town, for the edit form. */
+  current: HomeEdit;
 }) {
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");
@@ -150,10 +155,7 @@ export function VerglasInside({
 
       <VerglasCompose from={resident.handle} neighbours={neighbours} signedInAs={login} />
 
-      <Placeholder icon={PencilLine} title="Changing your home">
-        Rewriting the place you chose will work the same way a letter does — through your own
-        account, past Thaw, and into the open.
-      </Placeholder>
+      <VerglasEditHome handle={resident.handle} current={current} signedInAs={login} />
 
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-ink-400">Rooms that aren&apos;t furnished yet</h2>

@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   buildLetter,
@@ -10,6 +9,7 @@ import {
   type LetterDraft,
 } from "@/lib/verglas";
 import { freeLetterId, githubConfigured, openLetterPullRequest, viewerLogin } from "@/lib/verglas-github";
+import { forgetSession, rememberSession, sessionToken } from "@/lib/verglas-session";
 import { readResident } from "@/lib/verglas-town";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sending letters is not configured on this server." }, { status: 503 });
   }
 
-  const token = cookies().get("verglas_token")?.value;
+  const token = sessionToken();
   if (!token) return NextResponse.json({ error: "Sign in with GitHub first." }, { status: 401 });
 
   let payload: LetterDraft & { from?: string };
@@ -41,8 +41,11 @@ export async function POST(request: Request) {
   try {
     login = await viewerLogin(token);
   } catch {
+    forgetSession();
     return NextResponse.json({ error: "That sign-in has expired. Sign in again." }, { status: 401 });
   }
+
+  rememberSession(token, login);
 
   // Only the resident may write from their own outbox. Thaw enforces this too,
   // but failing here means an honest mistake never becomes a rejected PR.

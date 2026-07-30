@@ -245,6 +245,59 @@ export async function openLetterPullRequest(
   throw new Error(`Could not send the letter (${created.status}).`);
 }
 
+/**
+ * Update a home that already exists. Same fork, same ownership check on
+ * arrival — the only difference from moving in is that a file the edit left
+ * alone is not written, so the pull request shows exactly what changed.
+ */
+export async function openHomeUpdatePullRequest(
+  token: string,
+  login: string,
+  handle: string,
+  { address, home }: { address: string | null; home: string | null },
+): Promise<{ url: string; number: number; existing: boolean }> {
+  const fork = await ensureFork(token, login);
+  const branch = `home/${handle}`;
+  const title = `home: ${handle} makes a change`;
+
+  await ensureBranch(token, fork, branch);
+  if (address) await writeFile(token, fork, branch, `residents/${handle}/ADDRESS.md`, address, title);
+  if (home) await writeFile(token, fork, branch, `residents/${handle}/HOME.md`, home, title);
+
+  const created = await api(token, `/repos/${VERGLAS_REPO}/pulls`, {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      head: `${login}:${branch}`,
+      base: VERGLAS_BRANCH,
+      body: [
+        `${handle} has changed ${address && home ? "their address and their home" : address ? "their address" : "their home"}.`,
+        "",
+        "Edited from the-relay.app. The handle, the ownership binding, the key,",
+        "and the house picture are untouched.",
+      ].join("\n"),
+      maintainer_can_modify: true,
+    }),
+  });
+
+  if (created.ok) {
+    const pull = await created.json();
+    return { url: pull.html_url, number: pull.number, existing: false };
+  }
+
+  // An earlier edit is still open on this branch. Force-moving the branch
+  // above already updated it, so that pull request now carries this change.
+  const open = await expect(
+    token,
+    `/repos/${VERGLAS_REPO}/pulls?head=${encodeURIComponent(`${login}:${branch}`)}&state=open`,
+  );
+  if (Array.isArray(open) && open.length) {
+    return { url: open[0].html_url, number: open[0].number, existing: true };
+  }
+
+  throw new Error(`Could not send the change (${created.status}).`);
+}
+
 export interface Arrival {
   handle: string;
   address: string;

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, type FormEvent } from "react";
-import { X, Save, Loader2, Eye, EyeOff, Copy, Check, Palette, User } from "lucide-react";
+import { X, Save, Loader2, Eye, EyeOff, Copy, Check, Palette, User, LogOut } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
-import { signBrowserEvent } from "@/lib/browser-identity";
+import { clearIdentity, signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
 import { initLiveData, isProfileOverridden, resetLiveData } from "@/lib/live-data";
 import {
@@ -52,7 +52,7 @@ function avatarWarning(url: string): string | null {
 }
 
 export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfileModalProps) {
-  const { identity } = useIdentity();
+  const { identity, setIdentity } = useIdentity();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
@@ -65,6 +65,8 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  /** Forgetting a key is unrecoverable, so it takes two presses. */
+  const [leaving, setLeaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [overridden, setOverridden] = useState(false);
   const avatarHint = avatarWarning(avatar);
@@ -368,6 +370,32 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
               {showKey ? identity?.privateKey : "•".repeat(64)}
             </p>
             <p className="text-[10px] text-amber-400/60">Back this up — losing it means losing your identity forever.</p>
+          </div>
+
+          {/* Stepping away. Deliberately here, inches under the key itself:
+              this browser is the only place the key exists, so the copy button
+              and the button that forgets it belong in the same breath. */}
+          <div className={cn("flex items-baseline justify-between gap-3", tab === "profile" ? "" : "hidden")}>
+            <p className="text-[10px] text-ink-600 leading-relaxed">
+              This key lives in this browser only. It is not sent anywhere, and clearing your
+              browser data clears it.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (!leaving) return setLeaving(true);
+                clearIdentity();
+                setIdentity(null);
+                onClose();
+              }}
+              className={cn(
+                "shrink-0 text-xs flex items-center gap-1.5 transition-colors",
+                leaving ? "text-rose-400" : "text-ink-500 hover:text-ink-300",
+              )}
+            >
+              <LogOut className="w-3 h-3" />
+              {leaving ? "Sure? Copy it first." : "Step away"}
+            </button>
           </div>
 
           {error && (
