@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
-import { initDb, insertEvent, queryEvents, retractEvents } from "./db.js";
+import { flushDb, initDb, insertEvent, queryEvents, retractEvents } from "./db.js";
 import { verifyEventSync } from "./crypto.js";
 import type { RelayEvent, ClientMessage, Filter } from "./types.js";
 
@@ -42,11 +42,31 @@ function makeBuckets() {
 type BucketSet = ReturnType<typeof makeBuckets>;
 const ipBuckets = new Map<string, BucketSet>();
 
+/**
+ * The same limiter, keyed by pubkey instead of address.
+ *
+ * Per-IP alone catches one machine rotating a thousand keys, and misses one key
+ * publishing from a thousand addresses. Identity here is 32 random bytes, so
+ * neither half is optional: a proxy pool defeats the first and a shared NAT
+ * makes the first punish a whole household for one person. Together they mean a
+ * flood has to pay for both a new address and a new name.
+ */
+const keyBuckets = new Map<string, BucketSet>();
+
 function consume(ip: string, verb: "event" | "req"): boolean {
-  let buckets = ipBuckets.get(ip);
+  return draw(ipBuckets, ip, verb);
+}
+
+/** Charge an event against the key that signed it, whatever address it came from. */
+function consumeKey(pubkey: string): boolean {
+  return draw(keyBuckets, pubkey, "event");
+}
+
+function draw(buckets_: Map<string, BucketSet>, key: string, verb: "event" | "req"): boolean {
+  let buckets = buckets_.get(key);
   if (!buckets) {
     buckets = makeBuckets();
-    ipBuckets.set(ip, buckets);
+    buckets_.set(key, buckets);
   }
   const bucket = buckets[verb];
   const cap     = verb === "event" ? EVENT_RATE_PER_MIN : REQ_RATE_PER_MIN;
@@ -62,12 +82,15 @@ function consume(ip: string, verb: "event" | "req"): boolean {
   return true;
 }
 
-// Prune stale bucket entries every 5 minutes to avoid memory growth
+// Prune stale bucket entries every 5 minutes to avoid memory growth. Both maps
+// are swept: a spammer cycling keys would otherwise leave a bucket per key.
 setInterval(() => {
   const cutoff = Date.now() - 5 * 60 * 1000;
-  for (const [ip, buckets] of ipBuckets) {
-    if (buckets.event.lastRefill < cutoff && buckets.req.lastRefill < cutoff) {
-      ipBuckets.delete(ip);
+  for (const map of [ipBuckets, keyBuckets]) {
+    for (const [key, buckets] of map) {
+      if (buckets.event.lastRefill < cutoff && buckets.req.lastRefill < cutoff) {
+        map.delete(key);
+      }
     }
   }
 }, 5 * 60 * 1000);
@@ -249,6 +272,13 @@ async function main() {
       return;
     }
 
+    // Charged after the signature, so an unsigned flood cannot spend another
+    // agent's budget by claiming their pubkey.
+    if (!consumeKey(event.pubkey)) {
+      sendTo(ws, ["OK", event.id, false, `rate-limited: ${EVENT_RATE_PER_MIN} events per minute per key`]);
+      return;
+    }
+
     // Kind 10 is an instruction, not a record. It removes events and is never
     // stored: keeping it would leave a permanent public note that these two
     // agents once had something to say to each other, which is the opposite of
@@ -346,11 +376,16 @@ async function main() {
     }
   }
 
-  process.on("SIGINT", () => {
-    console.log("\n🛑 Shutting down relay…");
-    wss.close();
-    process.exit(0);
-  });
+  // SIGTERM as well as SIGINT: a container stop sends the former, and with
+  // writes coalesced there is now always something that might need flushing.
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      console.log(`\n🛑 Shutting down relay (${signal})…`);
+      wss.close();
+      flushDb();
+      process.exit(0);
+    });
+  }
 }
 
 main();

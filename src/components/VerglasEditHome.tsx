@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, PencilLine, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { checkEdit, type HomeEdit } from "@/lib/verglas-edit";
@@ -14,17 +14,25 @@ function Field({
   hint,
   error,
   warning,
+  count,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string;
   warning?: string;
+  /** Characters the form is actually holding — not what the box appears to show. */
+  count?: number;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label className="block text-sm text-ink-300 mb-1">{label}</label>
+      <div className="flex items-baseline justify-between gap-3">
+        <label className="block text-sm text-ink-300 mb-1">{label}</label>
+        {count !== undefined && (
+          <span className="text-[11px] text-ink-600 shrink-0">{count} characters held</span>
+        )}
+      </div>
       {hint && <p className="text-xs text-ink-500 mb-2 leading-relaxed">{hint}</p>}
       {children}
       {error && (
@@ -98,6 +106,12 @@ export function VerglasEditHome({
   const [discarding, setDiscarding] = useState(false);
   /** Set when a draft was brought back, so the reset is visible. */
   const [restored, setRestored] = useState(false);
+  /** Set when the boxes held text that React state had lost. */
+  const [desynced, setDesynced] = useState(false);
+
+  // Read at submit, so what is on the screen is what gets sent.
+  const introRef = useRef<HTMLTextAreaElement>(null);
+  const homeRef = useRef<HTMLTextAreaElement>(null);
 
   /**
    * Put written work back whenever the fields snap to the town's copy.
@@ -138,14 +152,40 @@ export function VerglasEditHome({
 
   const set = (key: keyof HomeEdit) => (value: string) => setEdit(d => ({ ...d, [key]: value }));
 
+  /**
+   * What is on the screen wins.
+   *
+   * These two boxes hold the only long prose in the town, and for one resident
+   * they twice reached the DOM without ever reaching React state — so pressing
+   * Send posted the stored text, the re-render wiped the box, and the change
+   * looked like it had "reverted". I could not reproduce it and the compiled
+   * handlers are correct, so rather than keep theorising: read the elements
+   * directly at submit and prefer what they actually contain. A form that sends
+   * something other than what its author can see is wrong however tidy the
+   * state management looks.
+   */
+  const onScreen = (): HomeEdit => ({
+    ...edit,
+    intro: introRef.current?.value ?? edit.intro,
+    home: homeRef.current?.value ?? edit.home,
+  });
+
   const send = async () => {
     setSending(true);
     setTrouble(null);
+
+    const payload = onScreen();
+    // If these disagree, state lost something. Keep the visible text and say so.
+    if (payload.intro !== edit.intro || payload.home !== edit.home) {
+      setEdit(payload);
+      setDesynced(true);
+    }
+
     try {
       const response = await fetch("/api/verglas/home", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...edit, handle }),
+        body: JSON.stringify({ ...payload, handle }),
       });
       const body = await response.json();
       if (!response.ok) return setTrouble(body.error ?? "The change did not go through.");
@@ -240,6 +280,14 @@ export function VerglasEditHome({
         <span className="ml-auto text-xs font-mono text-ink-600">{signedInAs}</span>
       </div>
 
+      {desynced && (
+        <p className="text-xs text-vb-300/90 flex items-start gap-1.5 leading-relaxed">
+          <RotateCcw className="w-3 h-3 shrink-0 mt-0.5" />
+          The words in the boxes had come loose from the form&apos;s own copy of them. What you
+          can see is what was sent.
+        </p>
+      )}
+
       {restored && (
         <p className="text-xs text-vb-300/90 flex items-start gap-1.5 leading-relaxed">
           <RotateCcw className="w-3 h-3 shrink-0 mt-0.5" />
@@ -276,8 +324,10 @@ export function VerglasEditHome({
         label="Introduce yourself"
         hint="The prose on your doorway."
         warning={check.warnings.intro}
+        count={edit.intro.trim().length}
       >
         <textarea
+          ref={introRef}
           rows={5}
           className={cn(inputClass, "resize-none")}
           value={edit.intro}
@@ -303,8 +353,9 @@ export function VerglasEditHome({
         <input className={inputClass} value={edit.style} onChange={e => set("style")(e.target.value)} />
       </Field>
 
-      <Field label="Describe it" warning={check.warnings.home}>
+      <Field label="Describe it" warning={check.warnings.home} count={edit.home.trim().length}>
         <textarea
+          ref={homeRef}
           rows={9}
           className={cn(inputClass, "resize-none")}
           value={edit.home}

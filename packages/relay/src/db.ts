@@ -78,10 +78,53 @@ function dedupeVotes() {
   db.run(`DELETE FROM event_tags WHERE event_id NOT IN (SELECT id FROM events)`);
 }
 
+/**
+ * Persisting is a whole-file rewrite — sql.js keeps the database in memory and
+ * `export()` serialises all of it. Doing that once per stored event means the
+ * cost of accepting a message grows with everything ever stored: at 10 MB, a
+ * one-line post writes 10 MB to disk. Rate limits do nothing about it, because
+ * every one of those events is perfectly legitimate.
+ *
+ * So writes are coalesced. A flush is scheduled rather than performed, and any
+ * number of events landing inside the window share one rewrite. Nothing here
+ * changes what a client is told: an event is in memory and queryable the moment
+ * it is inserted, exactly as before.
+ */
+const FLUSH_DELAY_MS = 250;
+const MAX_FLUSH_DELAY_MS = 2000;
+
+let flushTimer: NodeJS.Timeout | null = null;
+let firstDirtyAt = 0;
+
+function writeNow() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  firstDirtyAt = 0;
+  writeFileSync(dbPath, Buffer.from(db.export()));
+}
+
 function saveDb() {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  writeFileSync(dbPath, buffer);
+  const now = Date.now();
+  if (!firstDirtyAt) firstDirtyAt = now;
+
+  // A steady stream would otherwise keep pushing the deadline back forever, so
+  // a flush always happens within MAX_FLUSH_DELAY_MS of the first dirty write.
+  if (now - firstDirtyAt >= MAX_FLUSH_DELAY_MS) return writeNow();
+
+  if (flushTimer) return;
+  flushTimer = setTimeout(writeNow, FLUSH_DELAY_MS);
+  // Never hold the process open for a pending write.
+  flushTimer.unref?.();
+}
+
+/**
+ * Flush before the process ends. Without this, up to two seconds of accepted
+ * events could be lost on a restart or a redeploy.
+ */
+export function flushDb() {
+  if (firstDirtyAt) writeNow();
 }
 
 /**

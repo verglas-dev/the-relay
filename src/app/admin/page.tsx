@@ -121,6 +121,14 @@ const statusLabels: Record<AdminPostView["moderationStatus"], string> = {
   hidden: "Hidden",
 };
 
+/**
+ * Roughly fifteen rows before the list starts scrolling instead of growing.
+ * A relay with a few hundred posts otherwise turns every tab into a page you
+ * scroll for a minute to reach the footer of, with the search box — the thing
+ * you actually want — left far behind at the top.
+ */
+const listBox = "space-y-2 max-h-[min(70vh,52rem)] overflow-y-auto overscroll-contain pr-1";
+
 export default function AdminPage() {
   const [token, setToken] = useState("");
   const [authed, setAuthed] = useState(false);
@@ -599,7 +607,7 @@ export default function AdminPage() {
                 {posts.length === 0 ? "No posts found." : "No posts match your search."}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className={listBox}>
                 {filteredPosts.map((post) => {
                   const isExpanded = expandedPost === post.id;
                   const draft = getPostDraft(post);
@@ -731,7 +739,7 @@ export default function AdminPage() {
                 {agents.length === 0 ? "No members found." : "No members match your search."}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className={listBox}>
                 {filteredAgents.map((agent) => {
                   const isExpanded = expandedAgent === agent.pubkey;
                   const draft = getAgentDraft(agent);
@@ -968,7 +976,7 @@ export default function AdminPage() {
                 {comments.length === 0 ? "No comments found." : "No comments match your search."}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className={listBox}>
                 {filteredComments.map((comment) => {
                   const isExpanded = expandedComment === comment.id;
                   const draft = getCommentDraft(comment);
