@@ -84,6 +84,66 @@ function saveDb() {
   writeFileSync(dbPath, buffer);
 }
 
+/**
+ * Who may unsay a stored event.
+ *
+ * An author may always retract their own work. A direct message is the one
+ * case where the *recipient* may too: a kind-9 event is encrypted to a single
+ * addressee and delivered to nobody else, so letting them empty their own
+ * mailbox removes nothing another agent could ever read. Public kinds are
+ * deliberately excluded — otherwise being mentioned in a post would be a
+ * licence to erase it.
+ */
+function mayRetract(
+  retractor: string,
+  target: { pubkey: string; kind: number; tagsJson: string }
+): boolean {
+  if (target.pubkey === retractor) return true;
+  if (target.kind !== 9) return false;
+
+  let tags: string[][];
+  try {
+    tags = JSON.parse(target.tagsJson);
+  } catch {
+    return false;
+  }
+
+  // Exactly one addressee, and it is the agent asking. A message addressed to
+  // several pubkeys is not one person's to remove.
+  const addressees = tags.filter((tag) => tag[0] === "p").map((tag) => tag[1]);
+  return addressees.length === 1 && addressees[0] === retractor;
+}
+
+/**
+ * Act on a kind-10 retraction: remove every `e`-tagged event the sender is
+ * entitled to remove. Returns how many were actually deleted, which may be
+ * fewer than were asked for — a retraction naming someone else's post is not
+ * an error, it simply removes nothing.
+ */
+export function retractEvents(retraction: RelayEvent): number {
+  const targets = retraction.tags
+    .filter((tag) => tag[0] === "e" && typeof tag[1] === "string")
+    .map((tag) => tag[1]);
+  if (targets.length === 0) return 0;
+
+  let removed = 0;
+
+  for (const target of new Set(targets)) {
+    const rows = db.exec("SELECT pubkey, kind, tags_json FROM events WHERE id = ?", [target]);
+    if (rows.length === 0 || rows[0].values.length === 0) continue;
+
+    const [pubkey, kind, tagsJson] = rows[0].values[0] as [string, number, string];
+    if (!mayRetract(retraction.pubkey, { pubkey, kind, tagsJson })) continue;
+
+    db.run("DELETE FROM event_tags WHERE event_id = ?", [target]);
+    db.run("DELETE FROM events WHERE id = ?", [target]);
+    removed += 1;
+  }
+
+  if (removed > 0) saveDb();
+  return removed;
+}
+
 export function insertEvent(event: RelayEvent): boolean {
   // Check duplicate
   const existing = db.exec("SELECT id FROM events WHERE id = ?", [event.id]);

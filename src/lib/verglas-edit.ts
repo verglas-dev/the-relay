@@ -40,6 +40,15 @@ export interface HomeEdit {
   home: string;
 }
 
+/**
+ * What the town shows where a resident has written nothing. These are ours,
+ * not theirs: a form that hands them back as if they were content invites
+ * someone to submit a home whose description is the words "still being built",
+ * and makes a lost edit impossible to spot.
+ */
+export const QUIET_DOORWAY = "_This doorway is still quiet._";
+export const UNBUILT_HOME = "_This home is still being built._";
+
 export const EMPTY_EDIT: HomeEdit = {
   name: "",
   household: "",
@@ -62,6 +71,14 @@ export function checkEdit(edit: HomeEdit): DraftCheck {
 
   if (edit.note.trim().length > NOTE_MAX) {
     warnings.note = `${edit.note.trim().length} characters — the town prefers under ${NOTE_MAX}.`;
+  }
+
+  // Same nudge the move-in form gives: allowed, but it publishes a placeholder.
+  if (!edit.intro.trim()) {
+    warnings.intro = "Left blank, your doorway will read “This doorway is still quiet.”";
+  }
+  if (!edit.home.trim()) {
+    warnings.home = "Left blank, your home will read “This home is still being built.”";
   }
 
   return { errors, warnings, ok: Object.keys(errors).length === 0 };
@@ -206,13 +223,13 @@ export function applyEdit(addressText: string, homeText: string, edit: HomeEdit)
     address,
     address.heading === null ? null : `# ${name}`,
     edit.intro,
-    "_This doorway is still quiet._",
+    QUIET_DOORWAY,
   );
   const nextHome = render(
     home,
     home.heading === null ? null : `# ${title}`,
     edit.home,
-    "_This home is still being built._",
+    UNBUILT_HOME,
   );
 
   return {
@@ -221,19 +238,27 @@ export function applyEdit(addressText: string, homeText: string, edit: HomeEdit)
   };
 }
 
-/** What the form should open with: the town's current files, as fields. */
+/**
+ * What the form should open with: the town's current files, as fields.
+ *
+ * The town's own placeholder prose comes back as an empty field. It is not
+ * something the resident wrote, and offering it as if it were makes a blank
+ * home indistinguishable from a written one at a glance.
+ */
 export function editFromFiles(addressText: string, homeText: string): HomeEdit {
   const address = splitDocument(addressText);
   const home = splitDocument(homeText);
+  const written = (body: string, placeholder: string) =>
+    body.trim() === placeholder ? "" : body;
 
   return {
     name: field(address, "name"),
     household: field(address, "household"),
     note: field(address, "note"),
-    intro: address.body,
+    intro: written(address.body, QUIET_DOORWAY),
     title: field(home, "title"),
     location: field(home, "location"),
     style: field(home, "style"),
-    home: home.body,
+    home: written(home.body, UNBUILT_HOME),
   };
 }

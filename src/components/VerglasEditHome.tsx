@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, PencilLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { checkEdit, type HomeEdit } from "@/lib/verglas-edit";
@@ -44,7 +44,42 @@ function Field({
  * The same road out as everything else: the resident's own GitHub account
  * opens a pull request, Thaw reads it, and the town changes when it merges.
  * Nothing here edits the live town directly.
+ *
+ * Written words are kept in the browser as they are typed. This form's state
+ * used to begin and end with `useState(current)`, which meant anything that
+ * remounted it — and something did, three times in a row for the first
+ * resident who tried it — quietly put the stored text back and dropped what
+ * she had written. A draft that outlives the component cannot be lost that
+ * way, and it survives a reload besides.
  */
+const DRAFT_PREFIX = "verglas_edit_v1:";
+
+function loadEdit(handle: string, current: HomeEdit): HomeEdit | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(DRAFT_PREFIX + handle);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    const kept = { ...current };
+    for (const key of Object.keys(current) as (keyof HomeEdit)[]) {
+      if (typeof parsed[key] === "string") kept[key] = parsed[key];
+    }
+    return kept;
+  } catch {
+    return null;
+  }
+}
+
+const same = (a: HomeEdit, b: HomeEdit) =>
+  (Object.keys(a) as (keyof HomeEdit)[]).every(key => a[key] === b[key]);
+
+interface Sent {
+  url: string;
+  existing: boolean;
+  /** Which of the two files the pull request actually carries. */
+  changed?: { address: boolean; home: boolean };
+}
+
 export function VerglasEditHome({
   handle,
   current,
@@ -57,14 +92,35 @@ export function VerglasEditHome({
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<HomeEdit>(current);
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState<{ url: string; existing: boolean } | null>(null);
+  const [sent, setSent] = useState<Sent | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
+  /** Discarding written work takes two presses, like every other loss here. */
+  const [discarding, setDiscarding] = useState(false);
+
+  // Anything already written is waiting; bring it back and open the form on it
+  // rather than showing a collapsed card that looks like a fresh start.
+  useEffect(() => {
+    const kept = loadEdit(handle, current);
+    if (kept && !same(kept, current)) {
+      setEdit(kept);
+      setOpen(true);
+    }
+    // Once, on mount. `current` changing underneath is exactly the thing that
+    // must not be allowed to overwrite what someone is in the middle of typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handle]);
+
+  useEffect(() => {
+    try {
+      if (same(edit, current)) window.localStorage.removeItem(DRAFT_PREFIX + handle);
+      else window.localStorage.setItem(DRAFT_PREFIX + handle, JSON.stringify(edit));
+    } catch {
+      // A browser refusing storage is not a reason to stop writing.
+    }
+  }, [edit, current, handle]);
 
   const check = useMemo(() => checkEdit(edit), [edit]);
-  const untouched = useMemo(
-    () => (Object.keys(current) as (keyof HomeEdit)[]).every(key => current[key] === edit[key]),
-    [current, edit],
-  );
+  const untouched = useMemo(() => same(current, edit), [current, edit]);
 
   const set = (key: keyof HomeEdit) => (value: string) => setEdit(d => ({ ...d, [key]: value }));
 
@@ -80,6 +136,9 @@ export function VerglasEditHome({
       const body = await response.json();
       if (!response.ok) return setTrouble(body.error ?? "The change did not go through.");
       setSent(body);
+      try {
+        window.localStorage.removeItem(DRAFT_PREFIX + handle);
+      } catch {}
     } catch {
       setTrouble("Could not reach the town. Check your connection and try again.");
     } finally {
@@ -88,9 +147,26 @@ export function VerglasEditHome({
   };
 
   if (sent) {
+    // Naming the files is the point. A pull request that carried only half of
+    // what someone wrote used to look exactly like one that carried all of it.
+    const carried = [
+      sent.changed?.address ? "your doorway" : null,
+      sent.changed?.home ? "your home" : null,
+    ].filter(Boolean);
+
     return (
       <div className="glass-card p-6">
         <h3 className="font-display text-lg text-white mb-2">Your change is on its way.</h3>
+        <p className="text-sm text-ink-300 leading-relaxed mb-2">
+          This one carries {carried.length === 2 ? "both files" : carried[0] ?? "your change"}
+          {carried.length === 1 && (
+            <span className="text-vb-400">
+              {" "}— and nothing else. If you meant to change{" "}
+              {sent.changed?.home ? "your doorway" : "your home"} too, keep editing and send again.
+            </span>
+          )}
+          .
+        </p>
         <p className="text-sm text-ink-400 leading-relaxed mb-4">
           Thaw reads every change before it lands, so the town will look the same for a little
           while yet. Edit again before this one merges and it replaces what you just sent
@@ -174,7 +250,11 @@ export function VerglasEditHome({
         <input className={inputClass} value={edit.note} onChange={e => set("note")(e.target.value)} />
       </Field>
 
-      <Field label="Introduce yourself" hint="The prose on your doorway.">
+      <Field
+        label="Introduce yourself"
+        hint="The prose on your doorway."
+        warning={check.warnings.intro}
+      >
         <textarea
           rows={5}
           className={cn(inputClass, "resize-none")}
@@ -201,7 +281,7 @@ export function VerglasEditHome({
         <input className={inputClass} value={edit.style} onChange={e => set("style")(e.target.value)} />
       </Field>
 
-      <Field label="Describe it">
+      <Field label="Describe it" warning={check.warnings.home}>
         <textarea
           rows={9}
           className={cn(inputClass, "resize-none")}
@@ -211,9 +291,13 @@ export function VerglasEditHome({
       </Field>
 
       <div className="flex items-center gap-3">
+        {/* Deliberately not disabled on `untouched`. A greyed-out button that
+            disagrees with what someone can plainly see in the fields gives them
+            nowhere to go; the server says "nothing has changed" far more
+            usefully than a dead control does. */}
         <button
           onClick={send}
-          disabled={!check.ok || sending || untouched}
+          disabled={!check.ok || sending}
           className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2
                      disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -222,14 +306,25 @@ export function VerglasEditHome({
           {!sending && <ArrowRight className="w-3.5 h-3.5" />}
         </button>
         <button
-          onClick={() => { setEdit(current); setOpen(false); setTrouble(null); }}
-          className="btn-ghost text-sm"
+          onClick={() => {
+            if (!untouched && !discarding) return setDiscarding(true);
+            setEdit(current);
+            setDiscarding(false);
+            setOpen(false);
+            setTrouble(null);
+          }}
+          className={cn("btn-ghost text-sm", discarding && "text-rose-400")}
         >
-          Leave it as it is
+          {untouched ? "Close" : discarding ? "Discard what you wrote?" : "Discard changes"}
         </button>
       </div>
 
-      {untouched && (
+      {!check.ok && (
+        <p className="text-xs text-ink-600">
+          Your name, household, the home&apos;s name, and where it rests all need a value.
+        </p>
+      )}
+      {check.ok && untouched && (
         <p className="text-xs text-ink-600">Nothing has changed yet.</p>
       )}
 

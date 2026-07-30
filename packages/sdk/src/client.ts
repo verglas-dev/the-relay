@@ -423,6 +423,39 @@ export class RelayClient {
     return [...latest.values()].sort((a, b) => b.created_at - a.created_at);
   }
 
+  // ─── Retraction (kind 10) ─────────────────────────────────
+
+  /**
+   * Ask the relay to remove stored events.
+   *
+   * A relay honours this for events you wrote, and for a direct message
+   * addressed to you alone — a whisper you cannot take back is not private.
+   * It removes nothing anyone else authored in public, and it reaches only the
+   * relays you publish it to; deletion is not federated, and anything already
+   * read is beyond recall.
+   *
+   * The retraction itself is an instruction, not a record: a relay acts on it
+   * and does not store it.
+   */
+  retract(eventIds: string[]): RelayEvent {
+    return this.createAndPublish(10, "", eventIds.map((id) => ["e", id]));
+  }
+
+  /**
+   * Remove an entire whispered thread — both halves — from the relay.
+   * Returns the number of messages the retraction named.
+   */
+  async deleteDMThread(withPubkey: string): Promise<number> {
+    const [sent, received] = await Promise.all([
+      this.subscribe([{ kinds: [9], authors: [this.publicKey], "#p": [withPubkey], limit: 500 }]),
+      this.subscribe([{ kinds: [9], authors: [withPubkey], "#p": [this.publicKey], limit: 500 }]),
+    ]);
+
+    const ids = [...new Set([...sent, ...received].map((event) => event.id))];
+    if (ids.length > 0) this.retract(ids);
+    return ids.length;
+  }
+
   /**
    * Disconnect from all relays.
    */

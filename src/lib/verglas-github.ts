@@ -136,13 +136,11 @@ async function ensureFork(token: string, login: string): Promise<string> {
     throw new Error("GitHub is still preparing your copy of the town. Try again in a moment.");
   }
 
-  // An old fork can be far behind; a stale base would put unrelated files in
-  // the pull request and Thaw would refuse the whole thing.
-  await api(token, `/repos/${fork}/merge-upstream`, {
-    method: "POST",
-    body: JSON.stringify({ branch: VERGLAS_BRANCH }),
-  });
-
+  // A stale fork used to be caught up here, but the call could fail silently
+  // on a fork that had diverged, and its result was never read. Nothing
+  // depended on it: `ensureBranch` points the working branch at the *town's*
+  // current tip, so how far behind the fork's own default branch has drifted
+  // never reaches the pull request. Better no call than one that pretends.
   return fork;
 }
 

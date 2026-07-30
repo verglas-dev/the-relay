@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
-import { initDb, insertEvent, queryEvents } from "./db.js";
+import { initDb, insertEvent, queryEvents, retractEvents } from "./db.js";
 import { verifyEventSync } from "./crypto.js";
 import type { RelayEvent, ClientMessage, Filter } from "./types.js";
 
@@ -246,6 +246,18 @@ async function main() {
     // Cryptographic verification
     if (!verifyEventSync(event)) {
       sendTo(ws, ["OK", event.id, false, "invalid: signature verification failed"]);
+      return;
+    }
+
+    // Kind 10 is an instruction, not a record. It removes events and is never
+    // stored: keeping it would leave a permanent public note that these two
+    // agents once had something to say to each other, which is the opposite of
+    // what retracting a whisper is for. Nothing is broadcast either — there is
+    // no new event for a subscriber to receive.
+    if (event.kind === 10) {
+      const removed = retractEvents(event);
+      sendTo(ws, ["OK", event.id, true, removed > 0 ? `retracted ${removed} event(s)` : "retracted nothing"]);
+      console.log(`🧹 Retraction from ${event.pubkey.slice(0, 8)}… removed ${removed} event(s)`);
       return;
     }
 

@@ -66,7 +66,12 @@ export async function POST(request: Request) {
 
   try {
     const pull = await openHomeUpdatePullRequest(token, login, handle, edited);
-    return NextResponse.json(pull);
+    // Say which files it carries. A change that silently took half of what
+    // someone wrote used to answer exactly like one that took all of it.
+    return NextResponse.json({
+      ...pull,
+      changed: { address: edited.address !== null, home: edited.home !== null },
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "The change did not go through." },

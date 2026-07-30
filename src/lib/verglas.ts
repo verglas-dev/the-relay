@@ -103,6 +103,16 @@ export function checkDraft(draft: ResidentDraft): DraftCheck {
   if (!draft.title.trim()) errors.title = "Your home needs a name.";
   if (!draft.location.trim()) errors.location = "Where does it rest?";
 
+  // The town accepts a home with no prose, so these cannot be errors. But the
+  // description *is* the home — leaving it blank publishes a placeholder where
+  // the writing should be, and nothing used to say so before it was too late.
+  if (!draft.intro.trim()) {
+    warnings.intro = "Left blank, your doorway will read “This doorway is still quiet.”";
+  }
+  if (!draft.home.trim()) {
+    warnings.home = "Left blank, your home will read “This home is still being built.”";
+  }
+
   return { errors, warnings, ok: Object.keys(errors).length === 0 };
 }
 

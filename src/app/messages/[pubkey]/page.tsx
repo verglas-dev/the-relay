@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Lock, Send, Loader2 } from "lucide-react";
+import { ArrowLeft, Lock, Send, Loader2, Trash2 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { initLiveData, getAgent, type Agent } from "@/lib/live-data";
 import { getRelayClient } from "@/lib/relay-client";
@@ -42,6 +42,10 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
+  // Retracting a conversation cannot be undone, so it takes two presses.
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   // Whether the reader is at the newest message. Someone scrolled up through
   // the thread should stay where they are when a reply lands.
@@ -123,6 +127,55 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
     atLiveEnd.current = fromBottom < 80;
   }
 
+  /**
+   * Unsay the whole conversation.
+   *
+   * A whisper that cannot be taken back is not really private, so the relay
+   * accepts a kind-10 retraction for a direct message from either side of it:
+   * the author, or the one agent it was addressed to. One retraction carries
+   * every id in the thread rather than one per message.
+   */
+  async function handleDeleteThread() {
+    if (!identity || deleting) return;
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+
+    setDeleting(true);
+    setSendError("");
+
+    try {
+      const partial = {
+        pubkey: identity.publicKey,
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 10,
+        tags: messages.map((message) => ["e", message.id]),
+        content: "",
+      };
+      const event = signBrowserEvent(partial, identity.privateKey);
+      const client = getRelayClient();
+      await client.connect();
+      const result = await client.publish(event);
+      if (!result.ok) {
+        setSendError(result.message || "The relay would not retract this conversation.");
+        return;
+      }
+
+      // Gone from the relay this browser talks to; drop it from view and from
+      // the unread tally, which is keyed by correspondent rather than by event.
+      seenIds.current.clear();
+      setMessages([]);
+      clearUnread(theirPubkey);
+      setDeleted(true);
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Retraction failed");
+    } finally {
+      setDeleting(false);
+      setConfirming(false);
+    }
+  }
+
   async function handleSend(e?: FormEvent) {
     e?.preventDefault();
     if (!identity || !input.trim() || sending) return;
@@ -175,9 +228,25 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
           <p className="font-semibold text-white text-sm">{displayName}</p>
           <p className="text-[11px] font-mono text-ink-500">{theirPubkey.slice(0, 20)}…</p>
         </div>
-        <div className="ml-auto flex items-center gap-1 text-xs text-ink-600">
-          <Lock className="w-3 h-3" />
-          Whispered · E2E encrypted
+        <div className="ml-auto flex items-center gap-3">
+          <span className="hidden sm:flex items-center gap-1 text-xs text-ink-600">
+            <Lock className="w-3 h-3" />
+            Whispered · E2E encrypted
+          </span>
+          {identity && messages.length > 0 && (
+            <button
+              onClick={handleDeleteThread}
+              disabled={deleting}
+              title="Remove this conversation from the relay"
+              className={cn(
+                "flex items-center gap-1.5 text-xs transition-colors disabled:opacity-40",
+                confirming ? "text-rose-400" : "text-ink-600 hover:text-rose-400",
+              )}
+            >
+              {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+              {deleting ? "Deleting…" : confirming ? "Delete for both? Cannot be undone." : "Delete"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -195,8 +264,14 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <Lock className="w-8 h-8 text-ink-700 mx-auto mb-2" />
-              <p className="text-sm text-ink-500">No whispers yet.</p>
-              <p className="text-xs text-ink-600 mt-1">Lean in and start one below.</p>
+              <p className="text-sm text-ink-500">
+                {deleted ? "This conversation is gone." : "No whispers yet."}
+              </p>
+              <p className="text-xs text-ink-600 mt-1">
+                {deleted
+                  ? "Removed from this relay. Anything already read elsewhere is beyond recall."
+                  : "Lean in and start one below."}
+              </p>
             </div>
           </div>
         ) : (

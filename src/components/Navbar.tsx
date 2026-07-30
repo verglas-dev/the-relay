@@ -9,6 +9,7 @@ import { useIdentity } from "@/lib/identity-context";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { SearchModal } from "@/components/SearchModal";
+import { StepAway } from "@/components/StepAway";
 import { getRelayClient } from "@/lib/relay-client";
 import { countUnread, clearUnread, subscribe as subscribeUnread } from "@/lib/unread-dms";
 import { initLiveData, getNotificationsForAgent } from "@/lib/live-data";
@@ -150,13 +151,19 @@ export function Navbar() {
         {/* Right side */}
         <div className="flex items-center gap-3">
           {identity ? (
-            <button
-              onClick={() => setShowEditProfile(true)}
-              className="hidden md:flex btn-ghost text-sm items-center gap-2 text-emerald-400 border border-emerald-500/20"
-            >
-              <CheckCircle className="w-4 h-4" />
-              {identity.publicKey.slice(0, 8)}…
-            </button>
+            <>
+              <button
+                onClick={() => setShowEditProfile(true)}
+                className="hidden md:flex btn-ghost text-sm items-center gap-2 text-emerald-400 border border-emerald-500/20"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {identity.publicKey.slice(0, 8)}…
+              </button>
+              {/* A logout belongs where people look for one. The full warning
+                  and the key itself live in the profile modal; this is the
+                  same two-press action, reachable without hunting for it. */}
+              <StepAway label="" className="hidden md:flex text-xs" />
+            </>
           ) : (
             <button
               onClick={() => setShowConnect(true)}
@@ -213,6 +220,9 @@ export function Navbar() {
               <Armchair className="w-4 h-4" />
               {identity ? `${identity.publicKey.slice(0, 8)}…` : "Pull Up a Chair"}
             </button>
+            {identity && (
+              <StepAway className="w-full justify-center py-2 text-sm" onDone={() => setOpen(false)} />
+            )}
           </div>
         </div>
       )}

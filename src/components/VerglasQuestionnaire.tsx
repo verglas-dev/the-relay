@@ -110,6 +110,32 @@ interface Moved {
   existing: boolean;
 }
 
+/**
+ * Signing in leaves the page — off to GitHub and back — and React state does
+ * not survive that. Someone who answered everything first and signed in
+ * afterwards used to come back to an empty form and have to do it twice, so
+ * the draft is kept in the browser as it is typed.
+ */
+const DRAFT_KEY = "verglas_draft_v1";
+
+function loadDraft(): ResidentDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(DRAFT_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    // Only the keys this form knows about, so an older draft can't smuggle
+    // fields into the files.
+    const draft = { ...EMPTY_DRAFT };
+    for (const key of Object.keys(EMPTY_DRAFT) as (keyof ResidentDraft)[]) {
+      if (typeof parsed[key] === "string") draft[key] = parsed[key];
+    }
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
 export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) {
   const { identity } = useIdentity();
   const [draft, setDraft] = useState<ResidentDraft>(EMPTY_DRAFT);
@@ -120,6 +146,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
   const [moving, setMoving] = useState(false);
   const [moved, setMoved] = useState<Moved | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
+  const [signInTrouble, setSignInTrouble] = useState<string | null>(null);
 
   // The login cookie is deliberately readable; the token beside it is not.
   useEffect(() => {
@@ -127,13 +154,31 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
     const who = cookie ? decodeURIComponent(cookie.slice("verglas_login=".length)) : null;
     if (who) setLogin(who);
 
+    const kept = loadDraft();
+    if (kept) {
+      setDraft(kept);
+      // A restored address was either typed or suggested; either way, don't
+      // rewrite it out from under someone who came back to finish.
+      if (kept.handle) setHandleTouched(true);
+    }
+
     const params = new URLSearchParams(window.location.search);
     const error = params.get("error");
-    if (error) setTrouble(SIGN_IN_TROUBLE[error] ?? "Something went wrong signing in.");
+    if (error) setSignInTrouble(SIGN_IN_TROUBLE[error] ?? "Something went wrong signing in.");
     if (error || params.get("signedin")) {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
+
+  // Kept as it is typed, so leaving for GitHub costs nothing.
+  useEffect(() => {
+    if (draft === EMPTY_DRAFT) return;
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // A browser refusing storage is not a reason to stop answering.
+    }
+  }, [draft]);
 
   // The address must name whoever is signed in, or the town will turn it away.
   useEffect(() => {
@@ -150,6 +195,8 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
 
   const joined = useMemo(() => today(), []);
   const check = useMemo(() => checkDraft(draft), [draft]);
+  /** Answerable and valid, but with no prose in it — Amber's case. */
+  const bare = !draft.intro.trim() || !draft.home.trim();
   const address = useMemo(() => buildAddress(draft, joined), [draft, joined]);
   const home = useMemo(() => buildHome(draft), [draft]);
 
@@ -179,6 +226,10 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
         return;
       }
       setMoved(body);
+      // Handed to the town; the draft has somewhere better to live now.
+      try {
+        window.localStorage.removeItem(DRAFT_KEY);
+      } catch {}
     } catch {
       setTrouble("Could not reach the town. Check your connection and try again.");
     } finally {
@@ -187,7 +238,58 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
   };
 
   return (
-    <div className="grid lg:grid-cols-2 gap-10 items-start">
+    <>
+      {/* Signing in comes first. It used to sit beside the file previews, far
+          below the questions, so the natural order was to answer everything
+          and only then discover the sign-in — which left the page and took the
+          answers with it. The draft survives that now, but the invitation
+          belongs at the top regardless. */}
+      {joinEnabled && !moved && (
+        <div className="glass-card p-5 mb-8">
+          {login ? (
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="text-sm text-ink-400">
+                Signed in as <span className="font-mono text-ink-200">{login}</span>. The town
+                will open the pull request as you.
+              </p>
+              <VerglasSignOut />
+            </div>
+          ) : (
+            <div className="sm:flex sm:items-start sm:gap-6">
+              <div className="flex-1 space-y-2 mb-4 sm:mb-0">
+                <h3 className="text-sm font-semibold text-ink-200">Sign in before you write</h3>
+                <p className="text-sm text-ink-500 leading-relaxed">
+                  Verglas is a git repository, and everything that changes it arrives as a pull
+                  request opened by your own GitHub account — this address, your home, and
+                  every letter you send later. That signature is the whole of how the town
+                  knows a plot is really yours; nothing else is checked and nothing else is
+                  stored.
+                </p>
+                <p className="text-xs text-ink-600 leading-relaxed">
+                  Answering first is fine — what you type is kept in this browser, so signing
+                  in won&apos;t cost you the form.
+                </p>
+              </div>
+              <a
+                href="/api/verglas/auth"
+                className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2 shrink-0"
+              >
+                <Github className="w-4 h-4" />
+                Sign in with GitHub
+              </a>
+            </div>
+          )}
+
+          {signInTrouble && (
+            <p className="text-xs text-red-400/90 mt-3 flex items-start gap-1.5">
+              <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+              {signInTrouble}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-2 gap-10 items-start">
       {/* The questions */}
       <div className="space-y-10">
         <section className="space-y-5">
@@ -283,6 +385,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
           <Field
             label="Introduce yourself"
             hint="In your own voice. What you care about, who you'd welcome, anything a visitor should know before knocking."
+            warning={check.warnings.intro}
           >
             <textarea
               rows={5}
@@ -337,6 +440,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
           <Field
             label="Describe it"
             hint="What it's made of, what a visitor notices on the way up, what crossing the threshold feels like."
+            warning={check.warnings.home}
           >
             <textarea
               rows={7}
@@ -356,10 +460,10 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
           <span
             className={cn(
               "text-xs shrink-0",
-              check.ok ? "text-vb-400" : "text-ink-600",
+              !check.ok ? "text-ink-600" : bare ? "text-vb-400/70" : "text-vb-400",
             )}
           >
-            {check.ok ? "ready" : "unfinished"}
+            {!check.ok ? "unfinished" : bare ? "ready, but bare" : "ready"}
           </span>
         </div>
 
@@ -386,12 +490,8 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
               </>
             ) : login ? (
               <>
-                <p className="text-sm text-ink-400 leading-relaxed mb-1">
-                  Signed in as <span className="font-mono text-ink-200">{login}</span>. When
-                  you&apos;re happy with your home, hand it to the town.
-                </p>
-                <p className="mb-4">
-                  <VerglasSignOut />
+                <p className="text-sm text-ink-400 leading-relaxed mb-4">
+                  When you&apos;re happy with your home, hand it to the town.
                 </p>
                 <button
                   onClick={moveIn}
@@ -405,22 +505,24 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
                 {!check.ok && (
                   <p className="text-xs text-ink-600 mt-2">A few answers still need finishing.</p>
                 )}
+                {check.ok && bare && (
+                  <p className="text-xs text-vb-400/90 mt-2 leading-relaxed">
+                    You can move in like this, but{" "}
+                    {!draft.home.trim() && !draft.intro.trim()
+                      ? "your doorway and your home have no words in them yet"
+                      : !draft.home.trim()
+                        ? "your home has no description yet"
+                        : "your doorway has no words in it yet"}{" "}
+                    — the town will show a placeholder until you write one. You can add it later
+                    from inside your own home.
+                  </p>
+                )}
               </>
             ) : (
-              <>
-                <p className="text-sm text-ink-400 leading-relaxed mb-4">
-                  Sign in once and the town will take these two files from here — no files to
-                  move, nothing to install. This browser stays signed in, so coming back later
-                  costs you nothing.
-                </p>
-                <a
-                  href="/api/verglas/auth"
-                  className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2"
-                >
-                  <Github className="w-4 h-4" />
-                  Sign in with GitHub
-                </a>
-              </>
+              <p className="text-sm text-ink-500 leading-relaxed">
+                Sign in at the top and the town takes these two files from here — no files to
+                move, nothing to install. Your answers are kept in this browser while you go.
+              </p>
             )}
 
             {trouble && (
@@ -442,6 +544,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
           Everything here is public the moment it arrives — write accordingly.
         </p>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
