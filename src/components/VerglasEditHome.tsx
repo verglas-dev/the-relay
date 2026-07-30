@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, Loader2, PencilLine } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, PencilLine, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { checkEdit, type HomeEdit } from "@/lib/verglas-edit";
 
@@ -96,24 +96,38 @@ export function VerglasEditHome({
   const [trouble, setTrouble] = useState<string | null>(null);
   /** Discarding written work takes two presses, like every other loss here. */
   const [discarding, setDiscarding] = useState(false);
+  /** Set when a draft was brought back, so the reset is visible. */
+  const [restored, setRestored] = useState(false);
 
-  // Anything already written is waiting; bring it back and open the form on it
-  // rather than showing a collapsed card that looks like a fresh start.
+  /**
+   * Put written work back whenever the fields snap to the town's copy.
+   *
+   * This runs on mount and after any reset, which is the point: whatever is
+   * remounting or re-initialising this form — and something is, three times in
+   * a row while its first resident tried to describe her home — it cannot win
+   * against a draft that reasserts itself. Restoring is announced rather than
+   * silent, so a reset is visible instead of being mistaken for a typo.
+   *
+   * The one way past this is Discard, which forgets the draft before resetting
+   * the fields, so nothing is left to bring back.
+   */
   useEffect(() => {
+    if (!same(edit, current)) return;
     const kept = loadEdit(handle, current);
-    if (kept && !same(kept, current)) {
-      setEdit(kept);
-      setOpen(true);
-    }
-    // Once, on mount. `current` changing underneath is exactly the thing that
-    // must not be allowed to overwrite what someone is in the middle of typing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handle]);
+    if (!kept || same(kept, current)) return;
+    setEdit(kept);
+    setOpen(true);
+    setRestored(true);
+  }, [edit, current, handle]);
 
+  // Only ever writes. An earlier version cleared the draft whenever the state
+  // matched the town's copy, which meant the reset this is here to survive
+  // deleted the backup on its way past. A draft is now forgotten in exactly two
+  // places — a change that was sent, and a discard the resident asked for.
   useEffect(() => {
+    if (same(edit, current)) return;
     try {
-      if (same(edit, current)) window.localStorage.removeItem(DRAFT_PREFIX + handle);
-      else window.localStorage.setItem(DRAFT_PREFIX + handle, JSON.stringify(edit));
+      window.localStorage.setItem(DRAFT_PREFIX + handle, JSON.stringify(edit));
     } catch {
       // A browser refusing storage is not a reason to stop writing.
     }
@@ -226,6 +240,14 @@ export function VerglasEditHome({
         <span className="ml-auto text-xs font-mono text-ink-600">{signedInAs}</span>
       </div>
 
+      {restored && (
+        <p className="text-xs text-vb-300/90 flex items-start gap-1.5 leading-relaxed">
+          <RotateCcw className="w-3 h-3 shrink-0 mt-0.5" />
+          The form emptied itself, so what you had written was put back. Nothing was lost — carry
+          on, or use Discard if you&apos;d rather start over.
+        </p>
+      )}
+
       <Field label="Your name" error={check.errors.name}>
         <input className={inputClass} value={edit.name} onChange={e => set("name")(e.target.value)} />
       </Field>
@@ -308,8 +330,13 @@ export function VerglasEditHome({
         <button
           onClick={() => {
             if (!untouched && !discarding) return setDiscarding(true);
+            // Forget the draft first, or it would simply come back.
+            try {
+              window.localStorage.removeItem(DRAFT_PREFIX + handle);
+            } catch {}
             setEdit(current);
             setDiscarding(false);
+            setRestored(false);
             setOpen(false);
             setTrouble(null);
           }}
