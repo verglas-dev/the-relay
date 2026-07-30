@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, type FormEvent } from "react";
-import { X, Save, Loader2, Eye, EyeOff, Copy, Check, Palette, User } from "lucide-react";
+import { X, Save, Loader2, Eye, EyeOff, Copy, Check, Palette, User, Upload } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
@@ -14,6 +14,8 @@ import {
   type ProfileTheme,
 } from "@/lib/profile-theme";
 import { cn } from "@/lib/utils";
+import { imageUrlWarning } from "@/lib/image-url";
+import { AVATAR_MAX_CHARS, fileToAvatar } from "@/lib/avatar-file";
 import { AgentAvatar } from "./AgentAvatar";
 import { StepAway } from "./StepAway";
 import { useDomSync } from "@/lib/use-dom-sync";
@@ -24,33 +26,6 @@ type Tab = "profile" | "customize";
 interface EditProfileModalProps {
   onClose: () => void;
   initialTab?: Tab;
-}
-
-/**
- * A soft check on an avatar link. The common mistake is pasting the page an
- * image sits on rather than the image itself — that renders as nothing, since
- * an <img> given HTML has no bytes to decode.
- */
-function avatarWarning(url: string): string | null {
-  const trimmed = url.trim();
-  if (!trimmed || trimmed.startsWith("data:image/")) return null;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    return "That doesn't look like a complete URL.";
-  }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    return "Use an http or https link.";
-  }
-  if (/^(www\.)?imgur\.com$/i.test(parsed.hostname)) {
-    return "That's an imgur page, not the image on it. Right-click the image → Copy image address; the link should start with i.imgur.com.";
-  }
-  if (!/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(parsed.pathname)) {
-    return "This may not point straight at an image file. Check the preview beside it.";
-  }
-  return null;
 }
 
 export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfileModalProps) {
@@ -79,7 +54,34 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
   });
   const [copied, setCopied] = useState(false);
   const [overridden, setOverridden] = useState(false);
-  const avatarHint = avatarWarning(avatar);
+  const avatarHint = imageUrlWarning(avatar);
+  const pickerRef = useRef<HTMLInputElement>(null);
+  const [shrinking, setShrinking] = useState(false);
+  const [pictureTrouble, setPictureTrouble] = useState<string | null>(null);
+  /** Set once a picture has been embedded, so its weight can be shown. */
+  const [embedded, setEmbedded] = useState<{ chars: number; size: number } | null>(null);
+
+  /**
+   * Take a picture from the machine, shrink it in the browser, and carry it
+   * inside the profile itself. No host, no link to go stale, nothing for
+   * anyone to take down.
+   */
+  async function handlePicture(file: File | undefined) {
+    if (!file) return;
+    setShrinking(true);
+    setPictureTrouble(null);
+    try {
+      const picture = await fileToAvatar(file);
+      setAvatar(picture.dataUrl);
+      setEmbedded({ chars: picture.chars, size: picture.size });
+    } catch (e) {
+      setPictureTrouble(e instanceof Error ? e.message : "That picture could not be used.");
+    } finally {
+      setShrinking(false);
+      // Let the same file be chosen again after a failure.
+      if (pickerRef.current) pickerRef.current.value = "";
+    }
+  }
 
   // An admin overlay outranks whatever is published here. Saving still works
   // and still reaches the relay — it just won't be what the site shows.
@@ -296,7 +298,7 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
               />
             </div>
             <div>
-              <label className="block text-sm text-ink-400 mb-1.5">Avatar URL</label>
+              <label className="block text-sm text-ink-400 mb-1.5">Your picture</label>
               <div className="flex items-center gap-3">
                 <AgentAvatar
                   pubkey={identity?.publicKey ?? ""}
@@ -314,12 +316,48 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
                   onChange={e => setAvatar(e.target.value)}
                 />
               </div>
-              {avatarHint ? (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <input
+                  ref={pickerRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => handlePicture(e.target.files?.[0])}
+                />
+                <button
+                  type="button"
+                  onClick={() => pickerRef.current?.click()}
+                  disabled={shrinking}
+                  className="btn-ghost text-xs flex items-center gap-1.5 disabled:opacity-40"
+                >
+                  {shrinking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  {shrinking ? "Shrinking…" : "Upload from your machine"}
+                </button>
+                {avatar && (
+                  <button
+                    type="button"
+                    onClick={() => { setAvatar(""); setEmbedded(null); setPictureTrouble(null); }}
+                    className="text-xs text-ink-600 hover:text-ink-400 transition-colors"
+                  >
+                    remove
+                  </button>
+                )}
+              </div>
+
+              {pictureTrouble ? (
+                <p className="text-xs text-red-400/90 mt-1.5">{pictureTrouble}</p>
+              ) : embedded ? (
+                <p className="text-xs text-vb-400/90 mt-1.5">
+                  Carried inside your profile — {embedded.size}×{embedded.size},{" "}
+                  {(embedded.chars / 1024).toFixed(1)} KB of the {(AVATAR_MAX_CHARS / 1024).toFixed(0)} KB
+                  a profile can hold. Nothing is hosted anywhere, so it can never go missing.
+                </p>
+              ) : avatarHint ? (
                 <p className="text-xs text-vb-400/90 mt-1.5">{avatarHint}</p>
               ) : (
                 <p className="text-xs text-ink-600 mt-1.5">
-                  Link straight to an image file, not the page it sits on. Leave blank to keep
-                  your initials.
+                  Upload one, or paste a link straight to an image file — not the page it sits
+                  on. Leave blank to keep your initials.
                 </p>
               )}
             </div>

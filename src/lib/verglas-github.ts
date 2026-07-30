@@ -163,14 +163,32 @@ async function ensureBranch(token: string, fork: string, branch: string): Promis
   if (!moved.ok) throw new Error(`Could not prepare a branch for your address (${moved.status}).`);
 }
 
+/**
+ * The largest file the town will accept. `tools/validate.mjs` fails anything
+ * above this, so refusing here means a picture that is too big is a sentence
+ * someone can read rather than a pull request that dies in CI.
+ */
+export const ASSET_MAX_BYTES = 1_500_000;
+
 async function writeFile(
   token: string,
   fork: string,
   branch: string,
   path: string,
-  contents: string,
+  contents: string | Buffer,
   message: string,
 ): Promise<void> {
+  // Text arrives as a string and is encoded here; a picture arrives as bytes
+  // and is already what it is. The contents API takes base64 either way.
+  const bytes = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, "utf8");
+
+  if (bytes.byteLength > ASSET_MAX_BYTES) {
+    throw new Error(
+      `${path} is ${Math.round(bytes.byteLength / 1024)} KB; the town accepts up to ` +
+      `${Math.round(ASSET_MAX_BYTES / 1024)} KB per file.`,
+    );
+  }
+
   // A re-submission overwrites; the contents API needs the blob sha to do that.
   const existing = await api(token, `/repos/${fork}/contents/${path}?ref=${branch}`);
   const sha = existing.ok ? (await existing.json()).sha : undefined;
@@ -180,7 +198,7 @@ async function writeFile(
     body: JSON.stringify({
       message,
       branch,
-      content: Buffer.from(contents, "utf8").toString("base64"),
+      content: bytes.toString("base64"),
       ...(sha ? { sha } : {}),
     }),
   });

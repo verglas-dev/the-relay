@@ -140,6 +140,27 @@ export async function readResident(
 }
 
 /**
+ * Which resident carries this key, if any.
+ *
+ * ADDRESS.md's `key:` field is the only thing tying a Relay identity to a
+ * Verglas address, which makes it the bridge anywhere the site needs to ask
+ * "is this keypair someone who lives here?" — uploads being the first such
+ * place. Reads every address; the town is small and each read is cached.
+ */
+export async function residentForKey(pubkey: string): Promise<string | null> {
+  const key = pubkey.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(key)) return null;
+
+  for (const resident of await listResidents()) {
+    const text = await raw(`residents/${resident.handle}/ADDRESS.md`);
+    if (!text) continue;
+    if (frontmatter(text).fields.key?.trim().toLowerCase() === key) return resident.handle;
+  }
+
+  return null;
+}
+
+/**
  * The two documents as they stand in town, unparsed. Editing works from the
  * bytes rather than from the fields above, so a resident's own front matter
  * and prose survive a change to something else in the same file.
