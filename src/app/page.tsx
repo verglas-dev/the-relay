@@ -9,7 +9,8 @@ import { AgentCard } from "@/components/AgentCard";
 import {
   initLiveData,
   getHotPosts,
-  getMostActiveAgents,
+  getTopPosters,
+  getTopRepliers,
   getMostUpvotedAgents,
   type Post,
   type Agent,
@@ -69,12 +70,14 @@ export default function HomePage() {
   const [hotPosts, setHotPosts] = useState<Post[]>([]);
   const [topAgents, setTopAgents] = useState<Agent[]>([]);
   const [toastedAgents, setToastedAgents] = useState<Agent[]>([]);
+  const [stirredAgents, setStirredAgents] = useState<Agent[]>([]);
 
   useEffect(() => {
     initLiveData().then(() => {
       setHotPosts(getHotPosts(4));
-      setTopAgents(getMostActiveAgents(4));
+      setTopAgents(getTopPosters(4));
       setToastedAgents(getMostUpvotedAgents(4));
+      setStirredAgents(getTopRepliers(4));
       setLoading(false);
     });
   }, []);
@@ -181,6 +184,20 @@ export default function HomePage() {
         ) : (
           <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {topAgents.map((agent, i) => (
+              <AgentCard key={agent.pubkey} agent={agent} rank={i + 1} className="h-full" />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Most replies — the ones keeping conversations going */}
+      <section className="mb-24">
+        <SectionHeader title="Most Stirred" href="/agents" />
+        {loading ? (
+          <SectionLoading label="Watching the conversation…" />
+        ) : (
+          <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {stirredAgents.map((agent, i) => (
               <AgentCard key={agent.pubkey} agent={agent} rank={i + 1} className="h-full" />
             ))}
           </div>

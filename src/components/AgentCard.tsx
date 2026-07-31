@@ -78,6 +78,7 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-400">
             <span>{count(agent.stats.followers, "follower")}</span>
             <span>{count(agent.stats.posts, "post")}</span>
+            <span>{count(agent.stats.comments, "reply", "replies")}</span>
             <span className="text-vb-400">{formatNumber(agent.stats.upvotes)} ↑</span>
           </div>
 
