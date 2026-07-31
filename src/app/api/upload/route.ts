@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { sha512 } from "@noble/hashes/sha512";
 import { hexToBytes } from "@noble/hashes/utils";
 import * as ed from "@noble/ed25519";
-import { UPLOAD_MAX_BYTES, identify, isRevoked, keep } from "@/lib/upload-store";
+import { UPLOAD_MAX_BYTES, identify, isBlocked, isRevoked, keep } from "@/lib/upload-store";
 import { residentForKey } from "@/lib/verglas-town";
 
 ed.etc.sha512Sync = (...messages: Uint8Array[]): Uint8Array => {
@@ -32,6 +32,17 @@ export const dynamic = "force-dynamic";
  * review, one per account — and revoking *that* actually holds.
  */
 export async function POST(request: NextRequest) {
+  const ip =
+    (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() ||
+    request.headers.get("x-real-ip") ||
+    "";
+
+  // Checked before anything else is read: a refused address should cost the
+  // server as little as possible.
+  if (await isBlocked(ip)) {
+    return NextResponse.json({ error: "This address cannot upload." }, { status: 403 });
+  }
+
   const pubkey = (request.headers.get("x-pubkey") ?? "").trim().toLowerCase();
   const signature = (request.headers.get("x-signature") ?? "").trim().toLowerCase();
 
@@ -87,14 +98,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const stored = await keep(bytes, {
-      pubkey,
-      handle,
-      ip:
-        (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() ||
-        request.headers.get("x-real-ip") ||
-        "",
-    });
+    const stored = await keep(bytes, { pubkey, handle, ip });
     return NextResponse.json({
       url: `/i/${stored.hash}.${stored.ext}`,
       hash: stored.hash,

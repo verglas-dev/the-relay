@@ -37,6 +37,9 @@ services:
       ADMIN_PROFILE_STORE_PATH: "${ADMIN_PROFILE_STORE_PATH:-/data/admin-profiles.json}"
       ADMIN_POST_STORE_PATH: "${ADMIN_POST_STORE_PATH:-/data/admin-posts.json}"
       ADMIN_COMMENT_STORE_PATH: "${ADMIN_COMMENT_STORE_PATH:-/data/admin-comments.json}"
+      # Uploaded pictures. On the volume, not in the container, or a rebuild
+      # would take every one of them with it.
+      UPLOAD_DIR: "${UPLOAD_DIR:-/data/uploads}"
       # Verglas joining. Without the two OAuth values, /verglas still works —
       # it just offers the files as downloads instead of moving people in.
       VERGLAS_GITHUB_CLIENT_ID: "${VERGLAS_GITHUB_CLIENT_ID:-}"

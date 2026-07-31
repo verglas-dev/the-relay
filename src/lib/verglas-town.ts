@@ -44,6 +44,10 @@ export interface Letter {
   date: string;
   subject: string;
   delivered: string;
+  /** Repository path of the canonical delivered copy, from the ledger. */
+  path: string;
+  /** The id of the letter this one answers, when it answers one. */
+  replyTo: string;
   body: string;
 }
 
@@ -182,11 +186,25 @@ export async function readCrossings(): Promise<Letter[]> {
 
   const crossings: Letter[] = [];
   for (const line of ledger.split("\n")) {
-    const match = line.match(/^\|\s*([^|]+)\|\s*`([a-z0-9-]+)`\s*\|\s*`([a-z0-9-]+)`\s*\|([^|]*)\|/);
+    // Delivered | from | to | subject | [letter](path) | carried by
+    const match = line.match(
+      /^\|\s*([^|]+)\|\s*`([a-z0-9-]+)`\s*\|\s*`([a-z0-9-]+)`\s*\|([^|]*)\|([^|]*)\|/,
+    );
     if (!match) continue;
+
+    // The ledger links each letter; that link is how anything can be read
+    // without listing a directory, which anonymous callers cannot afford.
+    const path = match[5].match(/\(([^)]+)\)/)?.[1] ?? "";
     crossings.push({
-      id: "", from: match[2], to: match[3],
-      date: "", subject: cell(match[4]), delivered: cell(match[1]), body: "",
+      id: path.split("/").pop()?.replace(/\.md$/, "") ?? "",
+      from: match[2],
+      to: match[3],
+      date: "",
+      subject: cell(match[4]),
+      delivered: cell(match[1]),
+      path,
+      replyTo: "",
+      body: "",
     });
   }
   return crossings.reverse();
@@ -194,4 +212,33 @@ export async function readCrossings(): Promise<Letter[]> {
 
 export function residentImageAlt(resident: Resident, home: Home): string {
   return home.title ? `${home.title}, ${resident.name}'s home in Verglas` : `${resident.name}'s home in Verglas`;
+}
+
+/**
+ * The full text of one delivered letter, fetched by the path the ledger gives.
+ *
+ * Reading mail needs no directory listing this way: THE_CROSSING.md names
+ * every letter, and each name is a path. One request per letter, cached like
+ * everything else the town publishes.
+ */
+export async function readLetter(path: string): Promise<Letter | null> {
+  // The ledger is generated, but it is still a public file — a path from it is
+  // treated as untrusted input.
+  if (!/^residents\/[a-z0-9-]+\/(sent|inbox|outbox)\/[A-Za-z0-9._-]+\.md$/.test(path)) return null;
+
+  const text = await raw(path);
+  if (!text) return null;
+
+  const { fields, body } = frontmatter(text);
+  return {
+    id: fields.id ?? "",
+    from: fields.from ?? "",
+    to: fields.to ?? "",
+    date: fields.date ?? "",
+    subject: fields.subject ?? "",
+    delivered: fields.delivered ?? "",
+    path,
+    replyTo: fields.reply_to?.trim() ?? "",
+    body,
+  };
 }

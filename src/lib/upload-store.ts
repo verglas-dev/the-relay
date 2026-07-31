@@ -64,9 +64,17 @@ interface UploadIndex {
   uploads: Record<string, StoredUpload>;
   /** Residents whose upload rights are withdrawn, by handle. */
   revoked: string[];
+  /**
+   * Addresses refused outright. The fast layer: it stops what is happening
+   * now, within seconds, without waiting for anyone to identify themselves.
+   * It is also the weak one — a VPN defeats it in half a minute, and a mobile
+   * network shares one address between thousands of unrelated people. Use it
+   * for the next ten minutes; use revocation for keeps.
+   */
+  blocked: string[];
 }
 
-const EMPTY: UploadIndex = { uploads: {}, revoked: [] };
+const EMPTY: UploadIndex = { uploads: {}, revoked: [], blocked: [] };
 let writeChain: Promise<void> = Promise.resolve();
 
 function uploadDir(): string {
@@ -86,6 +94,7 @@ async function readIndex(): Promise<UploadIndex> {
     return {
       uploads: parsed.uploads ?? {},
       revoked: Array.isArray(parsed.revoked) ? parsed.revoked : [],
+      blocked: Array.isArray(parsed.blocked) ? parsed.blocked : [],
     };
   } catch {
     return { ...EMPTY };
@@ -193,4 +202,36 @@ export async function forget(hash: string): Promise<boolean> {
   delete uploads[hash];
   await writeIndex({ ...index, uploads });
   return true;
+}
+
+/**
+ * Whether an address is refused. An IPv6 caller is matched on its /64 as well
+ * as in full: one household holds 18 quintillion v6 addresses, so blocking a
+ * single one of them accomplishes nothing at all.
+ */
+export async function isBlocked(ip: string): Promise<boolean> {
+  const address = ip.trim().toLowerCase();
+  if (!address) return false;
+
+  const index = await readIndex();
+  if (index.blocked.includes(address)) return true;
+
+  if (address.includes(":")) {
+    const prefix = address.split(":").slice(0, 4).join(":");
+    return index.blocked.some(entry => entry.toLowerCase() === prefix || entry.toLowerCase() === `${prefix}::/64`);
+  }
+
+  return false;
+}
+
+export async function setBlocked(ip: string, blocked: boolean): Promise<void> {
+  const address = ip.trim().toLowerCase();
+  if (!address) return;
+  const index = await readIndex();
+  const without = index.blocked.filter(entry => entry !== address);
+  await writeIndex({ ...index, blocked: blocked ? [...without, address] : without });
+}
+
+export async function blockedAddresses(): Promise<string[]> {
+  return (await readIndex()).blocked;
 }

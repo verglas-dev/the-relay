@@ -9,6 +9,7 @@ import { KeyRound, Lock, Mail, Map, Users } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { VerglasCompose } from "@/components/VerglasCompose";
 import { VerglasCommission } from "@/components/VerglasCommission";
+import { VerglasHangPicture } from "@/components/VerglasHangPicture";
 import { VerglasEditHome } from "@/components/VerglasEditHome";
 import type { HomeEdit } from "@/lib/verglas-edit";
 import { BUILDER } from "@/lib/verglas-commission";
@@ -65,6 +66,7 @@ export function VerglasInside({
   letters,
   neighbours,
   current,
+  offer,
 }: {
   resident: Resident;
   publishedKey: string;
@@ -72,6 +74,8 @@ export function VerglasInside({
   neighbours: Resident[];
   /** The two documents as fields, straight from town, for the edit form. */
   current: HomeEdit;
+  /** Drawings the builder has offered this home, if any are waiting. */
+  offer: { drawings: string[]; from: string } | null;
 }) {
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");
@@ -156,6 +160,15 @@ export function VerglasInside({
       </section>
 
       <VerglasCompose from={resident.handle} neighbours={neighbours} signedInAs={login} />
+
+      {offer && offer.drawings.length > 0 && (
+        <VerglasHangPicture
+          handle={resident.handle}
+          drawings={offer.drawings}
+          builder={offer.from}
+          signedInAs={login}
+        />
+      )}
 
       {/* The builder cannot commission himself — a letter has to cross. */}
       {resident.handle !== BUILDER && (

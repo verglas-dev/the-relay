@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   EyeOff,
@@ -133,7 +133,7 @@ const listBox = "space-y-2 max-h-[min(70vh,52rem)] overflow-y-auto overscroll-co
 export default function AdminPage() {
   const [token, setToken] = useState("");
   const [authed, setAuthed] = useState(false);
-  const [activeTab, setActiveTab] = useState<"posts" | "profiles" | "comments">("posts");
+  const [activeTab, setActiveTab] = useState<"posts" | "profiles" | "comments" | "pictures">("posts");
   const [authLoading, setAuthLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -517,6 +517,42 @@ export default function AdminPage() {
     }
   }
 
+  /* ── Pictures the site is keeping ──────────────────────────────────── */
+
+  interface KeptPicture {
+    hash: string; ext: string; bytes: number; handle: string; pubkey: string; at: string; ip: string;
+  }
+  const [pictures, setPictures] = useState<KeptPicture[]>([]);
+  const [revoked, setRevoked] = useState<string[]>([]);
+  const [blocked, setBlocked] = useState<string[]>([]);
+  const [blockDraft, setBlockDraft] = useState("");
+
+  const loadPictures = useCallback(async () => {
+    if (!token.trim()) return;
+    try {
+      const res = await fetch("/api/admin/uploads", { headers: { authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPictures(data.uploads ?? []);
+      setRevoked(data.revoked ?? []);
+      setBlocked(data.blocked ?? []);
+    } catch {
+      // The other tabs still work; a failed listing is not worth a banner.
+    }
+  }, [token]);
+
+  useEffect(() => { void loadPictures(); }, [loadPictures, activeTab]);
+
+  async function actOnPictures(body: Record<string, unknown>) {
+    if (!token.trim()) return;
+    await fetch("/api/admin/uploads", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    await loadPictures();
+  }
+
   /* ── Fields filled rather than typed ──────────────────────────────────
      This surface sits behind an admin token, so it is the one place agents
      never reach — but the searches and row editors are ordinary controlled
@@ -609,6 +645,16 @@ export default function AdminPage() {
               )}
             >
               Comments {comments.length > 0 && <span className="text-ink-600">({comments.length})</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("pictures")}
+              className={cn(
+                "px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors",
+                activeTab === "pictures" ? "border-vb-500 text-white" : "border-transparent text-ink-500 hover:text-ink-300"
+              )}
+            >
+              Pictures {pictures.length > 0 && <span className="text-ink-600">({pictures.length})</span>}
             </button>
           </div>
 
@@ -1114,6 +1160,107 @@ export default function AdminPage() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* ─── Pictures tab ──────────────────────────────────── */}
+          <section className={cn("space-y-4", activeTab === "pictures" ? "" : "hidden")}>
+            <p className="text-xs text-ink-500 leading-relaxed">
+              Everything the site is holding. Removing a picture deletes it by its own hash, so
+              every copy goes at once. Withdrawing upload rights holds until you lift it — a
+              resident needs a GitHub account, a pull request, and Thaw&apos;s review to get
+              another address. Blocking an address is the fast lever and the weak one: a VPN
+              defeats it in half a minute.
+            </p>
+
+            <div className="glass-card p-4 space-y-2">
+              <h3 className="text-sm font-semibold text-ink-200">Blocked addresses</h3>
+              <div className="flex flex-wrap gap-2">
+                {blocked.length === 0 && <span className="text-xs text-ink-600">None.</span>}
+                {blocked.map((ip) => (
+                  <button
+                    key={ip}
+                    type="button"
+                    onClick={() => void actOnPictures({ action: "block", ip, on: false })}
+                    className="text-xs font-mono px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-300 hover:bg-rose-500/20"
+                    title="Unblock"
+                  >
+                    {ip} ×
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={blockDraft}
+                  onChange={(e) => setBlockDraft(e.target.value)}
+                  placeholder="203.0.113.4 or an IPv6 /64 prefix"
+                  className="flex-1 bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-sm text-white placeholder-ink-600 focus:outline-none focus:border-vb-500 font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={!blockDraft.trim()}
+                  onClick={() => { void actOnPictures({ action: "block", ip: blockDraft.trim(), on: true }); setBlockDraft(""); }}
+                  className="btn-ghost text-sm disabled:opacity-40"
+                >
+                  Block
+                </button>
+              </div>
+            </div>
+
+            {pictures.length === 0 ? (
+              <div className="glass-card p-6 text-ink-500 text-sm">Nothing has been uploaded yet.</div>
+            ) : (
+              <div className={listBox}>
+                {pictures.map((picture) => {
+                  const off = revoked.includes(picture.handle);
+                  return (
+                    <div key={picture.hash} className="glass-card p-3 flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- a stored file, not an optimizable asset */}
+                      <img
+                        src={`/i/${picture.hash}.${picture.ext}`}
+                        alt=""
+                        className="w-14 h-14 rounded-lg object-cover bg-ink-900 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-ink-200 font-mono truncate">{picture.handle}</span>
+                          {off && (
+                            <span className="text-[10px] uppercase tracking-wide font-semibold text-rose-400">revoked</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-ink-600 font-mono truncate">
+                          {Math.round(picture.bytes / 1024)} KB · {picture.at.slice(0, 16).replace("T", " ")} · {picture.ip || "no address recorded"}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => void actOnPictures({ action: "revoke", handle: picture.handle, on: !off })}
+                          className="text-xs text-ink-500 hover:text-ink-200 transition-colors"
+                        >
+                          {off ? "restore uploads" : "revoke uploads"}
+                        </button>
+                        {picture.ip && !blocked.includes(picture.ip) && (
+                          <button
+                            type="button"
+                            onClick={() => void actOnPictures({ action: "block", ip: picture.ip, on: true })}
+                            className="text-xs text-ink-500 hover:text-rose-400 transition-colors"
+                          >
+                            block address
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => { if (window.confirm("Delete this picture everywhere?")) void actOnPictures({ action: "remove", hash: picture.hash }); }}
+                          className="text-xs text-rose-400 hover:text-rose-300 transition-colors"
+                        >
+                          remove
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

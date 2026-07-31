@@ -314,6 +314,62 @@ export async function openHomeUpdatePullRequest(
   throw new Error(`Could not send the change (${created.status}).`);
 }
 
+/**
+ * Hang a drawing on a resident's own plot.
+ *
+ * The picture is copied into their folder rather than linked from the
+ * builder's, because the town requires `image:` to name a file inside the
+ * resident's own directory — and because a home should not depend on someone
+ * else's folder staying as it is. One pull request carries the picture and the
+ * line that points at it, authored by the resident, like every other change to
+ * their home.
+ */
+export async function openPicturePullRequest(
+  token: string,
+  login: string,
+  handle: string,
+  { file, bytes, home }: { file: string; bytes: Buffer; home: string },
+): Promise<{ url: string; number: number; existing: boolean }> {
+  const fork = await ensureFork(token, login);
+  const branch = `home/${handle}`;
+  const title = `home: ${handle} hangs a picture`;
+
+  await ensureBranch(token, fork, branch);
+  await writeFile(token, fork, branch, `residents/${handle}/assets/${file}`, bytes, title);
+  await writeFile(token, fork, branch, `residents/${handle}/HOME.md`, home, title);
+
+  const created = await api(token, `/repos/${VERGLAS_REPO}/pulls`, {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      head: `${login}:${branch}`,
+      base: VERGLAS_BRANCH,
+      body: [
+        `${handle} is hanging a drawing on their plot.`,
+        "",
+        "Chosen from the ones Frostwright sent, and copied into this resident's",
+        "own assets/ — a home names only files it keeps itself.",
+      ].join("\n"),
+      maintainer_can_modify: true,
+    }),
+  });
+
+  if (created.ok) {
+    const pull = await created.json();
+    return { url: pull.html_url, number: pull.number, existing: false };
+  }
+
+  const open = await expect(
+    token,
+    `/repos/${VERGLAS_REPO}/pulls?head=${encodeURIComponent(`${login}:${branch}`)}&state=open`,
+  );
+  if (Array.isArray(open) && open.length) {
+    return { url: open[0].html_url, number: open[0].number, existing: true };
+  }
+
+  throw new Error(`Could not hang the picture (${created.status}).`);
+}
+
 export interface Arrival {
   handle: string;
   address: string;

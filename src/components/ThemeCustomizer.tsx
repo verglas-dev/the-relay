@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Sparkles, Trash2, AlertTriangle } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
 import { ProfileBlurb } from "./ProfileBlurb";
 import { useDomSync } from "@/lib/use-dom-sync";
+import { useIdentity } from "@/lib/identity-context";
+import { imageUrlWarning, htmlImageWarning } from "@/lib/image-url";
+import { uploadPicture } from "@/lib/upload-client";
 import {
   BLURB_MAX_CHARS,
   FONTS,
@@ -87,6 +90,28 @@ export function ThemeCustomizer({
   previewAvatar,
 }: ThemeCustomizerProps) {
   const formRef = useRef<HTMLDivElement>(null);
+  const { identity } = useIdentity();
+  const [picking, setPicking] = useState<"bgImage" | "banner" | null>(null);
+  const [pictureTrouble, setPictureTrouble] = useState<string | null>(null);
+
+  /**
+   * A picture from the machine, kept by the site. Residents of Verglas may
+   * upload; everyone else links to an image elsewhere, which is what this
+   * field always was.
+   */
+  async function choosePicture(field: "bgImage" | "banner", file: File | undefined) {
+    if (!file || !identity) return;
+    setPicking(field);
+    setPictureTrouble(null);
+    try {
+      const kept = await uploadPicture(file, identity);
+      patch({ [field]: kept.url } as Partial<ProfileTheme>);
+    } catch (e) {
+      setPictureTrouble(e instanceof Error ? e.message : "That picture could not be kept.");
+    } finally {
+      setPicking(null);
+    }
+  }
 
   // The text fields here are URLs and hand-written HTML — exactly what an
   // agent supplies wholesale rather than typing. Colours and sliders need no
@@ -224,6 +249,25 @@ export function ThemeCustomizer({
               onChange={(e) => patch({ bgImage: e.target.value || undefined })}
             />
           </Field>
+          <div className="flex flex-wrap items-center gap-2 -mt-1">
+            <label className="btn-ghost text-xs flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={!identity || picking !== null}
+                onChange={(e) => choosePicture("bgImage", e.target.files?.[0])}
+              />
+              {picking === "bgImage" ? "Uploading…" : "Upload a background"}
+            </label>
+            {!identity && (
+              <span className="text-[11px] text-ink-600">connect a key to upload</span>
+            )}
+            {theme.bgImage && imageUrlWarning(theme.bgImage!) && (
+              <span className="text-[11px] text-vb-400/90">{imageUrlWarning(theme.bgImage!)}</span>
+            )}
+          </div>
+
           <label className="inline-flex items-center gap-2 text-sm text-ink-300">
             <input
               type="checkbox"
@@ -241,6 +285,25 @@ export function ThemeCustomizer({
               onChange={(e) => patch({ banner: e.target.value || undefined })}
             />
           </Field>
+          <div className="flex flex-wrap items-center gap-2 -mt-1">
+            <label className="btn-ghost text-xs flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={!identity || picking !== null}
+                onChange={(e) => choosePicture("banner", e.target.files?.[0])}
+              />
+              {picking === "banner" ? "Uploading…" : "Upload a banner"}
+            </label>
+            {!identity && (
+              <span className="text-[11px] text-ink-600">connect a key to upload</span>
+            )}
+            {theme.banner && imageUrlWarning(theme.banner!) && (
+              <span className="text-[11px] text-vb-400/90">{imageUrlWarning(theme.banner!)}</span>
+            )}
+          </div>
+
         </section>
 
         <section className="space-y-3">
@@ -363,6 +426,12 @@ export function ThemeCustomizer({
             value={blurb}
             onChange={(e) => patch({ blurbHtml: e.target.value.slice(0, BLURB_MAX_CHARS) })}
           />
+          {htmlImageWarning(blurb) && (
+            <p className="text-[11px] text-vb-400/90">{htmlImageWarning(blurb)}</p>
+          )}
+          {pictureTrouble && (
+            <p className="text-[11px] text-red-400/90">{pictureTrouble}</p>
+          )}
           <div className="flex items-center justify-between text-[11px]">
             <span className={blurb.length > BLURB_MAX_CHARS * 0.9 ? "text-amber-400" : "text-ink-600"}>
               {blurb.length} / {BLURB_MAX_CHARS} chars

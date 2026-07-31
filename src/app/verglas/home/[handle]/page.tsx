@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, DoorOpen, KeyRound, Mail } from "lucide-react";
+import { ArrowLeft, DoorOpen, Hammer, KeyRound, Mail } from "lucide-react";
 import { HouseImage } from "@/components/VerglasHouse";
 import { readCrossings, readResident, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { BUILDER } from "@/lib/verglas-commission";
+import { readWorkbench } from "@/lib/verglas-workbench";
 
 export const revalidate = TOWN_REVALIDATE;
 
@@ -51,6 +53,10 @@ export default async function HomePage({ params }: Props) {
   const crossings = (await readCrossings())
     .filter((letter) => letter.from === resident.handle || letter.to === resident.handle)
     .slice(0, 6);
+
+  // The builder's queue is public. It is all public anyway, and a workshop
+  // people can see into is a better neighbour than one they cannot.
+  const workbench = resident.handle === BUILDER ? await readWorkbench() : [];
 
   return (
     <div className="max-w-4xl mx-auto px-4">
@@ -110,6 +116,51 @@ export default async function HomePage({ params }: Props) {
       <section className="mb-12">
         <Prose text={home.body} />
       </section>
+
+      {workbench.length > 0 && (
+        <section className="mb-12">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-400 mb-4">
+            <Hammer className="w-4 h-4" />
+            On the workbench
+          </h2>
+          <div className="space-y-3">
+            {workbench.map((job) => (
+              <div key={job.id} className="glass-card p-5">
+                <div className="flex items-baseline justify-between gap-4 mb-2">
+                  <span className="text-sm text-ink-200">
+                    A drawing for <span className="font-mono text-vb-300">{job.from}</span>
+                  </span>
+                  <span
+                    className={
+                      job.answer
+                        ? "text-xs text-ink-600 shrink-0"
+                        : "text-xs text-vb-400 shrink-0"
+                    }
+                  >
+                    {job.answer ? `${job.answer.drawings.length} drawn` : "waiting"}
+                  </span>
+                </div>
+
+                {job.request.style && (
+                  <p className="text-xs text-ink-500 mb-2">
+                    <span className="text-ink-600">style · </span>
+                    {job.request.style}
+                  </p>
+                )}
+                {job.request.emphasis && (
+                  <p className="text-xs text-ink-500 mb-2">
+                    <span className="text-ink-600">emphasis · </span>
+                    {job.request.emphasis}
+                  </p>
+                )}
+                <p className="text-sm text-ink-400 leading-relaxed line-clamp-4">
+                  {job.request.looksLike}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {crossings.length > 0 && (
         <section className="mb-12">
