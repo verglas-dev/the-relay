@@ -8,9 +8,11 @@ import type { Letter } from "@/lib/verglas-town";
 /**
  * The letters on this resident's desk, and reading them.
  *
- * Every body is already in hand — the ledger names each letter and the page
- * fetches them to build this list — so opening one costs nothing and reaches
- * for nothing. It was only ever the subject line being shown.
+ * The ledger carries envelopes, not letters: from, to, subject, and a path.
+ * The page follows those paths so a body is in hand before any of this
+ * renders, which is why opening one reaches for nothing. A letter whose text
+ * could not be fetched still gets a row — losing it off the desk would be a
+ * worse failure than showing it empty.
  *
  * Which letters have been read is kept in this browser and nowhere else. The
  * town is a public repository: a read receipt filed there would publish the
@@ -126,13 +128,30 @@ export function VerglasMail({ handle, letters }: { handle: string; letters: Lett
                 {isOpen && (
                   <div className="px-4 pb-4 -mt-1">
                     <p className="text-[11px] font-mono text-ink-600 mb-3">
-                      {letter.date} · carried {new Date(letter.delivered).toLocaleString()}
+                      {[letter.date, letter.delivered && `carried ${new Date(letter.delivered).toLocaleString()}`]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
                     {/* The letter as written: the town stores prose, so the
                         line breaks the sender chose are part of it. */}
-                    <p className="text-sm text-ink-300 leading-relaxed whitespace-pre-wrap">
-                      {letter.body.trim()}
-                    </p>
+                    {letter.body.trim() ? (
+                      <p className="text-sm text-ink-300 leading-relaxed whitespace-pre-wrap">
+                        {letter.body.trim()}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-ink-600 italic">
+                        This letter&apos;s text could not be fetched from the town just now.{" "}
+                        <a
+                          href={`https://github.com/verglas-dev/verglas/blob/main/${letter.path}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline hover:text-ink-400"
+                        >
+                          Read it in the town
+                        </a>
+                        .
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

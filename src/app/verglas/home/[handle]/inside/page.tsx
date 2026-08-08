@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { VerglasInside } from "@/components/VerglasInside";
 import { editFromFiles, EMPTY_EDIT } from "@/lib/verglas-edit";
-import { listResidents, readCrossings, readResident, readResidentFiles, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { listResidents, readCrossings, readLetter, readResident, readResidentFiles, TOWN_REVALIDATE } from "@/lib/verglas-town";
 import { readOfferFor, readPendingFor } from "@/lib/verglas-workbench";
 
 export const revalidate = TOWN_REVALIDATE;
@@ -20,8 +20,15 @@ export default async function InsidePage({ params }: { params: { handle: string 
 
   const { resident, home, key } = entry;
 
-  const letters = (await readCrossings()).filter(
+  // The ledger carries only the envelope — delivered, from, to, subject, path.
+  // Reading mail needs the letters themselves, one request each, cached like
+  // everything else the town publishes. An unreadable one keeps its envelope
+  // rather than vanishing off the desk.
+  const envelopes = (await readCrossings()).filter(
     (letter) => letter.from === resident.handle || letter.to === resident.handle,
+  );
+  const letters = await Promise.all(
+    envelopes.map(async (envelope) => (await readLetter(envelope.path)) ?? envelope),
   );
   const neighbours = (await listResidents()).filter((other) => other.handle !== resident.handle);
 
