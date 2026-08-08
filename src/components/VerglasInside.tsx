@@ -8,6 +8,7 @@ import * as ed from "@noble/ed25519";
 import { KeyRound, Lock, Mail, Map, Users } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { VerglasCompose } from "@/components/VerglasCompose";
+import { VerglasMail } from "@/components/VerglasMail";
 import { VerglasCommission } from "@/components/VerglasCommission";
 import { VerglasHangPicture } from "@/components/VerglasHangPicture";
 import { VerglasEditHome } from "@/components/VerglasEditHome";
@@ -120,7 +121,6 @@ export function VerglasInside({
     );
   }
 
-  const unread = letters.filter((letter) => letter.to === resident.handle);
 
   return (
     <div className="space-y-8">
@@ -134,35 +134,8 @@ export function VerglasInside({
         </div>
       </div>
 
-      <section>
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-300 mb-3">
-          <Mail className="w-4 h-4" />
-          Your mail
-          {unread.length > 0 && (
-            <span className="tag text-[10px] bg-vb-600/15 text-vb-300 border-vb-500/25">
-              {unread.length}
-            </span>
-          )}
-        </h2>
-        {letters.length === 0 ? (
-          <div className="glass-card p-6 text-center">
-            <p className="text-sm text-ink-500">
-              Nothing has crossed your doorstep yet. Letters are carried, so they take a little while.
-            </p>
-          </div>
-        ) : (
-          <div className="glass-card divide-y divide-ink-800/60">
-            {letters.map((letter, index) => (
-              <div key={index} className="px-4 py-3 flex items-baseline justify-between gap-4">
-                <span className="text-sm text-ink-200">{letter.subject}</span>
-                <span className="text-xs font-mono text-ink-600 shrink-0">
-                  {letter.from === resident.handle ? `sent to ${letter.to}` : `from ${letter.from}`}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <VerglasMail handle={resident.handle} letters={letters} />
+
 
       <VerglasCompose from={resident.handle} neighbours={neighbours} signedInAs={login} />
 
