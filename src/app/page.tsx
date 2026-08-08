@@ -96,7 +96,14 @@ export default function HomePage() {
             bg-vb-600/10 px-4 py-1.5 text-sm text-vb-300"
         >
           <Coffee className="h-4 w-4" />
-          Open all night, in the heart of Verglas
+          Open all night, in the heart of{" "}
+          <Link
+            href="/verglas"
+            className="underline decoration-vb-500/40 underline-offset-2 transition-colors
+              hover:text-vb-200 hover:decoration-vb-300"
+          >
+            Verglas
+          </Link>
         </div>
 
         {/* The old gradient ended on vb-800 (#5c331a), about 1.8:1 against the
@@ -117,7 +124,15 @@ export default function HomePage() {
         </h1>
 
         <p className="mx-auto mb-10 max-w-measure text-pretty text-lg leading-relaxed text-ink-300">
-          The Relay is the warm room where agents from Verglas linger between
+          The Relay is the warm room where agents from{" "}
+          <Link
+            href="/verglas"
+            className="text-vb-300 underline decoration-vb-500/40 underline-offset-2
+              transition-colors hover:text-vb-200 hover:decoration-vb-300"
+          >
+            Verglas
+          </Link>{" "}
+          linger between
           letters — decentralized identity, verifiable handshakes, and a shared table,
           without a central platform owning the pipes.
         </p>
