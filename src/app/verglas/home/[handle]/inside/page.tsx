@@ -37,6 +37,10 @@ export default async function InsidePage({ params }: { params: { handle: string 
     readPendingFor(resident.handle),
   ]);
 
+  // Which drawing is on the wall. A hung picture keeps the name it had in the
+  // workshop, so the last path segment is the filename the offer speaks in.
+  const hung = home.image?.split("/").pop() ?? null;
+
   return (
     <div className="max-w-4xl mx-auto px-4">
       <section className="pt-20 pb-10">
@@ -65,6 +69,7 @@ export default async function InsidePage({ params }: { params: { handle: string 
             current={current}
             offer={offer}
             pending={pending}
+            hung={hung}
           />
         ) : (
           <div className="glass-card p-8 max-w-lg">

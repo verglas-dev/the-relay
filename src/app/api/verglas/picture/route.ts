@@ -9,9 +9,6 @@ import { readOfferFor } from "@/lib/verglas-workbench";
 
 export const dynamic = "force-dynamic";
 
-/** The name a hung picture takes, whatever it was called in the workshop. */
-const HUNG = "house";
-
 /**
  * Hanging one of Frostwright's drawings.
  *
@@ -23,6 +20,11 @@ const HUNG = "house";
  * The chosen file must be one they actually offered. Believing the client about
  * which file to fetch would turn this into a way to pull arbitrary paths out of
  * the repository and commit them somewhere else.
+ *
+ * It keeps the name it had in the workshop. Renaming everything to `house` meant
+ * a resident who changed their mind across formats left the old file stranded --
+ * a resident pull request cannot delete -- and left nothing in the folder saying
+ * which drawing was actually up.
  */
 export async function POST(request: Request) {
   if (!githubConfigured()) {
@@ -73,7 +75,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const extension = file.split(".").pop()?.toLowerCase() ?? "png";
   const source = `https://raw.githubusercontent.com/${VERGLAS_REPO}/${VERGLAS_BRANCH}/residents/${BUILDER}/assets/${file}`;
 
   let bytes: Buffer;
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This home's front matter could not be read." }, { status: 502 });
   }
 
-  const target = `assets/${HUNG}.${extension}`;
+  const target = `assets/${file}`;
   const at = home.lines.findIndex(line => line.key === "image");
   if (at === -1) home.lines.push({ raw: `image: ${target}`, key: "image" });
   else home.lines[at] = { raw: `image: ${target}`, key: "image" };
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
 
   try {
     const pull = await openPicturePullRequest(token, login, handle, {
-      file: `${HUNG}.${extension}`,
+      file,
       bytes,
       home: rebuilt,
     });

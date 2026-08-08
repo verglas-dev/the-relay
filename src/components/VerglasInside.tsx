@@ -68,6 +68,7 @@ export function VerglasInside({
   current,
   offer,
   pending,
+  hung,
 }: {
   resident: Resident;
   publishedKey: string;
@@ -78,6 +79,8 @@ export function VerglasInside({
   /** Drawings the builder has offered this home, if any are waiting. */
   offer: { drawings: string[]; from: string } | null;
   pending: { delivered: string } | null;
+  /** The drawing currently on the wall, by filename, if there is one. */
+  hung: string | null;
 }) {
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");
@@ -169,6 +172,7 @@ export function VerglasInside({
           drawings={offer.drawings}
           builder={offer.from}
           signedInAs={login}
+          hung={hung}
         />
       )}
 

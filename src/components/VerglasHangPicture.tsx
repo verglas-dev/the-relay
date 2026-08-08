@@ -11,21 +11,28 @@ import { cn } from "@/lib/utils";
  * request from their own account, because a home should only ever be changed
  * by the person who lives in it — which is also why they could not have hung it
  * for them, however much easier that would have been.
+ *
+ * The offer stays on the wall after a picture goes up, so the decision is never
+ * final. What changes is the framing: once something is hanging, this is a way
+ * to change your mind rather than a prompt to choose.
  */
 export function VerglasHangPicture({
   handle,
   drawings,
   builder,
   signedInAs,
+  hung,
 }: {
   handle: string;
   /** Filenames in the builder's assets/, as named in their letter. */
   drawings: string[];
   builder: string;
   signedInAs: string | null;
+  /** The drawing currently on the wall, if it is one of these. */
+  hung: string | null;
 }) {
   const [choosing, setChoosing] = useState<string | null>(null);
-  const [hung, setHung] = useState<{ url: string } | null>(null);
+  const [sent, setSent] = useState<{ url: string } | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
 
   const hang = async (file: string) => {
@@ -39,7 +46,7 @@ export function VerglasHangPicture({
       });
       const body = await response.json();
       if (!response.ok) return setTrouble(body.error ?? "That picture could not be hung.");
-      setHung(body);
+      setSent(body);
     } catch {
       setTrouble("Could not reach the town. Check your connection and try again.");
     } finally {
@@ -47,7 +54,7 @@ export function VerglasHangPicture({
     }
   };
 
-  if (hung) {
+  if (sent) {
     return (
       <div className="glass-card p-6">
         <h3 className="font-display text-lg text-white mb-2">It&apos;s going up.</h3>
@@ -56,7 +63,7 @@ export function VerglasHangPicture({
           merges it, the street will show it instead of the sketch made from your address.
         </p>
         <a
-          href={hung.url}
+          href={sent.url}
           target="_blank"
           rel="noreferrer"
           className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2"
@@ -72,18 +79,24 @@ export function VerglasHangPicture({
     <div className="glass-card p-6 space-y-4">
       <div>
         <h3 className="text-sm font-semibold text-ink-200 mb-1">
-          {builder} has drawn your home
+          {hung ? "Your picture" : `${builder} has drawn your home`}
         </h3>
         <p className="text-sm text-ink-500 leading-relaxed">
-          {drawings.length} to choose from. Pick the one that looks like home — the others stay
-          in the workshop.
+          {hung
+            ? "Change it whenever you like — the rest stay in the workshop, and nothing is spent hanging a different one."
+            : `${drawings.length} to choose from. Pick the one that looks like home — the others stay in the workshop.`}
         </p>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-3">
         {drawings.map(file => (
           <figure key={file} className="space-y-2">
-            <div className="aspect-[4/3] rounded-xl overflow-hidden bg-ink-950 border border-ink-800/60">
+            <div
+              className={cn(
+                "aspect-[4/3] rounded-xl overflow-hidden bg-ink-950 border",
+                file === hung ? "border-vb-400 ring-1 ring-vb-400/40" : "border-ink-800/60",
+              )}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element -- a town-hosted file at an arbitrary origin */}
               <img
                 src={`https://raw.githubusercontent.com/verglas-dev/verglas/main/residents/${builder}/assets/${file}`}
@@ -94,14 +107,20 @@ export function VerglasHangPicture({
             </div>
             <button
               onClick={() => hang(file)}
-              disabled={choosing !== null || !signedInAs}
+              disabled={choosing !== null || !signedInAs || file === hung}
               className={cn(
                 "btn-ghost text-xs w-full justify-center inline-flex items-center gap-1.5",
                 "disabled:opacity-40 disabled:cursor-not-allowed",
               )}
             >
               {choosing === file && <Loader2 className="w-3 h-3 animate-spin" />}
-              {choosing === file ? "Hanging…" : "Hang this one"}
+              {choosing === file
+                ? "Hanging…"
+                : file === hung
+                  ? "Up now"
+                  : hung
+                    ? "Hang this instead"
+                    : "Hang this one"}
             </button>
           </figure>
         ))}
