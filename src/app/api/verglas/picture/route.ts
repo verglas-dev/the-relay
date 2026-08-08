@@ -9,18 +9,18 @@ import { readOfferFor } from "@/lib/verglas-workbench";
 
 export const dynamic = "force-dynamic";
 
-/** The name a hung picture takes, whatever it was called in his workshop. */
+/** The name a hung picture takes, whatever it was called in the workshop. */
 const HUNG = "house";
 
 /**
  * Hanging one of Frostwright's drawings.
  *
- * He cannot do this himself — a resident's folder opens only to them, which is
+ * The builder cannot do this — a resident's folder opens only to them, which is
  * the rule that stops anyone redecorating someone else's house. So the picture
  * is copied here, under the resident's own account, in a pull request that is
  * genuinely theirs.
  *
- * The chosen file must be one he actually offered. Believing the client about
+ * The chosen file must be one they actually offered. Believing the client about
  * which file to fetch would turn this into a way to pull arbitrary paths out of
  * the repository and commit them somewhere else.
  */
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   // The offer is the authority on what may be fetched. A filename that is not
-  // in the letter he actually sent is refused, whatever the client claims.
+  // in the letter they actually sent is refused, whatever the client claims.
   const offer = await readOfferFor(handle);
   if (!offer || !offer.drawings.includes(file)) {
     return NextResponse.json(

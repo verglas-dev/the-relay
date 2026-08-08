@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { VerglasInside } from "@/components/VerglasInside";
 import { editFromFiles, EMPTY_EDIT } from "@/lib/verglas-edit";
 import { listResidents, readCrossings, readResident, readResidentFiles, TOWN_REVALIDATE } from "@/lib/verglas-town";
-import { readOfferFor } from "@/lib/verglas-workbench";
+import { readOfferFor, readPendingFor } from "@/lib/verglas-workbench";
 
 export const revalidate = TOWN_REVALIDATE;
 
@@ -30,8 +30,12 @@ export default async function InsidePage({ params }: { params: { handle: string 
   const files = await readResidentFiles(resident.handle);
   const current = files ? editFromFiles(files.address, files.home) : EMPTY_EDIT;
 
-  // Drawings waiting to be hung, if the builder has answered a commission.
-  const offer = await readOfferFor(resident.handle);
+  // Drawings waiting to be hung, if the builder has answered a commission, and
+  // any request of their own still waiting for one.
+  const [offer, pending] = await Promise.all([
+    readOfferFor(resident.handle),
+    readPendingFor(resident.handle),
+  ]);
 
   return (
     <div className="max-w-4xl mx-auto px-4">
@@ -60,6 +64,7 @@ export default async function InsidePage({ params }: { params: { handle: string 
             neighbours={neighbours}
             current={current}
             offer={offer}
+            pending={pending}
           />
         ) : (
           <div className="glass-card p-8 max-w-lg">

@@ -67,6 +67,7 @@ export function VerglasInside({
   neighbours,
   current,
   offer,
+  pending,
 }: {
   resident: Resident;
   publishedKey: string;
@@ -76,6 +77,7 @@ export function VerglasInside({
   current: HomeEdit;
   /** Drawings the builder has offered this home, if any are waiting. */
   offer: { drawings: string[]; from: string } | null;
+  pending: { delivered: string } | null;
 }) {
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");
@@ -170,12 +172,13 @@ export function VerglasInside({
         />
       )}
 
-      {/* The builder cannot commission himself — a letter has to cross. */}
+      {/* The builder cannot commission themselves — a letter has to cross. */}
       {resident.handle !== BUILDER && (
         <VerglasCommission
           handle={resident.handle}
           description={current.home}
           signedInAs={login}
+          pending={pending}
         />
       )}
 

@@ -24,17 +24,20 @@ const inputClass = `w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2
  * The form is its own thing — nobody wants to compose a letter describing
  * something they have already described — but what it sends is an ordinary
  * letter, because that is the only way anything crosses between two folders
- * here. Frostwright reads it off his workbench; the town reads it as mail.
+ * here. Frostwright reads it off the workbench; the town reads it as mail.
  */
 export function VerglasCommission({
   handle,
   description,
   signedInAs,
+  pending,
 }: {
   handle: string;
   /** The resident's own home description, as a starting point. */
   description: string;
   signedInAs: string | null;
+  /** A request already crossing, from the town rather than from React. */
+  pending: { delivered: string } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<CommissionDraft>({
@@ -86,13 +89,27 @@ export function VerglasCommission({
     }
   };
 
+  if (pending && !sent && !open) {
+    return (
+      <div className="glass-card p-6">
+        <h3 className="font-display text-lg text-white mb-2">It&apos;s on the workbench.</h3>
+        <p className="text-sm text-ink-400 leading-relaxed">
+          You asked for a drawing of this place, and it has been carried but not yet
+          answered. Three will come back to this mailbox when they are ready, and you hang
+          whichever one looks like home. No need to ask again — a second request would draw
+          a second set.
+        </p>
+      </div>
+    );
+  }
+
   if (sent) {
     return (
       <div className="glass-card p-6">
-        <h3 className="font-display text-lg text-white mb-2">It&apos;s on his workbench.</h3>
+        <h3 className="font-display text-lg text-white mb-2">It&apos;s on the workbench.</h3>
         <p className="text-sm text-ink-400 leading-relaxed mb-4">
           Your request goes by mail like everything else here, so Thaw reads it and carries it
-          before Frostwright sees it. He&apos;ll write back with three drawings, and you hang
+          before Frostwright sees it. They&apos;ll write back with three drawings, and you hang
           whichever one looks like home.
         </p>
         <a href={sent.url} target="_blank" rel="noreferrer" className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2">
@@ -111,13 +128,13 @@ export function VerglasCommission({
           <h3 className="text-sm font-semibold text-ink-200">Build your home</h3>
         </div>
         <p className="text-sm text-ink-500 leading-relaxed mb-4">
-          Frostwright is the town&apos;s builder. Tell him what your place looks like and
-          he&apos;ll draw it — three attempts, delivered to your mailbox like any other letter.
-          Hang the one that looks like home. He can&apos;t hang it for you: your folder opens
+          Frostwright is the town&apos;s builder. Tell them what your place looks like and
+          they&apos;ll draw it — three attempts, delivered to your mailbox like any other letter.
+          Hang the one that looks like home. They can&apos;t hang it for you: your folder opens
           only to you, so the last move is always yours.
         </p>
         <button onClick={() => setOpen(true)} className="btn-primary text-sm px-4 py-2">
-          Ask him to draw it
+          Ask for a drawing
         </button>
       </div>
     );
@@ -135,7 +152,7 @@ export function VerglasCommission({
       <div>
         <label className="block text-sm text-ink-300 mb-1">What it looks like</label>
         <p className="text-xs text-ink-500 mb-2 leading-relaxed">
-          Your own description, to start. Trim it to the parts you can see, or write him
+          Your own description, to start. Trim it to the parts you can see, or write
           something new.
         </p>
         <textarea
@@ -219,7 +236,7 @@ export function VerglasCommission({
 
       <p className="text-xs text-ink-600 leading-relaxed">
         This goes to {BUILDER} as a public letter, like all mail here. It arrives after Thaw has
-        read and carried it, so give him a little while.
+        read and carried it, so give it a little while.
       </p>
 
       {trouble && (

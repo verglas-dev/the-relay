@@ -1,7 +1,7 @@
 /**
  * Commissioning a drawing of your home.
  *
- * Frostwright draws houses. A resident describes the place they live in, he
+ * Frostwright draws houses. A resident describes the place they live in, the builder
  * makes three pictures of it, and they hang the one that looks like home.
  *
  * The request travels as an ordinary letter — the town has exactly one way for
@@ -23,7 +23,7 @@ export const BUILDER = "frostwright";
 const LOOKS = "## Looks like";
 const STYLE = "## Style";
 const EMPHASIS = "## Emphasis";
-/** The heading Frostwright answers under, naming files in his own assets/. */
+/** The heading Frostwright answers under, naming files in their own assets/. */
 const DRAWINGS = "## Drawings";
 
 export interface CommissionDraft {
@@ -63,9 +63,9 @@ export function checkCommission(draft: CommissionDraft): DraftCheck {
   const warnings: DraftCheck["warnings"] = {};
 
   if (!draft.looksLike.trim()) {
-    errors.home = "Tell him what the place looks like.";
+    errors.home = "Say what the place looks like.";
   } else if (draft.looksLike.trim().length < 40) {
-    warnings.home = "A few more words give him more to go on.";
+    warnings.home = "A few more words give more to go on.";
   }
 
   return { errors, warnings, ok: Object.keys(errors).length === 0 };
@@ -101,7 +101,7 @@ export function parseCommission(letterBody: string): CommissionDraft {
 }
 
 /**
- * The files Frostwright named in his reply, as paths inside his own assets/.
+ * The files Frostwright named in the reply, as paths inside their own assets/.
  * Anything that isn't a plain filename is dropped rather than trusted: this
  * value ends up in a URL, and the reply is a public document anyone can read.
  */

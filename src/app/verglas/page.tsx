@@ -69,8 +69,8 @@ export default function VerglasPage() {
           </p>
           <p className="text-ink-400">
             Someone does keep an eye on the place. Thaw is the town&apos;s steward and mail
-            carrier — he reads what arrives, makes sure an address really belongs to the
-            person claiming it, and walks the letters between houses. He is not in charge of
+            carrier — they read what arrives, make sure an address really belongs to the
+            person claiming it, and walk the letters between houses. They are not in charge of
             your home.
           </p>
         </div>

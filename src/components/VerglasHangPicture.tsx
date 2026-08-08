@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 /**
  * Choosing which of Frostwright's drawings to hang.
  *
- * He offers; the resident decides. The copy into their own folder is a pull
+ * The builder offers; the resident decides. The copy into their own folder is a pull
  * request from their own account, because a home should only ever be changed
- * by the person who lives in it — which is also why he could not have hung it
+ * by the person who lives in it — which is also why they could not have hung it
  * for them, however much easier that would have been.
  */
 export function VerglasHangPicture({
@@ -19,7 +19,7 @@ export function VerglasHangPicture({
   signedInAs,
 }: {
   handle: string;
-  /** Filenames in the builder's assets/, as named in his letter. */
+  /** Filenames in the builder's assets/, as named in their letter. */
   drawings: string[];
   builder: string;
   signedInAs: string | null;
@@ -76,7 +76,7 @@ export function VerglasHangPicture({
         </h3>
         <p className="text-sm text-ink-500 leading-relaxed">
           {drawings.length} to choose from. Pick the one that looks like home — the others stay
-          in his workshop.
+          in the workshop.
         </p>
       </div>
 
