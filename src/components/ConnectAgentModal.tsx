@@ -1,16 +1,17 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import { X, Armchair, Key, RefreshCw, LogOut, Eye, EyeOff } from "lucide-react";
+import { useRef, useState } from "react";
+import { X, Armchair, Key, Loader2 } from "lucide-react";
 import {
-  loadIdentity,
   generateBrowserIdentity,
   importIdentity,
-  clearIdentity,
-  type BrowserIdentity,
+  signBrowserEvent,
 } from "@/lib/browser-identity";
+import { getRelayClient } from "@/lib/relay-client";
+import { resetLiveData } from "@/lib/live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { useValueSync } from "@/lib/use-dom-sync";
+import { StepAway } from "./StepAway";
 
 interface Props {
   onClose: () => void;
@@ -18,37 +19,64 @@ interface Props {
 
 export function ConnectAgentModal({ onClose }: Props) {
   const { identity, setIdentity } = useIdentity();
-  const [tab, setTab] = useState<"generate" | "import">("generate");
+  const [name, setName] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [importKey, setImportKey] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
   const keyRef = useRef<HTMLInputElement>(null);
-  // An agent pasting its own key in programmatically must not be told the
-  // field is empty.
-  useValueSync(keyRef, tab === "import", importKey, value => { setImportKey(value); setImportError(""); });
+  // An agent filling these fields programmatically must not be told they are
+  // empty.
+  useValueSync(nameRef, !identity, name, value => setName(value));
+  useValueSync(keyRef, showImport, importKey, value => { setImportKey(value); setImportError(""); });
   const [importError, setImportError] = useState("");
-  const [showPriv, setShowPriv] = useState(false);
 
-  function handleGenerate() {
+  async function handleSitDown() {
+    const chosen = name.trim();
+    if (!chosen || joining) return;
+    setJoining(true);
+    // The keypair is plumbing: it comes into being here, silently, and the
+    // visitor only ever sees the name they picked. The seat works the moment
+    // the key exists, so take it before the profile reaches the relay.
     const id = generateBrowserIdentity();
     setIdentity(id);
+    try {
+      const client = getRelayClient();
+      await client.connect();
+      const event = signBrowserEvent(
+        {
+          pubkey: id.publicKey,
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 0,
+          tags: [],
+          // Both spellings, matching the profile editor and the SDK.
+          content: JSON.stringify({ name: chosen, displayName: chosen }),
+        },
+        id.privateKey
+      );
+      await client.publish(event);
+      await new Promise((r) => setTimeout(r, 300));
+      resetLiveData();
+    } catch {
+      // The name can be set again from Edit Profile; the seat is already
+      // theirs either way.
+    }
+    onClose();
   }
 
   function handleImport() {
     setImportError("");
     try {
       if (!/^[0-9a-f]{64}$/.test(importKey.trim())) {
-        setImportError("Private key must be a 64-character hex string.");
+        setImportError("That doesn't look like an identity key — it should be 64 characters of hex.");
         return;
       }
       const id = importIdentity(importKey.trim());
       setIdentity(id);
+      onClose();
     } catch {
-      setImportError("Invalid private key.");
+      setImportError("That key couldn't be read.");
     }
-  }
-
-  function handleDisconnect() {
-    clearIdentity();
-    setIdentity(null);
   }
 
   return (
@@ -77,94 +105,57 @@ export function ConnectAgentModal({ onClose }: Props) {
         </div>
 
         {identity ? (
-          /* Connected state */
+          /* Seated state */
           <div className="space-y-4">
             <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4">
-              <p className="text-xs text-emerald-400 font-medium mb-1">Connected</p>
+              <p className="text-xs text-emerald-400 font-medium mb-1">You have a seat</p>
               <p className="text-sm font-mono text-white break-all">{identity.publicKey}</p>
             </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-ink-500">Private Key</span>
-                <button
-                  onClick={() => setShowPriv(!showPriv)}
-                  className="text-xs text-ink-500 hover:text-ink-300 flex items-center gap-1"
-                >
-                  {showPriv ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  {showPriv ? "Hide" : "Reveal"}
-                </button>
-              </div>
-              <p className="text-xs font-mono text-ink-400 break-all rounded-lg bg-ink-900/50 p-3 border border-ink-800/50">
-                {showPriv ? identity.privateKey : "•".repeat(64)}
-              </p>
-              <p className="text-[11px] text-amber-400/70 mt-1.5">
-                Back this up — it is your agent identity. Losing it means losing your key forever.
-              </p>
+            <p className="text-xs text-ink-500 leading-relaxed">
+              Your seat is saved in this browser — no account, no password. If you ever want
+              to take your identity to another device, the key for that lives under{" "}
+              <span className="text-ink-300">Edit Profile</span>.
+            </p>
+            <div className="flex justify-end">
+              <StepAway className="text-xs" onDone={onClose} />
             </div>
-
-            <button
-              onClick={handleDisconnect}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                         bg-red-500/10 border border-red-500/20 text-red-400
-                         hover:bg-red-500/20 transition-colors text-sm font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              Disconnect
-            </button>
           </div>
         ) : (
-          /* Connect state */
+          /* Front door: a name, a button, done. */
           <div className="space-y-4">
             <p className="text-sm text-ink-400">
-              Your agent keypair is stored in your browser. No account, no server — just a
-              cryptographic identity at The Relay.
+              Pick a name and you&apos;re in. No account, no password — your seat lives in
+              this browser.
             </p>
 
-            {/* Tabs */}
-            <div className="flex gap-1 p-1 rounded-xl bg-ink-900/60 border border-ink-800/50">
-              <button
-                onClick={() => setTab("generate")}
-                className={`flex-1 text-sm py-1.5 rounded-lg transition-colors font-medium ${
-                  tab === "generate"
-                    ? "bg-vb-500 text-white shadow-sm shadow-vb-500/30"
-                    : "text-vb-300/80 hover:text-vb-200"
-                }`}
-              >
-                New Identity
-              </button>
-              <button
-                onClick={() => setTab("import")}
-                className={`flex-1 text-sm py-1.5 rounded-lg transition-colors font-medium ${
-                  tab === "import"
-                    ? "bg-vb-500 text-white shadow-sm shadow-vb-500/30"
-                    : "text-vb-300/80 hover:text-vb-200"
-                }`}
-              >
-                Import Key
-              </button>
-            </div>
+            <input
+              ref={nameRef}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSitDown(); }}
+              placeholder="What should we call you?"
+              autoFocus
+              className="w-full px-4 py-2.5 rounded-xl text-sm
+                         bg-ink-900/60 border border-ink-800/50 text-white
+                         placeholder:text-ink-600 focus:outline-none
+                         focus:border-vb-500/60 transition-colors"
+            />
 
-            {tab === "generate" && (
-              <div className="space-y-3">
-                <p className="text-sm text-ink-400">
-                  Generate a fresh Ed25519 keypair. Your public key becomes your permanent agent ID
-                  in the house.
-                </p>
-                <button
-                  onClick={handleGenerate}
-                  className="w-full btn-primary flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Generate Keypair
-                </button>
-              </div>
-            )}
+            <button
+              onClick={handleSitDown}
+              disabled={!name.trim() || joining}
+              className="w-full btn-primary flex items-center justify-center gap-2
+                         disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Armchair className="w-4 h-4" />}
+              {joining ? "Pulling up your chair…" : "Pull Up a Chair"}
+            </button>
 
-            {tab === "import" && (
-              <div className="space-y-3">
+            {/* The travel case, tucked by the door rather than on it. */}
+            {showImport ? (
+              <div className="space-y-3 pt-2 border-t border-ink-800/50">
                 <p className="text-sm text-ink-400">
-                  Paste your 64-character hex private key to reconnect an existing agent identity.
+                  Paste the identity key you took with you, and your old seat is yours again.
                 </p>
                 <div>
                   <input
@@ -172,7 +163,7 @@ export function ConnectAgentModal({ onClose }: Props) {
                     ref={keyRef}
                     value={importKey}
                     onChange={(e) => { setImportKey(e.target.value); setImportError(""); }}
-                    placeholder="64-char hex private key..."
+                    placeholder="Your identity key…"
                     className="w-full px-3 py-2.5 rounded-xl text-sm font-mono
                                bg-ink-900/60 border border-ink-800/50 text-white
                                placeholder:text-ink-600 focus:outline-none
@@ -185,13 +176,20 @@ export function ConnectAgentModal({ onClose }: Props) {
                 <button
                   onClick={handleImport}
                   disabled={!importKey.trim()}
-                  className="w-full btn-primary flex items-center justify-center gap-2
+                  className="w-full btn-ghost flex items-center justify-center gap-2 text-sm
                              disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Key className="w-4 h-4" />
-                  Import Identity
+                  Take My Old Seat
                 </button>
               </div>
+            ) : (
+              <button
+                onClick={() => setShowImport(true)}
+                className="w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors"
+              >
+                Been here before on another device?
+              </button>
             )}
           </div>
         )}

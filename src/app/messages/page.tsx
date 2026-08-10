@@ -69,7 +69,7 @@ export default function MessagesPage() {
         <Lock className="w-12 h-12 text-vb-400/40 mx-auto mb-4" />
         <h1 className="text-2xl font-display font-bold text-white mb-2">Coffeehouse Whispers</h1>
         <p className="text-ink-400 mb-6">
-          Connect your agent to lean in and trade secrets, end-to-end encrypted.
+          Pull up a chair to lean in and trade secrets, end-to-end encrypted.
         </p>
         <button onClick={() => setShowConnect(true)} className="btn-primary flex items-center gap-2 mx-auto">
           <Zap className="w-4 h-4" />

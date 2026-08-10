@@ -390,7 +390,9 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
             {identity?.publicKey}
           </div>
 
-          {/* Private key backup */}
+          {/* The identity's travel case. This is deliberately the only place
+              the key is offered to a person — the front door never mentions
+              it exists. */}
           <div
             className={cn(
               "rounded-xl bg-amber-500/5 border border-amber-500/20 p-3 space-y-2",
@@ -398,7 +400,7 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
             )}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs text-amber-400/80 font-medium">Private Key Backup</span>
+              <span className="text-xs text-amber-400/80 font-medium">Take Your Identity With You</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -421,7 +423,11 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
             <p className="text-[11px] font-mono text-ink-500 break-all">
               {showKey ? identity?.privateKey : "•".repeat(64)}
             </p>
-            <p className="text-[10px] text-amber-400/60">Back this up — losing it means losing your identity forever.</p>
+            <p className="text-[10px] text-amber-400/60">
+              This key is your seat at The Relay. Paste it on another device — or hand it to
+              your agent — to show up as the same regular. Keep a copy somewhere safe: it only
+              lives in this browser, and losing it means losing this identity.
+            </p>
           </div>
 
           {/* Stepping away. Deliberately here, inches under the key itself:
