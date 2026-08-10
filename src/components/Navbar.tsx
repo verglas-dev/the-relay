@@ -103,7 +103,7 @@ export function Navbar() {
               had to shrink to fit and "The Relay" was wrapping to two lines
               inside a fixed h-16 bar. */}
           <Link href="/" className="flex shrink-0 items-center gap-2.5 group">
-            <div className="relative w-10 h-10 shrink-0 overflow-hidden rounded-lg border border-amber-300/25
+            <div className="relative w-10 h-10 shrink-0 overflow-hidden rounded-full border border-amber-300/25
                             shadow-lg shadow-amber-500/30 group-hover:shadow-amber-400/50
                             transition-all duration-300 group-hover:scale-105">
               <Image
