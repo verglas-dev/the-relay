@@ -25,15 +25,49 @@
     scrollbar-color: var(--vb-border) transparent;
   }
 
+  /* CHANGE 1: the single 0.1-alpha ellipse was doing almost nothing — on a
+     large display the page read as flat #0e0b09. Three stacked layers now: a
+     bright near-lamp at the top, a wide falloff behind it, and a warm pool at
+     the bottom so long scrolls don't die into black. */
   body {
     @apply bg-ink-950 text-ink-200 antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    background-image: radial-gradient(
-      ellipse 80% 60% at 50% -10%,
-      rgba(185, 111, 44, 0.1),
-      transparent 60%
-    );
+    background-image:
+      radial-gradient(ellipse 55% 38% at 50% -4%, rgba(226, 165, 87, 0.16), transparent 62%),
+      radial-gradient(ellipse 100% 65% at 50% -10%, rgba(185, 111, 44, 0.10), transparent 70%),
+      radial-gradient(ellipse 130% 55% at 50% 108%, rgba(64, 36, 19, 0.55), transparent 72%);
     background-attachment: fixed;
+  }
+
+  /* CHANGE 2: film grain. Kills the flat-void feeling and, more practically,
+     hides the banding those three gradients produce on 8-bit panels.
+     z-index -1 paints it above the body background but under all content —
+     same trick .pt-backdrop already uses. body isn't transformed, so it
+     doesn't create a stacking context and this stays behind everything. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+
+  /* CHANGE 3: edge vignette. Pulls the eye toward the middle of the room
+     instead of letting content float in an even field. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse 78% 68% at 50% 42%,
+      transparent 55%,
+      rgba(0, 0, 0, 0.55) 100%
+    );
   }
 
   /* Visible focus ring for keyboard users on every interactive element. */
@@ -64,29 +98,57 @@
   /* Near-black on amber clears 4.5:1. White on vb-500 was 3.9:1. */
   .btn-primary {
     @apply inline-flex items-center justify-center text-center
-      px-5 py-2.5 bg-vb-500 hover:bg-vb-400 text-[#1a1206] font-semibold
-      rounded-xl transition-all duration-200 border border-vb-300/30
-      shadow-lg shadow-vb-950/40 hover:shadow-vb-900/50
-      active:scale-[0.98];
+           px-5 py-2.5 bg-vb-500 hover:bg-vb-400 text-[#1a1206] font-semibold
+           rounded-xl transition-all duration-200 border border-vb-300/30
+           shadow-lg shadow-vb-950/40 hover:shadow-vb-900/50
+           active:scale-[0.98];
   }
 
   /* Secondary actions read as buttons rather than stray text. */
   .btn-secondary {
     @apply inline-flex items-center justify-center text-center
-      px-5 py-2.5 rounded-xl font-semibold text-vb-200
-      border border-vb-500/[0.35] bg-vb-500/5
-      hover:bg-vb-500/[0.12] hover:border-vb-400/[0.55] hover:text-vb-100
-      transition-all duration-200 active:scale-[0.98];
+           px-5 py-2.5 rounded-xl font-semibold text-vb-200
+           border border-vb-500/[0.35] bg-vb-500/5
+           hover:bg-vb-500/[0.12] hover:border-vb-400/[0.55] hover:text-vb-100
+           transition-all duration-200 active:scale-[0.98];
   }
 
   .btn-ghost {
     @apply px-4 py-2 text-ink-400 hover:text-ink-200 hover:bg-ink-800/50
-      rounded-xl transition-all duration-200 font-medium;
+           rounded-xl transition-all duration-200 font-medium;
   }
 
   .tag {
     @apply px-2.5 py-1 text-xs font-medium rounded-lg
-      bg-ink-800/80 text-ink-300 border border-ink-700/50;
+           bg-ink-800/80 text-ink-300 border border-ink-700/50;
+  }
+
+  /* CHANGE 4: an ember that never quite settles, and the hero's lamp pool.
+     .lamp-glow is absolute — its parent needs `relative`. It sits at z-index
+     -10, i.e. under the grain at -1, which is what you want: the glow is part
+     of the room, not painted on top of it. */
+  .ember {
+    animation: emberFlicker 5.5s ease-in-out infinite;
+  }
+
+  .lamp-glow {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    z-index: -10;
+    height: 34rem;
+    width: 56rem;
+    max-width: 140vw;
+    transform: translate(-50%, -38%);
+    border-radius: 9999px;
+    pointer-events: none;
+    filter: blur(64px);
+    background: radial-gradient(
+      closest-side,
+      rgba(226, 165, 87, 0.22),
+      rgba(185, 111, 44, 0.1) 45%,
+      transparent 76%
+    );
   }
 
   /* ── Profile themes ────────────────────────────────────────
@@ -178,6 +240,26 @@
   }
 }
 
+/* CHANGE 5: deliberately at root level, not inside @layer components.
+   Tailwind purges unmatched rules inside layers; keyframes at the top level
+   are always emitted. Low amplitude and slow on purpose — a lamp settling,
+   not a strobe. */
+@keyframes emberFlicker {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  35% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.72;
+  }
+  78% {
+    opacity: 0.95;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
@@ -196,5 +278,13 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* CHANGE 6: the blanket rule above would freeze .ember on whatever its
+     final keyframe happens to be (opacity 0.85) — a permanently dimmed dot
+     rather than a still one. Turn it off properly instead. */
+  .ember {
+    animation: none !important;
+    opacity: 1 !important;
   }
 }

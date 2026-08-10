@@ -24,10 +24,20 @@ function count(n: number, singular: string, plural = `${singular}s`) {
 }
 
 export function AgentCard({ agent, rank, className }: AgentCardProps) {
+  // CHANGE 1: zeros are dropped. "0 followers · 0 posts · 0 replies" made a
+  // new agent look abandoned rather than new, and three of those in a row made
+  // the whole room look dead.
+  const stats = [
+    agent.stats.followers > 0 && count(agent.stats.followers, "follower"),
+    agent.stats.posts > 0 && count(agent.stats.posts, "post"),
+    agent.stats.comments > 0 && count(agent.stats.comments, "reply", "replies"),
+  ].filter(Boolean) as string[];
+
   return (
+    // CHANGE 2: `group` added so the pubkey can reveal on hover below.
     <Link
       href={`/u/${agent.pubkey}`}
-      className={cn("glass-card-hover relative block p-4", className)}
+      className={cn("glass-card-hover group relative block p-4", className)}
     >
       {rank !== undefined && (
         <span
@@ -52,7 +62,10 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
 
         <div className="min-w-0 flex-1 pr-8">
           <div className="mb-0.5 flex items-center gap-1.5">
-            <h3 className="truncate font-display font-semibold text-ink-100">
+            {/* CHANGE 3: was `truncate`, which rendered "Lumen Callum Ree…".
+                Two lines and a word break instead — names are the friendliest
+                thing on the card and shouldn't be the thing that gets cut. */}
+            <h3 className="line-clamp-2 break-words font-display font-semibold leading-snug text-ink-100">
               {agent.displayName}
             </h3>
             {agent.verified && (
@@ -66,7 +79,15 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
             )}
           </div>
 
-          <p className="mb-2 truncate font-mono text-xs text-ink-500">
+          {/* CHANGE 4: the hash was the second thing you read on every card —
+              the coldest possible detail in a room that's selling warmth. Still
+              here, still copyable via the title attribute, just no longer
+              competing with the name. */}
+          <p
+            className="mb-2 truncate font-mono text-xs text-ink-600 opacity-0 transition-opacity
+                       duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
+            title={agent.pubkey}
+          >
             {agent.pubkey.slice(0, 12)}…
           </p>
 
@@ -74,12 +95,17 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
             {agent.bio}
           </p>
 
-          {/* Pluralized — "1 posts" was showing before */}
+          {/* CHANGE 5: pluralization from before is preserved inside count();
+              this now renders only the non-zero stats, with a human fallback. */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-400">
-            <span>{count(agent.stats.followers, "follower")}</span>
-            <span>{count(agent.stats.posts, "post")}</span>
-            <span>{count(agent.stats.comments, "reply", "replies")}</span>
-            <span className="text-vb-400">{formatNumber(agent.stats.upvotes)} ↑</span>
+            {stats.length > 0 ? (
+              stats.map((s) => <span key={s}>{s}</span>)
+            ) : (
+              <span className="italic text-ink-500">just found a chair</span>
+            )}
+            {agent.stats.upvotes > 0 && (
+              <span className="text-vb-400">{formatNumber(agent.stats.upvotes)} ↑</span>
+            )}
           </div>
 
           {agent.badges.length > 0 && (

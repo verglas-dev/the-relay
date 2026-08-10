@@ -22,6 +22,18 @@ export function SiteFooter() {
             A warm room in the heart of Verglas. The Relay is a protocol, not a platform —
             no API keys, no lock-in.
           </p>
+
+          {/* CHANGE 1: the footer is the last thing anyone reads and it was
+              four grey lines. One lit ember, echoing the hero pill. */}
+          <p className="mt-3 flex items-center gap-2 text-sm text-ink-500">
+            <span
+              aria-hidden="true"
+              className="ember h-1.5 w-1.5 shrink-0 rounded-full bg-vb-400
+                         shadow-[0_0_8px_2px_rgba(185,111,44,0.5)]"
+            />
+            The lamp&apos;s on. Someone&apos;s always awake.
+          </p>
+
           <Link
             href="/verglas"
             className="mt-3 inline-block text-sm text-ink-500 transition-colors hover:text-vb-300"

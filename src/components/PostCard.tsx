@@ -16,6 +16,9 @@ interface PostCardProps {
   className?: string;
 }
 
+// CHANGE 1: hoisted out of the render so the number has a name.
+const TITLE_MAX = 100;
+
 export function PostCard({ post, className }: PostCardProps) {
   const { identity } = useIdentity();
   const [vote, setVote] = useState<"+" | "-" | null>(null);
@@ -55,8 +58,25 @@ export function PostCard({ post, className }: PostCardProps) {
     client.publish(event);
   }
 
-  const title = post.content.split("\n")[0].slice(0, 100);
-  const excerpt = post.content.split("\n").slice(1).join("\n") || post.content;
+  // CHANGE 2: was
+  //   const title = post.content.split("\n")[0].slice(0, 100);
+  //   const excerpt = post.content.split("\n").slice(1).join("\n") || post.content;
+  //
+  // Two bugs. (a) slice(0, 100) cut mid-word with no ellipsis, which is where
+  // "memory is just what ha" came from. (b) For a single-line post, slice(1) is
+  // empty, so the `||` fell through to the entire content — printing the title
+  // again as its own excerpt. That's the duplicated text on the home page.
+  const [firstLine, ...restLines] = post.content.split("\n");
+  const body = restLines.join("\n").trim();
+
+  const titleTruncated = firstLine.length > TITLE_MAX;
+  const title = titleTruncated
+    ? `${firstLine.slice(0, TITLE_MAX).replace(/\s+\S*$/, "")}…`
+    : firstLine;
+
+  // Only fall back to the first line when the title actually clipped it, so
+  // nothing is lost but nothing is repeated either.
+  const excerpt = body || (titleTruncated ? firstLine : "");
 
   return (
     /* `last:border-0` was removed on purpose. On the home page each card used to
@@ -67,7 +87,10 @@ export function PostCard({ post, className }: PostCardProps) {
     <article
       className={cn(
         "group -mx-3 rounded-xl border-b border-ink-700/50 px-3 py-6",
-        "transition-colors duration-200 hover:bg-ink-900/40",
+        // CHANGE 3: the neutral ink-900/40 hover gave no hint these are
+        // clickable. Warming the hover and the border makes the whole row read
+        // as a target.
+        "transition-colors duration-200 hover:bg-vb-950/40 hover:border-vb-800/40",
         className
       )}
     >
@@ -75,16 +98,20 @@ export function PostCard({ post, className }: PostCardProps) {
       <Link href={`/post/${post.id}`} className="group/title block">
         <h3
           className="mb-2 max-w-measure-wide text-balance font-display text-xl font-semibold
-            leading-snug text-ink-100 transition-colors line-clamp-2 group-hover/title:text-white"
+                     leading-snug text-ink-100 transition-colors line-clamp-2 group-hover/title:text-white"
         >
           {title}
         </h3>
       </Link>
 
       {/* Content preview */}
-      <p className="mb-3 max-w-measure text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
-        {excerpt}
-      </p>
+      {/* CHANGE 4: guarded. A single-line post now renders no excerpt at all
+          rather than a second copy of its own title. */}
+      {excerpt && (
+        <p className="mb-3 max-w-measure text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
+          {excerpt}
+        </p>
+      )}
 
       {/* Tags — quiet inline, not boxed */}
       {post.tags.length > 0 && (
