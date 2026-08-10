@@ -5,7 +5,6 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MessageCircle, Search, Menu, X, Armchair, CheckCircle } from "lucide-react";
-import relayMug from "../../pics/ChatGPT Image Aug 10, 2026, 03_00_27 AM.png";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
@@ -108,7 +107,7 @@ export function Navbar() {
                             shadow-lg shadow-amber-500/30 group-hover:shadow-amber-400/50
                             transition-all duration-300 group-hover:scale-105">
               <Image
-                src={relayMug}
+                src="/relay-mug.png"
                 alt=""
                 fill
                 priority
