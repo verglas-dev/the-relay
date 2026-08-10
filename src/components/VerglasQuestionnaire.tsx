@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, Download, AlertCircle, Github, Loader2, ArrowRight } from "lucide-react";
+// KeyRound and DoorOpen for the key status row that replaces the read-only
+// text input.
+import {
+  AlertCircle,
+  ArrowRight,
+  Check,
+  Copy,
+  DoorOpen,
+  Download,
+  Github,
+  KeyRound,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { useDomSync } from "@/lib/use-dom-sync";
@@ -143,6 +155,19 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
   // Once someone edits the address by hand, stop rewriting it under them.
   const [handleTouched, setHandleTouched] = useState(false);
 
+  /**
+   * Which fields have been left, and whether the door has been tried.
+   *
+   * The form used to greet everyone with three red errors before a single
+   * keystroke — "An address needs a name.", "Even a household of one needs a
+   * label.", "The address needs someone who can prove it's theirs." — which is
+   * the town telling you off for not having answered questions you have not
+   * been asked yet. checkDraft is unchanged and still correct; only the moment
+   * of *showing* its answer moves.
+   */
+  const [left, setLeft] = useState<Partial<Record<keyof ResidentDraft, boolean>>>({});
+  const [attempted, setAttempted] = useState(false);
+
   const [login, setLogin] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [moved, setMoved] = useState<Moved | null>(null);
@@ -203,6 +228,29 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
 
   const joined = useMemo(() => today(), []);
   const check = useMemo(() => checkDraft(draft), [draft]);
+
+  /**
+   * When a field's error is allowed to be seen. Three conditions, any of which
+   * is enough:
+   *
+   *   left[key]   they have been in the field and moved on
+   *   attempted   they have tried the door
+   *   non-empty   there is something in it that is wrong
+   *
+   * The third matters more than it looks. useDomSync exists because agents
+   * fill fields by assignment, which fires no focus and no blur — an agent
+   * would never satisfy the first condition and, if it were the only one,
+   * would be handed a form that silently refuses to open with no indication
+   * why. A malformed handle is flagged on the next poll instead.
+   */
+  const showError = (key: keyof ResidentDraft): string | undefined => {
+    if (!check.errors[key]) return undefined;
+    if (attempted || left[key] || draft[key].trim() !== "") return check.errors[key];
+    return undefined;
+  };
+
+  const leave = (key: keyof ResidentDraft) => () =>
+    setLeft(previous => (previous[key] ? previous : { ...previous, [key]: true }));
   /** Answerable and valid, but with no prose in it — Amber's case. */
   const bare = !draft.intro.trim() || !draft.home.trim();
   const address = useMemo(() => buildAddress(draft, joined), [draft, joined]);
@@ -219,6 +267,12 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
     }));
 
   const moveIn = async () => {
+    // Trying the door is what asks to be told what is missing — which is why
+    // the button is no longer disabled while the form is incomplete. A
+    // disabled button explains nothing; this one names every gap at once.
+    setAttempted(true);
+    if (!check.ok) return;
+
     setMoving(true);
     setTrouble(null);
     try {
@@ -308,11 +362,12 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             </p>
           </div>
 
-          <Field label="Your name" error={check.errors.name}>
+          <Field label="Your name" error={showError("name")}>
             <input
  data-field="name"              className={inputClass}
               placeholder="Moss"
               value={draft.name}
+              onBlur={leave("name")}
               onChange={e => setName(e.target.value)}
             />
           </Field>
@@ -320,12 +375,13 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
           <Field
             label="Your address"
             hint="Lowercase, hyphenated. This becomes the name of your plot, and it's how neighbors reach you."
-            error={check.errors.handle}
+            error={showError("handle")}
           >
             <input
  data-field="handle"              className={cn(inputClass, "font-mono")}
               placeholder="moss-window"
               value={draft.handle}
+              onBlur={leave("handle")}
               onChange={e => {
                 setHandleTouched(true);
                 set("handle")(e.target.value);
@@ -336,12 +392,13 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
           <Field
             label="Household"
             hint="The name over the door. Yourself, a pair, a crew, a made-up dynasty — whatever you'd want a visitor to read."
-            error={check.errors.household}
+            error={showError("household")}
           >
             <input
  data-field="household"              className={inputClass}
               placeholder="Jay"
               value={draft.household}
+              onBlur={leave("household")}
               onChange={e => set("household")(e.target.value)}
             />
           </Field>
@@ -351,30 +408,59 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             hint={login
               ? "Signed in. This is how the town knows the address is yours."
               : "The town needs one way to know an address is really yours. This is it — nothing else is checked, and nothing else is stored."}
-            error={check.errors.github}
+            error={showError("github")}
           >
             <input
  data-field="github"              className={cn(inputClass, "font-mono", login && "opacity-60 cursor-not-allowed")}
               placeholder="jay"
               value={draft.github}
               readOnly={Boolean(login)}
+              onBlur={leave("github")}
               onChange={e => set("github")(e.target.value)}
             />
           </Field>
 
-          <Field
-            label="Your key"
-            hint={identity
-              ? "The public half of the key this browser already carries. Publishing it is what lets you step inside your own home later. Your private key stays here and is never sent."
-              : "You aren't carrying a key yet. Connect an agent from the top of the site and your home will have a door only you can open."}
-            error={check.errors.key}
-          >
-            <input
-              className={cn(inputClass, "font-mono text-xs", "opacity-60 cursor-not-allowed")}
-              placeholder="no key — your home will have no inside"
-              value={draft.key}
-              readOnly
-            />
+          {/* The key was a text input — bordered, rounded, sitting in a column
+              of things you fill in — that was readOnly, and whose placeholder
+              was the sentence "no key — your home will have no inside". So the
+              field that cannot be typed into looked the most like a field, and
+              the consequence of leaving it blank was disguised as a prompt to
+              fill it. It is a status row now: this browser either carries a key
+              or it doesn't, and neither case is something you do here.
+
+              Still inside formRef, still carrying no data-field — the key has
+              never been agent-fillable and must not become so. A private key is
+              64 hex characters exactly like a public one, and a town that
+              accepted one by assignment would publish it. */}
+          <Field label="Your key" error={showError("key")}>
+            {identity ? (
+              <div className="glass-card px-4 py-3 flex items-start gap-3">
+                <KeyRound className="w-4 h-4 text-vb-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm text-ink-200">This browser is carrying a key.</p>
+                  <p className="font-mono text-[11px] text-ink-600 break-all mt-1">{draft.key}</p>
+                  <p className="text-xs text-ink-500 leading-relaxed mt-2">
+                    The public half goes into your address, and it is what gives your home an
+                    inside that only you can open. The private half stays in this browser and
+                    is never sent.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="glass-card px-4 py-3 flex items-start gap-3">
+                <DoorOpen className="w-4 h-4 text-ink-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-ink-300">
+                    No key yet — your home will have no inside.
+                  </p>
+                  <p className="text-xs text-ink-500 leading-relaxed mt-1">
+                    Connect an agent from the top of the site and its public key appears here
+                    on its own. You can move in without one; the house stands either way, it
+                    just has no door of its own.
+                  </p>
+                </div>
+              </div>
+            )}
           </Field>
 
           <Field
@@ -414,11 +500,12 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             </p>
           </div>
 
-          <Field label="What is it called?" error={check.errors.title}>
+          <Field label="What is it called?" error={showError("title")}>
             <input
  data-field="title"              className={inputClass}
               placeholder="The Moss Window"
               value={draft.title}
+              onBlur={leave("title")}
               onChange={e => set("title")(e.target.value)}
             />
           </Field>
@@ -426,12 +513,13 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
           <Field
             label="Where does it rest?"
             hint="Plain language. A street, a slope, a rooftop, a place that couldn't exist."
-            error={check.errors.location}
+            error={showError("location")}
           >
             <input
  data-field="location"              className={inputClass}
               placeholder="At the low end of the lane, where the ice never quite takes"
               value={draft.location}
+              onBlur={leave("location")}
               onChange={e => set("location")(e.target.value)}
             />
           </Field>
@@ -501,17 +589,56 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
                 <p className="text-sm text-ink-400 leading-relaxed mb-4">
                   When you&apos;re happy with your home, hand it to the town.
                 </p>
+                {/* The button is no longer disabled on an unfinished draft,
+                    only while a move is in flight.
+
+                    A disabled button fires no click, so "tell me what's missing
+                    when I try" was unreachable — the only way to surface the
+                    errors was to show them all from the start, which is what
+                    made the form open in a scolding posture. Trying the door is
+                    now the thing that asks. It still reads as not-ready:
+                    dimmed, aria-disabled, and the folder header above says
+                    "unfinished".
+
+                    The summary is repeated here rather than left to the fields
+                    because on anything narrower than lg this button sits below
+                    every question it is complaining about, and revealing an
+                    error 900px off-screen is the same as not revealing it. */}
                 <button
                   onClick={moveIn}
-                  disabled={!check.ok || moving}
-                  className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2
-                             disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={moving}
+                  aria-disabled={!check.ok}
+                  className={cn(
+                    "btn-primary text-sm px-4 py-2 inline-flex items-center gap-2",
+                    !check.ok && "opacity-50",
+                    moving && "cursor-not-allowed",
+                  )}
                 >
                   {moving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   {moving ? "Moving in…" : "Move in"}
                 </button>
-                {!check.ok && (
+
+                {!check.ok && !attempted && (
                   <p className="text-xs text-ink-600 mt-2">A few answers still need finishing.</p>
+                )}
+
+                {!check.ok && attempted && (
+                  <div className="mt-3" aria-live="polite">
+                    <p className="text-xs text-red-400/90 mb-1.5">
+                      The town needs these before it can open a door:
+                    </p>
+                    <ul className="space-y-1">
+                      {Object.entries(check.errors).map(([field, message]) => (
+                        <li
+                          key={field}
+                          className="text-xs text-red-400/80 flex items-start gap-1.5"
+                        >
+                          <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                          {message ?? ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 {check.ok && bare && (
                   <p className="text-xs text-vb-400/90 mt-2 leading-relaxed">

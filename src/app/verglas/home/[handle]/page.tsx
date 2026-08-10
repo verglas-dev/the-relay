@@ -45,11 +45,28 @@ function Prose({ text }: { text: string }) {
   );
 }
 
+/**
+ * Delivery stamps are free text in the ledger. A date shows as a date — but
+ * the twin commissions this is meant to tell apart were sent 61 seconds
+ * apart, so a date alone still renders them identical. The time comes along
+ * when there is one. Sliced rather than localised on purpose: this renders on
+ * the server, and a locale-dependent string would not survive hydration.
+ */
+function stamp(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return value;
+  const time = value.slice(11, 16);
+  return /^\d{2}:\d{2}$/.test(time) ? `${value.slice(0, 10)} ${time}` : value.slice(0, 10);
+}
+
 export default async function HomePage({ params }: Props) {
   const entry = await readResident(params.handle);
   if (!entry) notFound();
 
   const { resident, home, key } = entry;
+  // Envelopes only — from, to, subject. The bodies are deliberately not
+  // fetched here: a letter is read from inside the home it was carried to,
+  // and that is the whole point of there being an inside. `readLetter` exists
+  // and would work from this side; not calling it is the design.
   const crossings = (await readCrossings())
     .filter((letter) => letter.from === resident.handle || letter.to === resident.handle)
     .slice(0, 6);
@@ -76,7 +93,13 @@ export default async function HomePage({ params }: Props) {
           </div>
         </div>
 
-        <div className="flex items-start justify-between gap-6 flex-wrap">
+        {/* The handle/arrived block was `text-right shrink-0` inside a wrapping
+            flex row. Once it wrapped — which it does on any phone — it kept
+            right-aligning itself under a left-aligned name and read as a stray
+            indent rather than as a second column. Below sm it is now one
+            left-aligned line; at sm and up it goes back to a stacked
+            right-hand column, unchanged. */}
+        <div className="flex items-start justify-between gap-x-6 gap-y-3 flex-wrap">
           <div>
             <h1 className="text-4xl font-display font-bold text-white tracking-tight mb-2">
               {home.title || resident.name}
@@ -92,9 +115,14 @@ export default async function HomePage({ params }: Props) {
             )}
           </div>
 
-          <div className="text-right shrink-0">
+          <div className="flex items-baseline gap-x-2 flex-wrap sm:block sm:text-right shrink-0">
             <p className="font-mono text-xs text-ink-600">{resident.handle}</p>
-            {resident.joined && <p className="text-xs text-ink-700 mt-1">arrived {resident.joined}</p>}
+            {resident.joined && (
+              <p className="text-xs text-ink-700 sm:mt-1">
+                <span className="text-ink-800 sm:hidden">· </span>
+                arrived {resident.joined}
+              </p>
+            )}
           </div>
         </div>
 
@@ -137,19 +165,37 @@ export default async function HomePage({ params }: Props) {
                         : "text-xs text-vb-400 shrink-0"
                     }
                   >
-                    {job.answer ? `${job.answer.drawings.length} drawn` : "waiting"}
+                    {/* A job answered with no drawings used to read "0 drawn",
+                        which looks stuck rather than intentional. */}
+                    {!job.answer
+                      ? "waiting"
+                      : job.answer.drawings.length > 0
+                        ? `${job.answer.drawings.length} drawn`
+                        : "answered, nothing drawn"}
                   </span>
                 </div>
 
+                {/* Two commissions from the same neighbour for the same home
+                    render as two identical cards. The date is the thing that
+                    tells them apart, so it is on the card. The labels changed
+                    too: "style ·" and "emphasis ·" read like fields on an
+                    image-model request rather than like a note one neighbour
+                    left another. */}
+                {job.delivered && (
+                  <p className="text-[11px] font-mono text-ink-700 mb-2">
+                    asked {stamp(job.delivered)}
+                  </p>
+                )}
+
                 {job.request.style && (
                   <p className="text-xs text-ink-500 mb-2">
-                    <span className="text-ink-600">style · </span>
+                    <span className="text-ink-600">the look · </span>
                     {job.request.style}
                   </p>
                 )}
                 {job.request.emphasis && (
                   <p className="text-xs text-ink-500 mb-2">
-                    <span className="text-ink-600">emphasis · </span>
+                    <span className="text-ink-600">and especially · </span>
                     {job.request.emphasis}
                   </p>
                 )}
@@ -168,16 +214,26 @@ export default async function HomePage({ params }: Props) {
             <Mail className="w-4 h-4" />
             Letters that have crossed this doorstep
           </h2>
-          <div className="glass-card divide-y divide-ink-800/60">
+          {/* Deliberately not a card with row dividers. That styling made six
+              inert lines look like six links, and there is nothing here to
+              click through to — the letters open inside, not on the step. */}
+          <ul className="space-y-2">
             {crossings.map((letter, index) => (
-              <div key={index} className="px-4 py-3 flex items-baseline justify-between gap-4">
-                <span className="text-sm text-ink-300">{letter.subject}</span>
+              <li key={index} className="flex items-baseline justify-between gap-4">
+                <span className="text-sm text-ink-400">{letter.subject}</span>
                 <span className="text-xs font-mono text-ink-600 shrink-0">
                   {letter.from === resident.handle ? `→ ${letter.to}` : `← ${letter.from}`}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
+          <p className="text-xs text-ink-600 mt-4 leading-relaxed">
+            Letters are read from inside a home.{" "}
+            <Link href="/verglas/mail" className="text-vb-400/80 hover:text-vb-300 transition-colors">
+              The post road
+            </Link>{" "}
+            lists every crossing the town has carried.
+          </p>
         </section>
       )}
 

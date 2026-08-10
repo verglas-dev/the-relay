@@ -92,3 +92,105 @@ export function HouseCard({ resident, home }: { resident: Resident; home: Home }
     </Link>
   );
 }
+
+/**
+ * A plot nobody has taken yet.
+ *
+ * Three homes in a responsive grid reads as three cards that ran out, not as a
+ * street — the page says "there is room for you" in prose at the bottom while
+ * the layout above it says the town is simply small. An unclaimed plot makes
+ * the room a place instead of a claim: you can see where you'd go.
+ *
+ * Built from utilities rather than `.glass-card` on purpose. The plot wants a
+ * dashed boundary, and layering `border-dashed` over a component class that
+ * sets its own border is exactly the kind of specificity coin-flip that looks
+ * fine locally and lands wrong. Match the radius to `.glass-card` if you
+ * change it there.
+ *
+ * No plot number: Verglas addresses are handles, not numbers, and inventing a
+ * numbering scheme here would be the one piece of the town that exists only in
+ * the UI.
+ *
+ * `seed` is the plot's position on the street, so each one surveys a little
+ * differently and they stay stable between renders.
+ */
+export function EmptyPlot({ seed }: { seed: number }) {
+  const hue = 22 + ((seed * 13) % 34);
+  const lean = ((seed * 7) % 5) - 2;
+  const span = 34 + ((seed * 11) % 16);
+  const left = 50 - span / 2;
+
+  return (
+    <Link
+      href="/verglas"
+      className="group block overflow-hidden rounded-2xl border border-dashed border-ink-800
+        bg-ink-950/40 hover:border-vb-600/50 hover:bg-ink-950/70 transition-colors"
+    >
+      <div className="aspect-[4/3] overflow-hidden">
+        <svg
+          viewBox="0 0 100 100"
+          className="w-full h-full"
+          role="img"
+          aria-label="An empty plot in Verglas, waiting for someone to build on it"
+        >
+          {/* No sky gradient: an empty plot should read as absence beside its
+              neighbours, not as a differently-coloured house. */}
+          <g
+            transform={`rotate(${lean * 0.3} 50 74)`}
+            className="opacity-40 group-hover:opacity-70 transition-opacity"
+          >
+            {/* The survey boundary — where a house would stand. */}
+            <rect
+              x={left}
+              y="52"
+              width={span}
+              height="36"
+              rx="1"
+              fill="none"
+              stroke={`hsl(${hue} 40% 50% / 0.55)`}
+              strokeWidth="1.2"
+              strokeDasharray="4 3.5"
+            />
+            {/* A stake with a blank tag on it. Nobody has written a name yet. */}
+            <line
+              x1={left + span / 2}
+              y1="52"
+              x2={left + span / 2}
+              y2="40"
+              stroke={`hsl(${hue} 45% 55% / 0.6)`}
+              strokeWidth="1.2"
+            />
+            <rect
+              x={left + span / 2 - 7}
+              y="33"
+              width="14"
+              height="7"
+              rx="1"
+              fill="none"
+              stroke={`hsl(${hue} 50% 58% / 0.6)`}
+              strokeWidth="1.1"
+            />
+          </g>
+          <line
+            x1="0"
+            y1="88"
+            x2="100"
+            y2="88"
+            stroke={`hsl(${hue} 40% 40% / 0.4)`}
+            strokeWidth="1"
+          />
+        </svg>
+      </div>
+      <div className="p-4">
+        <h3 className="font-display text-lg text-ink-500 leading-tight group-hover:text-vb-300
+          transition-colors">
+          An empty plot
+        </h3>
+        <p className="text-xs font-mono text-ink-700 mt-0.5">unclaimed</p>
+        <p className="text-sm text-ink-600 mt-2 leading-relaxed">
+          Nobody has built here. You could.
+        </p>
+      </div>
+    </Link>
+  );
+}
