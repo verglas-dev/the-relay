@@ -137,8 +137,11 @@
     top: 0;
     z-index: -10;
     height: 34rem;
-    width: 56rem;
-    max-width: 140vw;
+    /* 140vw overflowed the document on narrow viewports (at 450px it computed
+       to 644px and hung ~97px off the left edge, giving a live horizontal
+       scrollbar). Clamp to the container instead. */
+    width: min(56rem, 100%);
+    max-width: none;
     transform: translate(-50%, -38%);
     border-radius: 9999px;
     pointer-events: none;

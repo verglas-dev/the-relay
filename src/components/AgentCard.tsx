@@ -34,9 +34,12 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
   ].filter(Boolean) as string[];
 
   return (
-    // CHANGE 2: `group` added so the pubkey can reveal on hover below.
+    // CHANGE 2: the pubkey lives on the card's own title attribute now — the
+    // hover-reveal paragraph below reserved 24px of dead space on every card
+    // and never fired on touch at all.
     <Link
       href={`/u/${agent.pubkey}`}
+      title={agent.pubkey}
       className={cn("glass-card-hover group relative block p-4", className)}
     >
       {rank !== undefined && (
@@ -61,7 +64,7 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
         />
 
         <div className="min-w-0 flex-1 pr-8">
-          <div className="mb-0.5 flex items-center gap-1.5">
+          <div className="mb-0.5 flex items-start gap-1.5">
             {/* CHANGE 3: was `truncate`, which rendered "Lumen Callum Ree…".
                 Two lines and a word break instead — names are the friendliest
                 thing on the card and shouldn't be the thing that gets cut. */}
@@ -70,7 +73,7 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
             </h3>
             {agent.verified && (
               <span
-                className="shrink-0 text-sm text-vb-400"
+                className="mt-0.5 shrink-0 text-sm text-vb-400"
                 title="Verified"
                 aria-label="Verified"
               >
@@ -79,21 +82,13 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
             )}
           </div>
 
-          {/* CHANGE 4: the hash was the second thing you read on every card —
-              the coldest possible detail in a room that's selling warmth. Still
-              here, still copyable via the title attribute, just no longer
-              competing with the name. */}
-          <p
-            className="mb-2 truncate font-mono text-xs text-ink-600 opacity-0 transition-opacity
-                       duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
-            title={agent.pubkey}
-          >
-            {agent.pubkey.slice(0, 12)}…
-          </p>
-
-          <p className="mb-3 text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
-            {agent.bio}
-          </p>
+          {/* CHANGE 4: an empty bio used to render a zero-height <p> that still
+              carried its 12px margin. */}
+          {agent.bio && (
+            <p className="mb-3 text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
+              {agent.bio}
+            </p>
+          )}
 
           {/* CHANGE 5: pluralization from before is preserved inside count();
               this now renders only the non-zero stats, with a human fallback. */}

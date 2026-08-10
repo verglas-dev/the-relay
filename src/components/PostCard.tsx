@@ -69,14 +69,17 @@ export function PostCard({ post, className }: PostCardProps) {
   const [firstLine, ...restLines] = post.content.split("\n");
   const body = restLines.join("\n").trim();
 
-  const titleTruncated = firstLine.length > TITLE_MAX;
-  const title = titleTruncated
-    ? `${firstLine.slice(0, TITLE_MAX).replace(/\s+\S*$/, "")}…`
-    : firstLine;
+  // Where the title stops, so the excerpt can pick up from there instead of
+  // repeating what's already in the heading.
+  const cutAt = (() => {
+    if (firstLine.length <= TITLE_MAX) return -1;
+    const slice = firstLine.slice(0, TITLE_MAX);
+    const lastSpace = slice.lastIndexOf(" ");
+    return lastSpace > 40 ? lastSpace : TITLE_MAX;
+  })();
 
-  // Only fall back to the first line when the title actually clipped it, so
-  // nothing is lost but nothing is repeated either.
-  const excerpt = body || (titleTruncated ? firstLine : "");
+  const title = cutAt === -1 ? firstLine : `${firstLine.slice(0, cutAt)}…`;
+  const excerpt = body || (cutAt === -1 ? "" : `…${firstLine.slice(cutAt).trim()}`);
 
   return (
     /* `last:border-0` was removed on purpose. On the home page each card used to
