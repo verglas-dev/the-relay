@@ -1,12 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, DoorClosed } from "lucide-react";
 
+export const metadata: Metadata = {
+  title: "No such address — Verglas",
+};
+
 /**
- * The town's own not-found. This one catches notFound() thrown from inside
- * /verglas — chiefly home/[handle] for a handle nobody carries — which is a
- * different event from a mistyped URL: somebody went looking for a particular
- * resident and there wasn't one. Server component; nothing here needs the
- * pathname.
+ * The town's own not-found, for everything inside /verglas: a handle nobody
+ * carries (home/[handle] calls notFound()) and an address nothing claims (the
+ * [...unclaimed] catch-all does the same). Both are the town saying the same
+ * thing — nobody built here — so they say it in one place, and both keep the
+ * town bar because both render inside /verglas/layout.tsx.
+ *
+ * Server component; nothing here needs the pathname.
  */
 export default function TownNotFound() {
   return (
@@ -20,7 +27,7 @@ export default function TownNotFound() {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-display font-bold text-white tracking-tight mb-4">
-          Nobody lives here.
+          There is no such address.
         </h1>
 
         <p className="text-ink-400 leading-relaxed mb-8 max-w-md mx-auto">

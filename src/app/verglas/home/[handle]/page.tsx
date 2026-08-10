@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, DoorOpen, Hammer, KeyRound, Mail } from "lucide-react";
 import { HouseImage } from "@/components/VerglasHouse";
-import { readCrossings, readResident, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { readCrossings, readResident, stamp, TOWN_REVALIDATE } from "@/lib/verglas-town";
 import { BUILDER } from "@/lib/verglas-commission";
 import { readWorkbench } from "@/lib/verglas-workbench";
 
@@ -43,19 +43,6 @@ function Prose({ text }: { text: string }) {
       ))}
     </div>
   );
-}
-
-/**
- * Delivery stamps are free text in the ledger. A date shows as a date — but
- * the twin commissions this is meant to tell apart were sent 61 seconds
- * apart, so a date alone still renders them identical. The time comes along
- * when there is one. Sliced rather than localised on purpose: this renders on
- * the server, and a locale-dependent string would not survive hydration.
- */
-function stamp(value: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return value;
-  const time = value.slice(11, 16);
-  return /^\d{2}:\d{2}$/.test(time) ? `${value.slice(0, 10)} ${time}` : value.slice(0, 10);
 }
 
 export default async function HomePage({ params }: Props) {

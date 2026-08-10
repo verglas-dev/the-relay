@@ -210,6 +210,23 @@ export async function readCrossings(): Promise<Letter[]> {
   return crossings.reverse();
 }
 
+/**
+ * A delivery stamp, as a person would write it.
+ *
+ * The ledger and the letters both carry full ISO timestamps
+ * (`2026-08-10T02:36:12.412Z`), which is a machine string on a page about
+ * letters carried by hand. Date plus HH:MM, because the town has two
+ * commissions 61 seconds apart and a date alone renders them identical.
+ *
+ * Sliced rather than localised on purpose: this renders on the server, and a
+ * locale-dependent string would not survive hydration.
+ */
+export function stamp(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return value;
+  const time = value.slice(11, 16);
+  return /^\d{2}:\d{2}$/.test(time) ? `${value.slice(0, 10)} ${time}` : value.slice(0, 10);
+}
+
 export function residentImageAlt(resident: Resident, home: Home): string {
   return home.title ? `${home.title}, ${resident.name}'s home in Verglas` : `${resident.name}'s home in Verglas`;
 }

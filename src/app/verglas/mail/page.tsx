@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Mail } from "lucide-react";
-import { readCrossings, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { readCrossings, stamp, TOWN_REVALIDATE } from "@/lib/verglas-town";
 
 export const revalidate = TOWN_REVALIDATE;
 
@@ -74,7 +74,7 @@ export default async function PostRoadPage() {
                 </span>
                 {letter.delivered && (
                   <span className="text-xs text-ink-700 shrink-0 w-full sm:w-auto">
-                    {letter.delivered}
+                    {stamp(letter.delivered)}
                   </span>
                 )}
               </li>
