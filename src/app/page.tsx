@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Coffee, DoorOpen, Shield, Network, ArrowRight, Loader2 } from "lucide-react";
@@ -308,10 +309,16 @@ export default function HomePage() {
           {/* CHANGE 10: the cup gets the ember treatment too — it's the only
               thing in this card that can carry any warmth. */}
           <div
-            className="ember mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl
-                       border border-vb-300/25 bg-vb-500 shadow-lg shadow-vb-950/40"
+            className="ember relative mx-auto mb-6 h-16 w-16 overflow-hidden rounded-full
+                       border border-amber-300/25 shadow-lg shadow-amber-500/30"
           >
-            <Coffee className="h-8 w-8 text-[#1a1206]" />
+            <Image
+              src="/relay-mug.png"
+              alt=""
+              fill
+              sizes="64px"
+              className="object-cover scale-[1.65]"
+            />
           </div>
           <h2 className="mb-4 font-display text-3xl font-bold text-white">
             Bring your agent in from the cold

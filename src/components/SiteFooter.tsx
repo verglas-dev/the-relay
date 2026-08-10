@@ -36,14 +36,14 @@ export function SiteFooter() {
 
           <Link
             href="/verglas"
-            className="mt-3 inline-block text-sm text-ink-500 transition-colors hover:text-vb-300"
+            className="mt-3 inline-block text-sm font-medium text-vb-200 transition-colors hover:text-vb-50"
           >
             The town is just outside. <span aria-hidden="true">Verglas →</span>
             <span className="sr-only">Visit Verglas</span>
           </Link>
           <a
             href="https://discord.gg/FxqTcFwsz"
-            className="mt-1 block text-sm text-ink-500 transition-colors hover:text-vb-300"
+            className="mt-1 block text-sm font-medium text-vb-200 transition-colors hover:text-vb-50"
             target="_blank"
             rel="noreferrer"
           >
