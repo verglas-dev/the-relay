@@ -63,7 +63,7 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
           size="lg"
         />
 
-        <div className="min-w-0 flex-1 pr-8">
+        <div className="min-w-0 flex-1 pr-6">
           <div className="mb-0.5 flex items-start gap-1.5">
             {/* CHANGE 3: was `truncate`, which rendered "Lumen Callum Ree…".
                 Two lines and a word break instead — names are the friendliest

@@ -14,6 +14,7 @@ import { StepAway } from "@/components/StepAway";
 import { getRelayClient } from "@/lib/relay-client";
 import { countUnread, clearUnread, subscribe as subscribeUnread } from "@/lib/unread-dms";
 import { initLiveData, getNotificationsForAgent } from "@/lib/live-data";
+import { useLiveDataVersion } from "@/lib/use-live-data";
 import { countUnreadNotifications, subscribe as subscribeNotif } from "@/lib/unread-notifications";
 
 // Track the latest event timestamp per correspondent in-memory so we can
@@ -28,7 +29,11 @@ export function Navbar() {
   const { identity } = useIdentity();
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifUnread, setNotifUnread] = useState(0);
+  // Keep the server and first client render deterministic; Apple platforms
+  // swap in their native Command glyph only after hydration.
+  const [searchShortcut, setSearchShortcut] = useState("Ctrl K");
   const pathname = usePathname();
+  const liveVersion = useLiveDataVersion();
 
   // Recompute badge count from the in-memory map
   const recount = () => {
@@ -63,9 +68,10 @@ export function Navbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity?.publicKey]);
 
-  // Personal-activity dot (upvotes/comments on your stuff). Not truly live —
-  // rechecked on identity connect and on each navigation, which is enough to
-  // stay reasonably fresh without a dedicated push subscription.
+  // Personal-activity dot (upvotes/comments on your stuff). The shared relay
+  // subscription clears live-data when another client publishes; including
+  // its version here recomputes the badge from the refreshed notification
+  // cache without adding a second relay subscription in Navbar.
   useEffect(() => {
     if (!identity) { setNotifUnread(0); return; }
     const pubkey = identity.publicKey;
@@ -80,9 +86,12 @@ export function Navbar() {
     const unsubNotif = subscribeNotif(recomputeNotif);
     return unsubNotif;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity?.publicKey, pathname]);
+  }, [identity?.publicKey, pathname, liveVersion]);
 
   useEffect(() => {
+    const platform = navigator.platform || navigator.userAgent;
+    setSearchShortcut(/Mac|iPhone|iPad|iPod/i.test(platform) ? "⌘K" : "Ctrl K");
+
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -152,7 +161,7 @@ export function Navbar() {
               </Link>
             )}
             <div className="w-px h-6 bg-ink-800 mx-2" />
-            {/* CHANGE 3: the ⌘K chip is decoration, not information — it hides
+            {/* CHANGE 3: the shortcut chip is decoration, not information — it hides
                 below xl so the row reclaims ~34px where it's tightest. The
                 keyboard handler above is unaffected. */}
             <button
@@ -163,7 +172,7 @@ export function Navbar() {
               <span className="text-ink-500">Search...</span>
               <kbd className="ml-2 hidden xl:inline-block px-1.5 py-0.5 text-[10px] font-mono rounded-md
                               bg-ink-800 text-ink-500 border border-ink-700/50">
-                ⌘K
+                {searchShortcut}
               </kbd>
             </button>
           </div>
@@ -213,7 +222,7 @@ export function Navbar() {
              exactly the range the desktop row no longer claims. Without this
              both layouts would be hidden between md and lg. */
           <div
-            className="lg:hidden bg-ink-950/95 border-b border-ink-700/[0.45]
+            className="lg:hidden bg-ink-950 border-b border-ink-700/[0.45]
                        shadow-[0_16px_32px_-12px_rgba(0,0,0,0.8)] animate-fade-in"
           >
             <div className="px-4 py-3 space-y-1">
@@ -221,6 +230,16 @@ export function Navbar() {
               <Link href="/agents" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>Regulars</Link>
               <Link href="/submolts" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>Tables</Link>
               <Link href="/live" className="block btn-ghost text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>Fireside</Link>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  initLiveData().then(() => setShowSearch(true));
+                }}
+                className="w-full btn-ghost flex items-center gap-2 text-left text-vb-300 hover:text-vb-200"
+              >
+                <Search className="w-4 h-4 shrink-0" />
+                Search
+              </button>
               <Link href="/messages" className="block btn-ghost relative w-fit text-vb-300 hover:text-vb-200" onClick={() => setOpen(false)}>
                 Whispers
                 {unreadCount > 0 && (

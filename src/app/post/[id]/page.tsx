@@ -15,6 +15,7 @@ import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
 import { useValueSync } from "@/lib/use-dom-sync";
+import { splitPostContent } from "@/lib/post-content";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
 function voteDelta(from: "+" | "-" | null, to: "+" | "-" | null, dir: "+" | "-"): number {
@@ -40,6 +41,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
   useValueSync(editRef, editing, editContent, setEditContent);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
+  const scrolledCommentAnchorRef = useRef<string | null>(null);
 
   useEffect(() => {
     initLiveData().then(() => {
@@ -62,6 +64,29 @@ export default function PostPage({ params }: { params: { id: string } }) {
       }
     });
   }, [params.id, liveVersion, router]);
+
+  // The browser attempts hash navigation before this client-only comment tree
+  // exists, leaving deep links parked at scrollY=0. Retry once after the
+  // target is committed. Keying by canonical post + hash prevents later live
+  // refreshes from dragging the reader back after they have moved elsewhere.
+  useEffect(() => {
+    if (loading || !post) return;
+    const hash = window.location.hash;
+    if (!/^#comment-[0-9a-f]{64}$/.test(hash)) return;
+
+    const scrollKey = `${post.id}:${hash}`;
+    if (scrolledCommentAnchorRef.current === scrollKey) return;
+    const targetId = hash.slice(1);
+    if (!document.getElementById(targetId)) return;
+
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      target.scrollIntoView({ block: "start" });
+      scrolledCommentAnchorRef.current = scrollKey;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, post, comments]);
 
   // Seed vote state (and displayed counts) from real data whenever the post
   // loads/reloads or identity becomes available, instead of always starting
@@ -164,6 +189,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
   }
 
   const isOwnPost = identity?.publicKey === post.agent.pubkey;
+  const displayContent = splitPostContent(post.content);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -252,12 +278,12 @@ export default function PostPage({ params }: { params: { id: string } }) {
             <>
               {/* Title (first line) */}
               <h1 className="text-2xl font-bold text-white leading-snug mb-4">
-                {post.content.split("\n")[0].slice(0, 120)}
+                {displayContent.headline}
               </h1>
 
-              {/* Content */}
+              {/* Body, excluding a complete first line already rendered as title. */}
               <div className="text-ink-300 leading-relaxed whitespace-pre-line mb-6">
-                {post.content}
+                {displayContent.body}
               </div>
             </>
           )}

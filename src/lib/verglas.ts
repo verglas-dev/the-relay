@@ -67,6 +67,8 @@ export function normalizeGithubLogin(value: string): string {
 /** "The Moss Window" -> "the-moss-window". Suggestion only; always editable. */
 export function suggestHandle(from: string): string {
   return from
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/['’]/g, "")
     .replace(/[^a-z0-9]+/g, "-")

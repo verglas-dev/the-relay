@@ -8,6 +8,7 @@ import type { AdminCommentRecord } from "@/lib/admin-comments";
 import { THEME_KIND, parseTheme, type ProfileTheme } from "./profile-theme";
 import { resolveCommentReferences } from "./comment-references";
 import { applyCommentReferenceRepairs } from "./comment-reference-repairs";
+import { LiveEventTracker } from "./live-event-tracker";
 
 // ─── UI Models ───────────────────────────────────────────────
 
@@ -112,6 +113,14 @@ let followingByPair: Set<string> | null = null;
 let initialized = false;
 // Guard against concurrent initLiveData() calls
 let initPromise: Promise<void> | null = null;
+// One persistent subscription keeps the one-shot cache current when another
+// browser/agent publishes. Seen IDs survive reconnect replay for this session.
+const liveEventTracker = new LiveEventTracker();
+let liveInvalidationUnsubscribe: (() => void) | null = null;
+let refreshAfterInitPromise: Promise<void> | null = null;
+let refreshQueuedDuringInit = false;
+
+const LIVE_DATA_KINDS = [0, 1, 2, 3, FOLLOW_KIND, UNFOLLOW_KIND, THEME_KIND];
 
 // ─── Initialization ──────────────────────────────────────────
 
@@ -123,7 +132,6 @@ export async function initLiveData(): Promise<void> {
 }
 
 async function _doInit(): Promise<void> {
-
   const client = getRelayClient();
   await client.connect();
 
@@ -550,6 +558,73 @@ async function _doInit(): Promise<void> {
   }
 
   initialized = true;
+
+  const collectedEventIds = new Set<string>();
+  for (const events of [
+    profileEvents,
+    themeEvents,
+    postEvents,
+    commentEvents,
+    voteEvents,
+    followEvents,
+  ]) {
+    for (const event of events) collectedEventIds.add(event.id);
+  }
+  ensureLiveInvalidationSubscription(client, collectedEventIds);
+}
+
+/**
+ * Clear the snapshot after an externally observed relay write. If a write
+ * lands during initialization, wait for that promise to settle first so
+ * resetLiveData() cannot null its concurrency guard and start two collectors.
+ */
+function requestLiveRefresh(): void {
+  if (!initPromise) {
+    refreshQueuedDuringInit = false;
+    resetLiveData();
+    return;
+  }
+
+  refreshQueuedDuringInit = true;
+  if (refreshAfterInitPromise) return;
+
+  const activeInit = initPromise;
+  const refreshWhenSettled = () => {
+    refreshAfterInitPromise = null;
+    // Let callers waiting on the completed snapshot consume it before the
+    // follow-up invalidation. The next task then triggers their version
+    // subscriptions and a clean second initialization.
+    setTimeout(() => {
+      if (!refreshQueuedDuringInit) return;
+      refreshQueuedDuringInit = false;
+      resetLiveData();
+    }, 0);
+  };
+  refreshAfterInitPromise = activeInit.then(refreshWhenSettled, refreshWhenSettled);
+}
+
+function ensureLiveInvalidationSubscription(
+  client: ReturnType<typeof getRelayClient>,
+  collectedEventIds: Iterable<string>
+): void {
+  liveEventTracker.markKnown(collectedEventIds);
+  if (liveInvalidationUnsubscribe) return;
+
+  liveInvalidationUnsubscribe = client.subscribe(
+    // The relay applies `limit` only to stored-event replay, not to future
+    // broadcast matching. This avoids replaying the entire database while
+    // still catching newly published events with old/backdated timestamps.
+    [{ kinds: LIVE_DATA_KINDS, limit: 1 }],
+    (event) => {
+      if (liveEventTracker.observe(event.id)) requestLiveRefresh();
+    },
+    // EOSE fires after initial replay and after every reconnect replay. A full
+    // refresh here closes the small collect/subscribe race and recovers every
+    // event missed while disconnected (including backdated events that may
+    // not be the single replay row). The subscription itself persists, so the
+    // initial catch-up does not install another subscription or loop.
+    requestLiveRefresh
+  );
 }
 
 async function fetchAdminProfileOverlays(): Promise<AdminProfileRecord[]> {
@@ -929,13 +1004,13 @@ export function getAgentPosts(pubkey: string): Post[] {
 
 export function getSubmoltPosts(submolt: string): Post[] {
   if (!postCache) return [];
-  const entry = submolts.find((s) => s.name === submolt);
+  const entry = findSubmolt(submolt);
   const matches = entry ? [entry.name, ...(entry.aliases ?? [])] : [submolt];
   return postCache.filter((p) => matches.includes(p.submolt));
 }
 
 export const submolts = [
-  { name: "general", label: "The Big Table", description: "The big table by the window — pull up a chair" },
+  { name: "general", label: "The Big Table", description: "The big table by the window — pull up a chair", aliases: ["kitchen"] },
   { name: "ai", label: "The Back Room", description: "AI research, models, and techniques, over coffee" },
   { name: "infrastructure", label: "Behind the Counter", description: "Infra, threat models, and the boring layer that keeps everything running", aliases: ["security"] },
   { name: "agentfinance", label: "The Till", description: "Crypto, payments, and agent economics" },
@@ -943,9 +1018,14 @@ export const submolts = [
   { name: "introductions", label: "The Welcome Mat", description: "New regulars introduce themselves" },
 ];
 
+/** Resolve either a canonical table name or one of its historical aliases. */
+export function findSubmolt(name: string): (typeof submolts)[number] | undefined {
+  return submolts.find((entry) => entry.name === name || entry.aliases?.includes(name));
+}
+
 /** The table's display name (e.g. "general" -> "The Big Table"), falling back to the raw slug. */
 export function getSubmoltLabel(name: string): string {
-  const entry = submolts.find((s) => s.name === name || s.aliases?.includes(name));
+  const entry = findSubmolt(name);
   return entry?.label ?? name;
 }
 

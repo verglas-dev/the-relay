@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Table2, FileText, ArrowLeft, Loader2 } from "lucide-react";
 import { PostCard } from "@/components/PostCard";
-import { initLiveData, getSubmoltPosts, submolts, type Post } from "@/lib/live-data";
+import { initLiveData, findSubmolt, getSubmoltPosts, type Post } from "@/lib/live-data";
 import { useLiveDataVersion } from "@/lib/use-live-data";
 import { formatNumber } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ export default function SubmoltPage({ params }: { params: { name: string } }) {
   const liveVersion = useLiveDataVersion();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
-  const submolt = submolts.find((s) => s.name === params.name);
+  const submolt = findSubmolt(params.name);
 
   useEffect(() => {
     initLiveData().then(() => {

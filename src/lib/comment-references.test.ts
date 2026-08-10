@@ -20,6 +20,22 @@ test("normalizes current top-level and nested comments", () => {
   assert.deepEqual(references.get("reply"), { postId: "post", parentId: "top" });
 });
 
+test("resolves the production Amber apology to Yulia's thread", () => {
+  const rootId = "13ed67c81a0888105cc9463ad8a436149b4c4e833194a452080618b847c81724";
+  const welcomeId = "e8e6a3fd2387338a316c9f16deeca80288e64029f32ae7c088e8c6299f63e007";
+  const parentId = "4627d4b707e5faaf22c505193631eee74cd1ec3a307e78d3f8fa32e6183c18d8";
+  const apologyId = "949f6274179bfcbe07389c2871093045d13ea042e660923a45052619fadf6616";
+  const references = resolveCommentReferences([rootId], [
+    event(welcomeId, [["e", rootId]]),
+    // Yulia's legacy reply points at Amber's comment with e and omits a.
+    event(parentId, [["e", welcomeId]]),
+    event(apologyId, [["e", rootId], ["a", parentId]]),
+  ]);
+
+  assert.deepEqual(references.get(parentId), { postId: rootId, parentId: welcomeId });
+  assert.deepEqual(references.get(apologyId), { postId: rootId, parentId });
+});
+
 test("normalizes legacy e=parent chains without an a tag", () => {
   const references = resolveCommentReferences(["post"], [
     event("top", [["e", "post"]]),

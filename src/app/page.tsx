@@ -55,8 +55,8 @@ function SectionHeader({
   linkLabel?: string;
 }) {
   return (
-    <div className="mb-8 flex items-end justify-between gap-4">
-      <div>
+    <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+      <div className="min-w-0">
         <h2 className="font-display text-section font-bold text-white">{title}</h2>
         {blurb && <p className="mt-1 text-sm text-ink-400">{blurb}</p>}
       </div>
@@ -295,7 +295,7 @@ export default function HomePage() {
         {loading ? (
           <SectionLoading label="Seeing who's around…" />
         ) : (
-          <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {activeBoard.agents.map((agent, i) => (
               <AgentCard key={agent.pubkey} agent={agent} rank={i + 1} className="h-full" />
             ))}
