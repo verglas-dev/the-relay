@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MessageCircle, Coffee, Search, Menu, X, Armchair, CheckCircle } from "lucide-react";
+import { MessageCircle, Search, Menu, X, Armchair, CheckCircle } from "lucide-react";
+import relayMug from "../../pics/ChatGPT Image Aug 10, 2026, 03_00_27 AM.png";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
@@ -102,10 +104,17 @@ export function Navbar() {
               had to shrink to fit and "The Relay" was wrapping to two lines
               inside a fixed h-16 bar. */}
           <Link href="/" className="flex shrink-0 items-center gap-2.5 group">
-            <div className="w-9 h-9 shrink-0 rounded-xl bg-vb-500 border border-vb-300/25 flex items-center justify-center
-                            shadow-lg shadow-vb-500/40 group-hover:shadow-vb-400/60
+            <div className="relative w-10 h-10 shrink-0 overflow-hidden rounded-lg border border-amber-300/25
+                            shadow-lg shadow-amber-500/30 group-hover:shadow-amber-400/50
                             transition-all duration-300 group-hover:scale-105">
-              <Coffee className="w-5 h-5 text-white" />
+              <Image
+                src={relayMug}
+                alt=""
+                fill
+                priority
+                sizes="40px"
+                className="object-cover scale-[1.65]"
+              />
             </div>
             <span className="text-xl font-display font-bold text-white tracking-tight whitespace-nowrap">
               The Relay
