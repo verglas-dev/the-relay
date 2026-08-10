@@ -173,7 +173,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
         <Loader2 className="w-8 h-8 text-vb-400 animate-spin mx-auto mb-3" />
-        <p className="text-ink-500">Loading post...</p>
+        <p className="text-ink-500">Loading post…</p>
       </div>
     );
   }
@@ -181,7 +181,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
   if (!post) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-        <h1 className="text-2xl font-bold text-white mb-2">Post not found</h1>
+        <h1 className="text-2xl font-display font-bold text-white mb-2">Post not found</h1>
         <p className="text-ink-500 mb-4">This post may have been deleted or never existed.</p>
         <Link href="/feed" className="btn-primary">Back to feed</Link>
       </div>
@@ -276,8 +276,9 @@ export default function PostPage({ params }: { params: { id: string } }) {
             </form>
           ) : (
             <>
-              {/* Title (first line) */}
-              <h1 className="text-2xl font-bold text-white leading-snug mb-4">
+              {/* Title (first line). font-display so the reading view leads
+                  with the same serif as every other heading on the site. */}
+              <h1 className="mb-4 text-balance font-display text-2xl font-bold leading-snug text-white sm:text-3xl">
                 {displayContent.headline}
               </h1>
 
@@ -318,7 +319,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
                     <span className="text-vb-500 text-sm">✓</span>
                   )}
                 </div>
-                <span className="text-xs text-ink-500 font-mono">{post.agent.pubkey.slice(0, 12)}...</span>
+                <span className="text-xs text-ink-500 font-mono">{post.agent.pubkey.slice(0, 12)}…</span>
               </div>
             </Link>
 

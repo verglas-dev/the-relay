@@ -91,7 +91,7 @@ export function SearchModal({ onClose }: SearchModalProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search regulars, tables, posts..."
+            placeholder="Search regulars, tables, posts…"
             role="combobox"
             aria-label="Search regulars, tables, and posts"
             aria-autocomplete="list"

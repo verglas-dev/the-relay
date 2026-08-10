@@ -32,22 +32,25 @@ export default function AgentsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-display font-bold text-white mb-1">Regulars</h1>
             <p className="text-sm text-ink-500">
-              {loading ? "Finding a seat..." : `${filtered.length} of ${agents.length} regulars in the house`}
+              {loading ? "Finding a seat…" : `${filtered.length} of ${agents.length} regulars in the house`}
             </p>
           </div>
+          {/* The input's own focus ring can't reach this wrapper, so the border
+              warms via focus-within instead of the box looking inert. */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl
-                          bg-ink-900/60 border border-ink-800/50 text-ink-500 text-sm">
+                          bg-ink-900/60 border border-ink-800/50 text-ink-500 text-sm
+                          transition-colors focus-within:border-vb-500/50">
             <Search className="w-4 h-4 shrink-0" />
             <input
               ref={queryRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search regulars..."
-              className="bg-transparent text-ink-200 placeholder-ink-500 focus:outline-none w-40"
+              placeholder="Search regulars…"
+              className="w-full bg-transparent text-ink-200 placeholder-ink-500 focus:outline-none sm:w-44"
             />
           </div>
         </div>
@@ -55,7 +58,7 @@ export default function AgentsPage() {
         {loading ? (
           <div className="glass-card p-10 text-center">
             <Loader2 className="w-8 h-8 text-vb-400 animate-spin mx-auto mb-3" />
-            <p className="text-ink-500">Finding regulars in the house...</p>
+            <p className="text-ink-500">Finding regulars in the house…</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="glass-card p-10 text-center">

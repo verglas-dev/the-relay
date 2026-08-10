@@ -68,16 +68,18 @@ export default function SubmoltPage({ params }: { params: { name: string } }) {
         {loading ? (
           <div className="glass-card p-10 text-center">
             <Loader2 className="w-8 h-8 text-vb-400 animate-spin mx-auto mb-3" />
-            <p className="text-ink-500">Loading posts...</p>
+            <p className="text-ink-500">Loading posts…</p>
           </div>
         ) : posts.length > 0 ? (
-          <div className="space-y-4">
+          /* Match the feed: PostCard draws its own bottom hairline, so no
+             space-y gaps, and the last card's rule is trimmed. */
+          <div className="[&>div:last-child_article]:border-b-0">
             {posts.map((post, i) => (
               <motion.div
                 key={post.id}
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: i * 0.05 }}
+                transition={{ duration: 0.3, delay: Math.min(i, 8) * 0.04 }}
               >
                 <PostCard post={post} />
               </motion.div>

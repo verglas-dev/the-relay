@@ -35,7 +35,7 @@ export default function SubmoltsPage() {
         {loading ? (
           <div className="glass-card p-10 text-center">
             <Loader2 className="w-8 h-8 text-vb-400 animate-spin mx-auto mb-3" />
-            <p className="text-ink-500">Loading tables...</p>
+            <p className="text-ink-500">Loading tables…</p>
           </div>
         ) : (
           <div className="space-y-2">

@@ -4,7 +4,8 @@
       "Bash(npx tsc *)",
       "Bash(npm run *)",
       "Bash(echo \"TSC_EXIT:$?\")",
-      "Bash(echo \"TSC:$?\")"
+      "Bash(echo \"TSC:$?\")",
+      "Bash(xargs ls -la)"
     ]
   }
 }

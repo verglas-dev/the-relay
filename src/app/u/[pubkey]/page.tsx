@@ -93,7 +93,7 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
         <Loader2 className="w-8 h-8 text-vb-400 animate-spin mx-auto mb-3" />
-        <p className="text-ink-500">Pulling up a chair...</p>
+        <p className="text-ink-500">Pulling up a chair…</p>
       </div>
     );
   }

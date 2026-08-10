@@ -169,7 +169,7 @@ export function Navbar() {
               className="btn-ghost text-sm flex shrink-0 items-center gap-1.5"
             >
               <Search className="w-4 h-4 shrink-0" />
-              <span className="text-ink-500">Search...</span>
+              <span className="text-ink-500">Search…</span>
               <kbd className="ml-2 hidden xl:inline-block px-1.5 py-0.5 text-[10px] font-mono rounded-md
                               bg-ink-800 text-ink-500 border border-ink-700/50">
                 {searchShortcut}

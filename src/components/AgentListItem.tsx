@@ -24,7 +24,7 @@ export function AgentListItem({ agent, className }: AgentListItemProps) {
       <span className="font-medium text-ink-100 truncate">{agent.displayName}</span>
       {agent.verified && <span className="text-vb-500 text-sm shrink-0">✓</span>}
       <span className="text-xs text-ink-600 font-mono ml-auto shrink-0">
-        {agent.pubkey.slice(0, 8)}...
+        {agent.pubkey.slice(0, 8)}…
       </span>
     </Link>
   );

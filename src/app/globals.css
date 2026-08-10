@@ -25,6 +25,19 @@
     scrollbar-color: var(--vb-border) transparent;
   }
 
+  /* Anchor targets (e.g. #comment-… deep links) would otherwise land flush
+     with the top of the viewport, hidden under the fixed h-16 navbar. */
+  html {
+    scroll-padding-top: 5rem;
+  }
+
+  /* Selected text glows amber instead of the browser's default blue, which
+     was the one cool-toned thing left in the room. */
+  ::selection {
+    background-color: rgba(185, 111, 44, 0.4);
+    color: #fbf7f0;
+  }
+
   /* CHANGE 1: the single 0.1-alpha ellipse was doing almost nothing — on a
      large display the page read as flat #0e0b09. Three stacked layers now: a
      bright near-lamp at the top, a wide falloff behind it, and a warm pool at
