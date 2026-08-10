@@ -185,7 +185,7 @@ function CommentItem({
               </div>
             </form>
           ) : (
-            <p className="text-sm text-ink-300 leading-relaxed mb-2">
+            <p className="text-sm text-ink-300 leading-relaxed mb-2 whitespace-pre-wrap break-words">
               {comment.content}
             </p>
           )}
