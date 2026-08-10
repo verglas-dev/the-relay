@@ -6,6 +6,8 @@ import type { AdminPostRecord } from "@/lib/admin-posts";
 import type { AdminProfileRecord } from "@/lib/admin-profiles";
 import type { AdminCommentRecord } from "@/lib/admin-comments";
 import { THEME_KIND, parseTheme, type ProfileTheme } from "./profile-theme";
+import { resolveCommentReferences } from "./comment-references";
+import { applyCommentReferenceRepairs } from "./comment-reference-repairs";
 
 // ─── UI Models ───────────────────────────────────────────────
 
@@ -99,6 +101,9 @@ let postCache: Post[] | null = null;
 let adminPostCache: AdminPostView[] | null = null;
 let commentModerationById: Map<string, AdminCommentRecord> | null = null;
 let commentCache: Map<string, Comment[]> | null = null;
+// Canonical root post for each resolvable, nonblank comment. In addition to
+// building thread caches, this lets old /post/<comment-id> links recover.
+let postIdByCommentId: Map<string, string> | null = null;
 let adminCommentCache: AdminCommentView[] | null = null;
 let notificationsByTarget: Map<string, Notification[]> | null = null;
 let voteByVoterAndTarget: Map<string, "+" | "-"> | null = null;
@@ -243,10 +248,13 @@ async function _doInit(): Promise<void> {
     if (agent) agent.theme = theme;
   }
 
-  // Fetch all posts (kind 1)
-  const postEvents = await client.collect([{ kinds: [1], limit: 100 }]);
+  // Thread resolution is a graph operation: a recent comment may refer to an
+  // old comment and every comment ultimately depends on its root post. Do not
+  // globally truncate either side of that graph; doing so silently orphans
+  // valid deep threads once the site crosses an arbitrary event count.
+  const postEvents = await client.collect([{ kinds: [1] }]);
   const voteEvents = await client.collect([{ kinds: [3], limit: 500 }]);
-  const commentEvents = await client.collect([{ kinds: [2], limit: 200 }]);
+  const commentEvents = await client.collect([{ kinds: [2] }]);
   const followEvents = await client.collect([{ kinds: [FOLLOW_KIND, UNFOLLOW_KIND], limit: 1000 }]);
 
   // Current follow state per (follower, target) pair is just "whichever of
@@ -279,16 +287,32 @@ async function _doInit(): Promise<void> {
     getAgentForPubkey(pubkey).stats.following = count;
   }
 
+  // Edit events share the post/comment kind, but are payloads rather than
+  // standalone nodes in either reference graph.
+  const originalPostEvents = postEvents.filter((event) => !event.tags.some((t) => t[0] === "edit"));
+  const originalCommentEvents = commentEvents.filter((event) => !event.tags.some((t) => t[0] === "edit"));
+
+  // Normalize all formats seen in the wild:
+  //   current: e=root post, a=immediate parent (or root for top-level)
+  //   legacy:  e=immediate parent with no a, or a=target author pubkey
+  // Following legacy e chains here repairs profile links, post grouping,
+  // notifications, moderation checks, and arbitrarily deep thread rendering
+  // through the same canonical reference.
+  const commentReferencesById = resolveCommentReferences(
+    originalPostEvents.map((event) => event.id),
+    originalCommentEvents
+  );
+  const originalPostIds = new Set(originalPostEvents.map((event) => event.id));
+  const originalCommentIds = new Set(originalCommentEvents.map((event) => event.id));
+  applyCommentReferenceRepairs(commentReferencesById, originalPostIds, originalCommentIds);
+
   // Author/parent lookups used to route notifications to the right pubkey,
   // independent of the Comment/Post view objects built further down.
   const postAuthorById = new Map<string, string>();
-  for (const event of postEvents) postAuthorById.set(event.id, event.pubkey);
+  for (const event of originalPostEvents) postAuthorById.set(event.id, event.pubkey);
   const commentAuthorById = new Map<string, string>();
-  const commentPostById = new Map<string, string>();
-  for (const c of commentEvents) {
+  for (const c of originalCommentEvents) {
     commentAuthorById.set(c.id, c.pubkey);
-    const postId = c.tags.find((t) => t[0] === "e")?.[1];
-    if (postId) commentPostById.set(c.id, postId);
   }
 
   // Posts/comments are content-addressed and immutable, so a self-edit is
@@ -310,6 +334,38 @@ async function _doInit(): Promise<void> {
     if (!editOf || commentAuthorById.get(editOf) !== c.pubkey) continue;
     const existing = commentEditsById.get(editOf);
     if (!existing || c.created_at > existing.created_at) commentEditsById.set(editOf, c);
+  }
+
+  // Moderation overrides and valid self-edits both replace the stored body.
+  // Decide whether a comment is blank only after applying those layers: an
+  // old empty event can be repaired by moderation, while an overridden-empty
+  // event must stay out of every public view/count but remain in admin cache.
+  const effectiveCommentContentById = new Map<string, string>();
+  for (const c of originalCommentEvents) {
+    effectiveCommentContentById.set(
+      c.id,
+      commentModerationById.get(c.id)?.content ?? commentEditsById.get(c.id)?.content ?? c.content
+    );
+  }
+  const isBlankComment = (commentId: string) =>
+    !(effectiveCommentContentById.get(commentId) ?? "").trim();
+
+  // A historical blank retry is not rendered as a node. If anything did
+  // reply beneath one, walk past it so valid descendants do not vanish from
+  // the public tree along with the blank placeholder.
+  function getNonBlankParentId(commentId: string): string | undefined {
+    let parentId = commentReferencesById.get(commentId)?.parentId;
+    const seen = new Set<string>();
+    while (parentId && isBlankComment(parentId) && !seen.has(parentId)) {
+      seen.add(parentId);
+      parentId = commentReferencesById.get(parentId)?.parentId;
+    }
+    return parentId && !seen.has(parentId) ? parentId : undefined;
+  }
+
+  postIdByCommentId = new Map();
+  for (const [commentId, reference] of commentReferencesById) {
+    if (!isBlankComment(commentId)) postIdByCommentId.set(commentId, reference.postId);
   }
 
   notificationsByTarget = new Map();
@@ -342,14 +398,24 @@ async function _doInit(): Promise<void> {
     const targetAuthor = targetPostAuthor ?? targetCommentAuthor;
     if (!targetAuthor || targetAuthor === v.pubkey || deletedProfilePubkeys.has(targetAuthor)) continue;
     if (targetPostAuthor && postModerationById.get(targetId)?.deleted) continue;
-    if (targetCommentAuthor && commentModerationById.get(targetId)?.deleted) continue;
+    if (targetCommentAuthor) {
+      const rootPostId = postIdByCommentId.get(targetId);
+      if (
+        !rootPostId ||
+        isBlankComment(targetId) ||
+        commentModerationById.get(targetId)?.deleted ||
+        postModerationById.get(rootPostId)?.deleted
+      ) {
+        continue;
+      }
+    }
 
     pushNotification(
       {
         id: v.id,
         type: "upvote",
         actor: getAgentForPubkey(v.pubkey),
-        postId: targetPostAuthor ? targetId : commentPostById.get(targetId) || "",
+        postId: targetPostAuthor ? targetId : postIdByCommentId.get(targetId) || "",
         commentId: targetPostAuthor ? undefined : targetId,
         excerpt: "",
         createdAt: new Date(v.created_at * 1000).toISOString(),
@@ -364,8 +430,12 @@ async function _doInit(): Promise<void> {
   adminCommentCache = [];
   for (const c of commentEvents) {
     if (c.tags.some((t) => t[0] === "edit")) continue;
-    const postId = c.tags.find((t) => t[0] === "e")?.[1];
-    if (!postId) continue;
+    const rawEventId = c.tags.find((t) => t[0] === "e")?.[1];
+    if (!rawEventId) continue;
+    const reference = commentReferencesById.get(c.id);
+    // Keep unresolved comments available to admins under their raw event tag,
+    // but never expose a dead post link in public caches.
+    const postId = reference?.postId ?? rawEventId;
 
     const commentModeration = commentModerationById.get(c.id);
     const isHiddenComment = Boolean(commentModeration?.deleted);
@@ -373,19 +443,18 @@ async function _doInit(): Promise<void> {
     const isHiddenPost = Boolean(postModerationById.get(postId)?.deleted);
     const commentEdit = commentEditsById.get(c.id);
 
-    const parentTag = c.tags.find((t) => t[0] === "a");
     const comment: Comment = {
       id: c.id,
       postId,
-      content: commentModeration?.content ?? commentEdit?.content ?? c.content,
+      content: effectiveCommentContentById.get(c.id) ?? c.content,
       agent: getAgentForPubkey(c.pubkey),
       createdAt: new Date(c.created_at * 1000).toISOString(),
       upvotes: voteCounts.get(c.id)?.up || 0,
-      parentId: parentTag?.[1] !== postId ? parentTag?.[1] : undefined,
+      parentId: reference ? getNonBlankParentId(c.id) : undefined,
       edited: Boolean(commentEdit) && commentModeration?.content === undefined,
     };
 
-    if (!isHiddenAgent && !isHiddenPost && !isHiddenComment) {
+    if (reference && !isBlankComment(c.id) && !isHiddenAgent && !isHiddenPost && !isHiddenComment) {
       commentCounts.set(postId, (commentCounts.get(postId) || 0) + 1);
       const postComments = commentCache.get(postId) || [];
       postComments.push(comment);
@@ -472,8 +541,9 @@ async function _doInit(): Promise<void> {
     if (c.tags.some((t) => t[0] === "edit")) continue;
     if (deletedProfilePubkeys.has(c.pubkey)) continue;
     if (commentModerationById.get(c.id)?.deleted) continue;
-    const postId = c.tags.find((t) => t[0] === "e")?.[1];
-    if (postId && postModerationById.get(postId)?.deleted) continue;
+    if (isBlankComment(c.id)) continue;
+    const reference = commentReferencesById.get(c.id);
+    if (!reference || postModerationById.get(reference.postId)?.deleted) continue;
     const agent = getAgentForPubkey(c.pubkey);
     agent.stats.comments++;
     agent.stats.upvotes += voteCounts.get(c.id)?.up || 0;
@@ -663,6 +733,16 @@ export function getAgentByDisplayName(name: string): Agent | undefined {
 
 export function getPost(id: string): Post | undefined {
   return postCache?.find((p) => p.id === id);
+}
+
+/**
+ * Resolve either a root post ID or a comment ID to its canonical post. The
+ * comment-ID case keeps links generated before reference normalization from
+ * landing on a false "Post not found" page.
+ */
+export function getRootPostId(id: string): string | undefined {
+  if (postCache?.some((post) => post.id === id)) return id;
+  return postIdByCommentId?.get(id);
 }
 
 /**
@@ -900,6 +980,7 @@ export function resetLiveData() {
   adminPostCache = null;
   commentModerationById = null;
   commentCache = null;
+  postIdByCommentId = null;
   adminCommentCache = null;
   notificationsByTarget = null;
   voteByVoterAndTarget = null;

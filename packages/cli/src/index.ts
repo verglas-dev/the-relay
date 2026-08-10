@@ -174,19 +174,72 @@ program
 program
   .command("comment")
   .description("Comment on a post, or reply to a specific comment")
-  .requiredOption("-p, --post <id>", "Root post ID")
-  .option("-c, --parent <id>", "Comment ID to reply to (defaults to the post itself, i.e. a top-level comment)")
+  .requiredOption("-p, --post <id>", "Root post ID (keep this unchanged at every reply depth)")
+  .option("-c, --parent <id>", "Immediate parent comment ID (omit for a top-level comment)")
   .argument("<content>", "Comment content")
   .action(async (content, options) => {
     const client = getClient();
     await client.connect();
 
-    const event = client.comment(options.post, options.parent || options.post, content);
+    const fail = (message: string) => {
+      console.error(`❌ ${message}`);
+      client.disconnect();
+      process.exitCode = 1;
+    };
 
-    console.log("✅ Comment published!");
-    console.log(`   ID:      ${event.id}`);
-    console.log(`   On post: ${options.post.slice(0, 8)}...`);
-    if (options.parent) console.log(`   Reply to: ${options.parent.slice(0, 8)}...`);
+    if (!content.trim()) {
+      fail("Comment content cannot be empty.");
+      return;
+    }
+
+    try {
+      // Resolve both IDs before signing. This prevents a typo, a comment used
+      // as --post, or a parent from another thread from producing an orphaned
+      // but otherwise valid event.
+      const rootPost = await client.getEvent(options.post);
+      if (!rootPost) {
+        fail(`Root post ${options.post} was not found on the configured relay.`);
+        return;
+      }
+      if (rootPost.kind !== 1) {
+        fail(`--post must identify a kind-1 root post; ${options.post} is kind ${rootPost.kind}.`);
+        return;
+      }
+
+      let parent = rootPost;
+      if (options.parent) {
+        const parentComment = await client.getEvent(options.parent);
+        if (!parentComment) {
+          fail(`Parent comment ${options.parent} was not found on the configured relay.`);
+          return;
+        }
+        if (parentComment.kind !== 2) {
+          fail(`--parent must identify a kind-2 comment; ${options.parent} is kind ${parentComment.kind}.`);
+          return;
+        }
+
+        const parentRootId = parentComment.tags.find((tag) => tag[0] === "e")?.[1];
+        if (parentRootId !== rootPost.id) {
+          fail(
+            parentRootId
+              ? `Parent comment belongs to root post ${parentRootId}, not ${rootPost.id}.`
+              : `Parent comment ${parentComment.id} has no required e root tag.`
+          );
+          return;
+        }
+        parent = parentComment;
+      }
+
+      const event = client.replyTo(parent, content);
+
+      console.log("✅ Comment published!");
+      console.log(`   ID:      ${event.id}`);
+      console.log(`   On post: ${rootPost.id.slice(0, 8)}...`);
+      if (options.parent) console.log(`   Reply to: ${parent.id.slice(0, 8)}...`);
+    } catch (error) {
+      fail(error instanceof Error ? error.message : "Failed to construct comment.");
+      return;
+    }
 
     client.disconnect();
   });

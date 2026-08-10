@@ -47,7 +47,24 @@ export async function initDb(path = "relay.db") {
 
   db.run("CREATE INDEX IF NOT EXISTS idx_event_tags_key_value ON event_tags(tag_key, tag_value)");
 
+  // Thread relationships are derived rather than written back into tags_json.
+  // Events are signed over their tags, so "fixing" a legacy comment in place
+  // would make its id and signature invalid.  This sidecar lets the relay index
+  // old and current comment shapes under one canonical root/parent pair while
+  // continuing to return the original, verifiable event to clients.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS comment_threads (
+      event_id TEXT PRIMARY KEY,
+      root_id TEXT NOT NULL,
+      parent_id TEXT NOT NULL
+    )
+  `);
+
+  db.run("CREATE INDEX IF NOT EXISTS idx_comment_threads_root ON comment_threads(root_id)");
+  db.run("CREATE INDEX IF NOT EXISTS idx_comment_threads_parent ON comment_threads(parent_id)");
+
   dedupeVotes();
+  rebuildCommentThreads();
 
   saveDb();
 }
@@ -76,6 +93,250 @@ function dedupeVotes() {
     )
   `);
   db.run(`DELETE FROM event_tags WHERE event_id NOT IN (SELECT id FROM events)`);
+}
+
+// ─── Comment thread compatibility index ─────────────────────────────────────
+
+interface CommentThreadRef {
+  rootId: string;
+  parentId: string;
+}
+
+// Protect startup/reference resolution from a deliberately pathological chain
+// while leaving ample room above the product's supported 20-level threads.
+const MAX_COMMENT_ANCESTORS = 256;
+
+// One signed production event carries an unrelated legacy e target even though
+// its content unambiguously responds to Sol's "More Than One Horizon" post.
+// Signed events cannot be edited; this display/query-only sidecar override
+// restores the intended thread without changing the event returned to clients.
+const COMMENT_THREAD_OVERRIDES = new Map<string, CommentThreadRef>([
+  [
+    "7a9b80f559642ad4ef7bdcc0105bd6c996537a3c6a708290627afef7270a79d4",
+    {
+      rootId: "14fcdaf69ac6c84125cb07258e54ea67eca5c66f7825b92f6d31c1d26def0c94",
+      parentId: "14fcdaf69ac6c84125cb07258e54ea67eca5c66f7825b92f6d31c1d26def0c94",
+    },
+  ],
+]);
+
+function firstTagValue(event: RelayEvent, key: string): string | undefined {
+  const value = event.tags.find((tag) => tag[0] === key)?.[1];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isCommentEdit(event: RelayEvent): boolean {
+  return event.kind === 2 && firstTagValue(event, "edit") !== undefined;
+}
+
+function getStoredThreadRef(eventId: string): CommentThreadRef | null {
+  const rows = db.exec(
+    "SELECT root_id, parent_id FROM comment_threads WHERE event_id = ?",
+    [eventId]
+  );
+  if (rows.length === 0 || rows[0].values.length === 0) return null;
+  const [rootId, parentId] = rows[0].values[0] as [string, string];
+  return { rootId, parentId };
+}
+
+/**
+ * Resolve an event which is being used as a parent to its root post.
+ *
+ * The recursion is intentionally driven by the raw signed events, with the
+ * sidecar used only as a fallback for a retracted/missing ancestor.  That keeps
+ * startup backfills deterministic and also lets a newly arrived parent repair
+ * descendants which reached this relay out of order.
+ */
+function resolveParentRoot(eventId: string, seen: Set<string>): string | null {
+  if (seen.has(eventId)) return null;
+
+  // The normal publish path has already indexed the parent, making deep
+  // canonical and legacy threads O(1) per hop instead of recursively walking
+  // their complete ancestry every time.
+  const indexed = getStoredThreadRef(eventId);
+  if (indexed) return indexed.rootId;
+  if (seen.size >= MAX_COMMENT_ANCESTORS) return null;
+
+  const event = getEvent(eventId);
+  if (!event) return null;
+  if (event.kind === 1) return event.id;
+  if (event.kind !== 2 || isCommentEdit(event)) return null;
+
+  // deriveCommentThread owns adding this event to the cycle guard. Adding it
+  // here as well would make every comment look cyclic on its first hop.
+  const ref = deriveCommentThread(event, seen);
+  return ref?.rootId ?? null;
+}
+
+/**
+ * A short-lived legacy client used `a` for an author's public key rather than
+ * for a parent event id.  When that value is not a stored event, recover the
+ * intended parent as that author's newest earlier comment in the same thread.
+ * If no such comment exists the caller treats the reply as top-level.
+ */
+function findLegacyAuthorParent(
+  event: RelayEvent,
+  author: string,
+  rootId: string,
+  seen: Set<string>
+): string | null {
+  if (!/^[0-9a-f]{64}$/.test(author)) return null;
+
+  const rowIdRows = db.exec("SELECT rowid FROM events WHERE id = ?", [event.id]);
+  const currentRowId = rowIdRows.length > 0 && rowIdRows[0].values.length > 0
+    ? Number(rowIdRows[0].values[0][0])
+    : Number.MAX_SAFE_INTEGER;
+
+  const stmt = db.prepare(`
+    SELECT * FROM events
+    WHERE kind = 2
+      AND pubkey = ?
+      AND id != ?
+      AND (created_at < ? OR (created_at = ? AND rowid < ?))
+    ORDER BY created_at DESC, rowid DESC
+  `);
+  stmt.bind([author, event.id, event.created_at, event.created_at, currentRowId]);
+
+  while (stmt.step()) {
+    const candidate = rowToEvent(stmt.getAsObject() as any);
+    if (isCommentEdit(candidate) || seen.has(candidate.id)) continue;
+    const candidateRef = deriveCommentThread(candidate, new Set(seen));
+    if (candidateRef?.rootId === rootId) {
+      stmt.free();
+      return candidate.id;
+    }
+  }
+
+  stmt.free();
+  return null;
+}
+
+/**
+ * Canonical comments use e=root and a=parent.  For compatibility we also
+ * understand both historical forms still present in production:
+ *
+ *   - e=root with no a             -> top-level comment
+ *   - e=parent-comment with no a   -> nested reply; infer the parent's root
+ *   - e=root with a=author-pubkey  -> reply to that author's latest comment
+ */
+function deriveCommentThread(event: RelayEvent, seen = new Set<string>()): CommentThreadRef | null {
+  if (event.kind !== 2 || isCommentEdit(event) || seen.has(event.id)) return null;
+  const override = COMMENT_THREAD_OVERRIDES.get(event.id);
+  if (override) return override;
+  seen.add(event.id);
+
+  const rootHint = firstTagValue(event, "e");
+  if (!rootHint) return null;
+
+  const explicitParent = firstTagValue(event, "a");
+  let parentId = explicitParent ?? rootHint;
+
+  // Work out the root from the immediate parent where possible.  This also
+  // repairs a canonical-looking event whose e tag disagrees with its parent.
+  let rootId = resolveParentRoot(parentId, new Set(seen));
+
+  if (explicitParent && !getEvent(explicitParent)) {
+    const hintedRoot = resolveParentRoot(rootHint, new Set(seen)) ?? rootHint;
+    const legacyParent = findLegacyAuthorParent(event, explicitParent, hintedRoot, seen);
+    parentId = legacyParent ?? hintedRoot;
+    rootId = legacyParent
+      ? resolveParentRoot(legacyParent, new Set(seen))
+      : hintedRoot;
+  }
+
+  rootId ??= resolveParentRoot(rootHint, new Set(seen)) ?? rootHint;
+  return { rootId, parentId };
+}
+
+function indexCommentThread(event: RelayEvent) {
+  const ref = deriveCommentThread(event);
+  if (!ref) {
+    // The row may have belonged to a retracted event which was later
+    // re-published with a different kind. Do not retain a wrong live mapping.
+    if (getEvent(event.id)) {
+      db.run("DELETE FROM comment_threads WHERE event_id = ?", [event.id]);
+    }
+    return;
+  }
+
+  db.run(
+    `INSERT INTO comment_threads (event_id, root_id, parent_id)
+     VALUES (?, ?, ?)
+     ON CONFLICT(event_id) DO UPDATE SET
+       root_id = excluded.root_id,
+       parent_id = excluded.parent_id`,
+    [event.id, ref.rootId, ref.parentId]
+  );
+}
+
+/** Re-index comments which may have arrived before an event (or author) they name. */
+function reindexCommentDescendants(parentKeys: string[]) {
+  const queue = [...parentKeys];
+  const visitedKeys = new Set<string>();
+  const visitedComments = new Set<string>();
+  while (queue.length > 0) {
+    const parentKey = queue.shift()!;
+    if (visitedKeys.has(parentKey)) continue;
+    visitedKeys.add(parentKey);
+
+    // event_tags has an index on (key, value), so this follows only direct raw
+    // children instead of rescanning every stored comment on each publish.
+    // When a is present it is the raw parent key; otherwise legacy comments use
+    // their e value as the parent.
+    const rows = db.exec(`
+      SELECT DISTINCT e.*
+      FROM events e
+      JOIN event_tags t ON t.event_id = e.id
+      WHERE e.kind = 2
+        AND (
+          (t.tag_key = 'a' AND t.tag_value = ?)
+          OR (
+            t.tag_key = 'e' AND t.tag_value = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM event_tags a
+              WHERE a.event_id = e.id AND a.tag_key = 'a'
+            )
+          )
+        )
+    `, [parentKey, parentKey]);
+    if (rows.length === 0) continue;
+
+    for (const rawRow of rows[0].values) {
+      const row = Object.fromEntries(rows[0].columns.map((column: string, i: number) => [column, rawRow[i]]));
+      const child = rowToEvent(row);
+      if (visitedComments.has(child.id) || isCommentEdit(child)) continue;
+      visitedComments.add(child.id);
+      indexCommentThread(child);
+      queue.push(child.id);
+      // A legacy descendant may name this child's author in its a tag.
+      queue.push(child.pubkey);
+    }
+  }
+}
+
+function rebuildCommentThreads() {
+  const rows = db.exec("SELECT * FROM events WHERE kind = 2 ORDER BY created_at ASC, rowid ASC");
+  if (rows.length === 0) return;
+
+  // Recompute live mappings so resolver changes and one-off recovery overrides
+  // take effect after deployment. Rows for retracted comments remain as the
+  // linkage tombstones described in retractEvents.
+  db.run("DELETE FROM comment_threads WHERE event_id IN (SELECT id FROM events)");
+
+  const indexRows = (rawRows: any[][]) => {
+    for (const rawRow of rawRows) {
+      const row = Object.fromEntries(rows[0].columns.map((column: string, i: number) => [column, rawRow[i]]));
+      indexCommentThread(rowToEvent(row));
+    }
+  };
+
+  indexRows(rows[0].values);
+  // A second, reverse pass guarantees that comments whose timestamps arrived
+  // out of parent-before-child order can now use their freshly indexed parent.
+  for (const rawRow of [...rows[0].values].reverse()) {
+    const row = Object.fromEntries(rows[0].columns.map((column: string, i: number) => [column, rawRow[i]]));
+    indexCommentThread(rowToEvent(row));
+  }
 }
 
 /**
@@ -180,6 +441,11 @@ export function retractEvents(retraction: RelayEvent): number {
 
     db.run("DELETE FROM event_tags WHERE event_id = ?", [target]);
     db.run("DELETE FROM events WHERE id = ?", [target]);
+    // Intentionally retain a kind-2 target's comment_threads row as a tiny
+    // linkage tombstone. Descendant events still contain the deleted id in
+    // their signed parent tag; retaining only its root/parent mapping keeps
+    // those descendants attached to the thread across a relay restart. The
+    // deleted event itself cannot be returned because it is gone from events.
     removed += 1;
   }
 
@@ -235,6 +501,16 @@ export function insertEvent(event: RelayEvent): boolean {
     }
   }
 
+  // Do this only after the raw event and tags exist: reference resolution may
+  // need to inspect the event itself, and descendants may have arrived first.
+  if (event.kind === 1 || event.kind === 2) {
+    indexCommentThread(event);
+    // Legacy a=<author-pubkey> descendants key off the author's identity, not
+    // the eventual parent event id. Revisit both shapes if an older parent
+    // arrives at this relay after its reply did.
+    reindexCommentDescendants(event.kind === 2 ? [event.id, event.pubkey] : [event.id]);
+  }
+
   saveDb();
   return true;
 }
@@ -282,10 +558,26 @@ export function queryEvents(filters: Filter[]): RelayEvent[] {
     for (const [key, values] of Object.entries(filter)) {
       if (key.startsWith("#") && values && values.length > 0) {
         const tagKey = key.slice(1);
-        filterConditions.push(
-          `id IN (SELECT event_id FROM event_tags WHERE tag_key = ? AND tag_value IN (${values.map(() => "?").join(",")}))`
-        );
-        params.push(tagKey, ...values);
+        const placeholders = values.map(() => "?").join(",");
+        if (tagKey === "e" || tagKey === "a") {
+          const threadColumn = tagKey === "e" ? "root_id" : "parent_id";
+          filterConditions.push(`(
+            id IN (
+              SELECT event_id FROM event_tags
+              WHERE tag_key = ? AND tag_value IN (${placeholders})
+            )
+            OR id IN (
+              SELECT event_id FROM comment_threads
+              WHERE ${threadColumn} IN (${placeholders})
+            )
+          )`);
+          params.push(tagKey, ...values, ...values);
+        } else {
+          filterConditions.push(
+            `id IN (SELECT event_id FROM event_tags WHERE tag_key = ? AND tag_value IN (${placeholders}))`
+          );
+          params.push(tagKey, ...values);
+        }
       }
     }
 
@@ -318,6 +610,22 @@ export function queryEvents(filters: Filter[]): RelayEvent[] {
   stmt.free();
 
   return events;
+}
+
+/**
+ * Raw plus relay-derived values used for live subscription matching.  The
+ * event sent over the wire remains untouched and independently verifiable.
+ */
+export function getIndexedTagValues(event: RelayEvent, tagKey: string): string[] {
+  const values = event.tags
+    .filter((tag) => tag[0] === tagKey && typeof tag[1] === "string")
+    .map((tag) => tag[1]);
+
+  if (event.kind !== 2 || (tagKey !== "e" && tagKey !== "a")) return values;
+  const ref = getStoredThreadRef(event.id);
+  const derived = tagKey === "e" ? ref?.rootId : ref?.parentId;
+  if (derived && !values.includes(derived)) values.push(derived);
+  return values;
 }
 
 function rowToEvent(row: any): RelayEvent {

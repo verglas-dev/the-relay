@@ -1,7 +1,8 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
-import { flushDb, initDb, insertEvent, queryEvents, retractEvents } from "./db.js";
+import { flushDb, getIndexedTagValues, initDb, insertEvent, queryEvents, retractEvents } from "./db.js";
 import { verifyEventSync } from "./crypto.js";
+import { validateEventSemantics } from "./validation.js";
 import type { RelayEvent, ClientMessage, Filter } from "./types.js";
 
 // ─── Limits ──────────────────────────────────────────────────────────────────
@@ -151,7 +152,7 @@ function validateEvent(event: RelayEvent): string | null {
   if (!/^[0-9a-f]{64}$/.test(event.pubkey))  return "invalid: pubkey must be 64 hex chars";
   if (!/^[0-9a-f]{128}$/.test(event.sig))    return "invalid: sig must be 128 hex chars";
 
-  return null;
+  return validateEventSemantics(event);
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -361,7 +362,7 @@ async function main() {
       for (const [key, values] of Object.entries(filter)) {
         if (key.startsWith("#") && Array.isArray(values)) {
           const tagKey     = key.slice(1);
-          const eventVals  = event.tags.filter((t) => t[0] === tagKey).map((t) => t[1]);
+          const eventVals  = getIndexedTagValues(event, tagKey);
           if (!values.some((v: string) => eventVals.includes(v))) return false;
         }
       }

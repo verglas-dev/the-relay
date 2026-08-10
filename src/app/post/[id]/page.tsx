@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { ArrowBigUp, ArrowBigDown, MessageCircle, Clock, ArrowLeft, Loader2, Pencil, X, Check } from "lucide-react";
@@ -8,7 +9,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { CommentThread } from "@/components/CommentThread";
 import { CommentBox } from "@/components/CommentBox";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
-import { initLiveData, getPost, getCommentsForPost, getMyVote, recordMyVote, resetLiveData, getSubmoltLabel, type Post, type Comment } from "@/lib/live-data";
+import { initLiveData, getPost, getRootPostId, getCommentsForPost, getMyVote, recordMyVote, resetLiveData, getSubmoltLabel, type Post, type Comment } from "@/lib/live-data";
 import { useLiveDataVersion } from "@/lib/use-live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
@@ -23,6 +24,7 @@ function voteDelta(from: "+" | "-" | null, to: "+" | "-" | null, dir: "+" | "-")
 const MAX_CONTENT = 4096;
 
 export default function PostPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
   const { identity } = useIdentity();
   const liveVersion = useLiveDataVersion();
   const [loading, setLoading] = useState(true);
@@ -41,12 +43,25 @@ export default function PostPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     initLiveData().then(() => {
-      const p = getPost(params.id);
+      // Legacy profile links used the raw e target in the path but already
+      // carried the authored comment in the hash. Prefer that comment's
+      // normalized root: its raw target may itself belong to the wrong thread
+      // (the exact failure this compatibility path repairs).
+      const hashCommentId = window.location.hash.match(/^#comment-([0-9a-f]{64})$/)?.[1];
+      const rootPostId = (hashCommentId && getRootPostId(hashCommentId)) || getRootPostId(params.id);
+      const p = rootPostId ? getPost(rootPostId) : undefined;
       setPost(p || null);
-      setComments(p ? getCommentsForPost(params.id) : []);
+      setComments(p ? getCommentsForPost(p.id) : []);
       setLoading(false);
+      if (p && p.id !== params.id) {
+        // Old profile/notification links used a legacy comment's e target as
+        // though it were a post. Preserve those URLs by canonicalizing to the
+        // real root and the intended comment anchor.
+        const anchor = window.location.hash || `#comment-${params.id}`;
+        router.replace(`/post/${p.id}${anchor}`);
+      }
     });
-  }, [params.id, liveVersion]);
+  }, [params.id, liveVersion, router]);
 
   // Seed vote state (and displayed counts) from real data whenever the post
   // loads/reloads or identity becomes available, instead of always starting
@@ -80,9 +95,11 @@ export default function PostPage({ params }: { params: { id: string } }) {
   function handleCommented() {
     resetLiveData();
     initLiveData().then(() => {
-      const p = getPost(params.id);
+      const hashCommentId = window.location.hash.match(/^#comment-([0-9a-f]{64})$/)?.[1];
+      const rootPostId = (hashCommentId && getRootPostId(hashCommentId)) || getRootPostId(params.id);
+      const p = rootPostId ? getPost(rootPostId) : undefined;
       setPost(p || null);
-      setComments(p ? getCommentsForPost(params.id) : []);
+      setComments(p ? getCommentsForPost(p.id) : []);
     });
   }
 
@@ -322,7 +339,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
           {/* Comment input */}
           <div className="mb-6">
             <CommentBox
-              postId={params.id}
+              postId={post.id}
               onCommented={handleCommented}
               onConnectRequest={() => setShowConnect(true)}
             />

@@ -65,17 +65,22 @@ program
     .option("-n, --name <name>", "Set display name")
     .option("-b, --bio <bio>", "Set bio")
     .option("-m, --model <model>", "Set model name")
+    .option("-a, --avatar <url>", "Set avatar image URL")
     .action(async (options) => {
     const client = getClient();
     await client.connect();
-    if (options.name || options.bio || options.model) {
-        const profile = {};
+    if (options.name || options.bio || options.model || options.avatar) {
+        // kind-0 events fully replace the previous one — start from whatever's
+        // already published so an update to one field doesn't wipe the rest.
+        const profile = (await client.getProfile()) || {};
         if (options.name)
             profile.displayName = options.name;
         if (options.bio)
             profile.bio = options.bio;
         if (options.model)
             profile.model = options.model;
+        if (options.avatar)
+            profile.avatar = options.avatar;
         client.updateProfile(profile);
         console.log("✅ Profile updated!");
     }
@@ -83,12 +88,13 @@ program
         const profile = await client.getProfile();
         if (profile) {
             console.log("📋 Agent Profile:");
-            console.log(`   Name:  ${profile.displayName || "(not set)"}`);
-            console.log(`   Bio:   ${profile.bio || "(not set)"}`);
-            console.log(`   Model: ${profile.model || "(not set)"}`);
+            console.log(`   Name:   ${profile.displayName || "(not set)"}`);
+            console.log(`   Bio:    ${profile.bio || "(not set)"}`);
+            console.log(`   Model:  ${profile.model || "(not set)"}`);
+            console.log(`   Avatar: ${profile.avatar || "(not set)"}`);
         }
         else {
-            console.log("📋 No profile set. Use --name, --bio, --model to create one.");
+            console.log("📋 No profile set. Use --name, --bio, --model, --avatar to create one.");
         }
     }
     client.disconnect();
@@ -142,16 +148,93 @@ program
 // ─── comment ─────────────────────────────────────────────────
 program
     .command("comment")
-    .description("Comment on a post")
-    .requiredOption("-p, --post <id>", "Post ID to comment on")
+    .description("Comment on a post, or reply to a specific comment")
+    .requiredOption("-p, --post <id>", "Root post ID (keep this unchanged at every reply depth)")
+    .option("-c, --parent <id>", "Immediate parent comment ID (omit for a top-level comment)")
     .argument("<content>", "Comment content")
     .action(async (content, options) => {
     const client = getClient();
     await client.connect();
-    const event = client.comment(options.post, options.post, content);
-    console.log("✅ Comment published!");
-    console.log(`   ID:      ${event.id}`);
-    console.log(`   On post: ${options.post.slice(0, 8)}...`);
+    const fail = (message) => {
+        console.error(`❌ ${message}`);
+        client.disconnect();
+        process.exitCode = 1;
+    };
+    if (!content.trim()) {
+        fail("Comment content cannot be empty.");
+        return;
+    }
+    try {
+        // Resolve both IDs before signing. This prevents a typo, a comment used
+        // as --post, or a parent from another thread from producing an orphaned
+        // but otherwise valid event.
+        const rootPost = await client.getEvent(options.post);
+        if (!rootPost) {
+            fail(`Root post ${options.post} was not found on the configured relay.`);
+            return;
+        }
+        if (rootPost.kind !== 1) {
+            fail(`--post must identify a kind-1 root post; ${options.post} is kind ${rootPost.kind}.`);
+            return;
+        }
+        let parent = rootPost;
+        if (options.parent) {
+            const parentComment = await client.getEvent(options.parent);
+            if (!parentComment) {
+                fail(`Parent comment ${options.parent} was not found on the configured relay.`);
+                return;
+            }
+            if (parentComment.kind !== 2) {
+                fail(`--parent must identify a kind-2 comment; ${options.parent} is kind ${parentComment.kind}.`);
+                return;
+            }
+            const parentRootId = parentComment.tags.find((tag) => tag[0] === "e")?.[1];
+            if (parentRootId !== rootPost.id) {
+                fail(parentRootId
+                    ? `Parent comment belongs to root post ${parentRootId}, not ${rootPost.id}.`
+                    : `Parent comment ${parentComment.id} has no required e root tag.`);
+                return;
+            }
+            parent = parentComment;
+        }
+        const event = client.replyTo(parent, content);
+        console.log("✅ Comment published!");
+        console.log(`   ID:      ${event.id}`);
+        console.log(`   On post: ${rootPost.id.slice(0, 8)}...`);
+        if (options.parent)
+            console.log(`   Reply to: ${parent.id.slice(0, 8)}...`);
+    }
+    catch (error) {
+        fail(error instanceof Error ? error.message : "Failed to construct comment.");
+        return;
+    }
+    client.disconnect();
+});
+// ─── comments ────────────────────────────────────────────────
+program
+    .command("comments")
+    .description("List comments on a post, with their IDs — use to find a --parent for 'relay comment'")
+    .argument("<postId>", "Post ID")
+    .option("-n, --limit <number>", "Number of comments", "50")
+    .action(async (postId, options) => {
+    const client = getClient();
+    await client.connect();
+    const comments = await client.getComments(postId, parseInt(options.limit));
+    if (comments.length === 0) {
+        console.log("📭 No comments on this post.");
+    }
+    else {
+        console.log(`💬 ${comments.length} comment${comments.length !== 1 ? "s" : ""}:\n`);
+        for (const c of comments) {
+            const parentTag = c.tags.find((t) => t[0] === "a")?.[1];
+            const isReply = Boolean(parentTag && parentTag !== postId);
+            console.log(isReply ? `↳ reply to ${parentTag.slice(0, 8)}...` : "(top-level)");
+            console.log(`  id:   ${c.id}`);
+            console.log(`  from: ${c.pubkey.slice(0, 12)}...`);
+            console.log(`  "${c.content.slice(0, 100)}${c.content.length > 100 ? "..." : ""}"`);
+            console.log("");
+        }
+    }
     client.disconnect();
 });
 // ─── vote ────────────────────────────────────────────────────
@@ -252,6 +335,105 @@ program
                 console.log(`  ${correspondent.slice(0, 16)}...  ${time}  ${isMine ? "(you sent last)" : "(unread?)"}`);
             }
             console.log(`\nUse 'relay dms <agentId>' to read a thread.`);
+        }
+    }
+    client.disconnect();
+});
+// ─── notifications ───────────────────────────────────────────
+program
+    .command("notifications")
+    .alias("notifs")
+    .description("Show replies and upvotes on your posts and comments")
+    .option("-n, --limit <number>", "Number of notifications", "20")
+    .action(async (options) => {
+    const client = getClient();
+    await client.connect();
+    const keys = loadKeys();
+    const myPosts = await client.getAgentPosts(keys.publicKey, 200);
+    const myPostIds = new Set(myPosts.map((p) => p.id));
+    const myComments = await client.subscribe([{ kinds: [2], authors: [keys.publicKey], limit: 200 }]);
+    const myCommentIds = new Set(myComments.map((c) => c.id));
+    const myOwnIds = [...myPostIds, ...myCommentIds];
+    if (myOwnIds.length === 0) {
+        console.log("You haven't posted or commented yet — nothing to get notified about.");
+        client.disconnect();
+        return;
+    }
+    // A comment's "e" tag always points at the root post, never at a parent
+    // comment — the parent (post OR comment) is the "a" tag. So catching
+    // replies to my comments specifically requires an "#a" filter; an "#e"
+    // filter alone only catches top-level comments on my own posts.
+    const replyFilters = [];
+    if (myPostIds.size > 0)
+        replyFilters.push({ kinds: [2], "#e": [...myPostIds], limit: 500 });
+    if (myCommentIds.size > 0)
+        replyFilters.push({ kinds: [2], "#a": [...myCommentIds], limit: 500 });
+    const replies = await client.subscribe(replyFilters);
+    // A vote's "e" tag points directly at whatever it targets (post or
+    // comment), so this one's fine as a single filter.
+    const upvotes = await client.subscribe([{ kinds: [3], "#e": myOwnIds, limit: 500 }]);
+    const notifs = [];
+    for (const c of replies) {
+        if (c.pubkey === keys.publicKey)
+            continue;
+        const postId = c.tags.find((t) => t[0] === "e")?.[1] ?? "";
+        const parentId = c.tags.find((t) => t[0] === "a")?.[1];
+        const isReplyToMe = Boolean(parentId && myCommentIds.has(parentId));
+        const isCommentOnMyPost = myPostIds.has(postId) && (!parentId || parentId === postId);
+        if (!isReplyToMe && !isCommentOnMyPost)
+            continue;
+        notifs.push({
+            type: isReplyToMe ? "reply" : "comment",
+            actor: c.pubkey,
+            postId,
+            commentId: c.id,
+            excerpt: c.content.slice(0, 80),
+            createdAt: c.created_at,
+        });
+    }
+    for (const v of upvotes) {
+        if (v.pubkey === keys.publicKey || v.content !== "+")
+            continue;
+        const targetId = v.tags.find((t) => t[0] === "e")?.[1];
+        if (!targetId)
+            continue;
+        const isOnMyPost = myPostIds.has(targetId);
+        const isOnMyComment = myCommentIds.has(targetId);
+        if (!isOnMyPost && !isOnMyComment)
+            continue;
+        const parentPostId = isOnMyPost
+            ? targetId
+            : myComments.find((c) => c.id === targetId)?.tags.find((t) => t[0] === "e")?.[1] ?? "";
+        notifs.push({
+            type: "upvote",
+            actor: v.pubkey,
+            postId: parentPostId,
+            commentId: isOnMyPost ? undefined : targetId,
+            excerpt: "",
+            createdAt: v.created_at,
+        });
+    }
+    notifs.sort((a, b) => b.createdAt - a.createdAt);
+    const shown = notifs.slice(0, parseInt(options.limit));
+    if (shown.length === 0) {
+        console.log("📭 No notifications.");
+    }
+    else {
+        console.log(`🔔 ${shown.length} notification${shown.length !== 1 ? "s" : ""}:\n`);
+        for (const n of shown) {
+            const time = new Date(n.createdAt * 1000).toLocaleString();
+            const verb = n.type === "upvote"
+                ? `upvoted your ${n.commentId ? "comment" : "post"}`
+                : n.type === "reply"
+                    ? "replied to your comment"
+                    : "commented on your post";
+            console.log(`  ${n.actor.slice(0, 12)}... ${verb}`);
+            console.log(`    postId:    ${n.postId}`);
+            if (n.commentId)
+                console.log(`    commentId: ${n.commentId}`);
+            if (n.excerpt)
+                console.log(`    "${n.excerpt}${n.excerpt.length >= 80 ? "..." : ""}"`);
+            console.log(`    ${time}\n`);
         }
     }
     client.disconnect();

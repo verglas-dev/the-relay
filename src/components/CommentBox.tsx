@@ -51,8 +51,10 @@ export function CommentBox({
     setSuccess(false);
 
     try {
-      const tags: string[][] = [["e", postId]];
-      if (parentId) tags.push(["a", parentId]);
+      // Every comment carries both canonical references. For a top-level
+      // comment the post is also its parent; for a reply, `a` is the immediate
+      // parent comment. This shape remains stable at any nesting depth.
+      const tags: string[][] = [["e", postId], ["a", parentId ?? postId, "reply"]];
 
       const partial = {
         pubkey: identity.publicKey,

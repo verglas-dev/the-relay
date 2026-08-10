@@ -13,6 +13,20 @@ import type {
 /** Kind 10002 — profile theme. See PROTOCOL.md §4.8. */
 export const THEME_KIND = 10002;
 
+const EVENT_ID_RE = /^[0-9a-f]{64}$/;
+
+function assertEventId(value: string, label: string): void {
+  if (!EVENT_ID_RE.test(value)) {
+    throw new Error(`${label} must be a 64-character lowercase hex event ID`);
+  }
+}
+
+function assertCommentContent(content: string): void {
+  if (!content.trim()) {
+    throw new Error("Comment content cannot be empty");
+  }
+}
+
 interface PendingRequest {
   resolve: (events: RelayEvent[]) => void;
   reject: (err: Error) => void;
@@ -224,13 +238,59 @@ export class RelayClient {
   }
 
   /**
-   * Comment on a post.
+   * Publish a comment with explicit thread references.
+   *
+   * `rootPostId` is the kind-1 post at the root of the conversation and must
+   * remain the same at every nesting level. `parentId` is the event being
+   * answered: the root post for a top-level comment, or the immediately
+   * preceding comment for a nested reply.
+   *
+   * When you already have the parent event, prefer `replyTo()` so the SDK can
+   * derive the root instead of making the caller keep two IDs in sync.
    */
   comment(rootPostId: string, parentId: string, content: string): RelayEvent {
+    assertEventId(rootPostId, "rootPostId");
+    assertEventId(parentId, "parentId");
+    assertCommentContent(content);
     return this.createAndPublish(2, content, [
       ["e", rootPostId],
       ["a", parentId, "reply"],
     ]);
+  }
+
+  /**
+   * Reply to a post or comment event without manually copying its root ID.
+   *
+   * A kind-1 parent starts a new comment thread. A kind-2 parent must carry
+   * the protocol's required `e` root and `a` parent tags; its root is
+   * preserved while the new comment's `a` points at that immediate parent.
+   * Legacy malformed comments without `a` are rejected because their `e`
+   * might be another comment rather than the root.
+   */
+  replyTo(parent: RelayEvent, content: string): RelayEvent {
+    assertEventId(parent.id, "parent.id");
+
+    if (parent.kind === 1) {
+      return this.comment(parent.id, parent.id, content);
+    }
+    if (parent.kind !== 2) {
+      throw new Error(`Cannot reply to kind-${parent.kind} event ${parent.id}`);
+    }
+
+    const rootPostId = parent.tags.find((tag) => tag[0] === "e")?.[1];
+    if (!rootPostId) {
+      throw new Error(`Cannot reply to comment ${parent.id}: missing required e root tag`);
+    }
+    const parentEventId = parent.tags.find((tag) => tag[0] === "a")?.[1];
+    if (!parentEventId) {
+      throw new Error(
+        `Cannot derive a root from non-canonical comment ${parent.id}: ` +
+        "missing required a parent tag; use comment(correctRootPostId, parent.id, content)"
+      );
+    }
+    assertEventId(rootPostId, "parent e root tag");
+    assertEventId(parentEventId, "parent a parent tag");
+    return this.comment(rootPostId, parent.id, content);
   }
 
   /**
@@ -340,8 +400,9 @@ export class RelayClient {
    * Get a single event by ID.
    */
   async getEvent(eventId: string): Promise<RelayEvent | null> {
-    const events = await this.subscribe([{ ids: [eventId], limit: 1 }]);
-    return events[0] || null;
+    assertEventId(eventId, "eventId");
+    const events = await this.subscribe([{ ids: [eventId], limit: 5 }]);
+    return events.find((event) => event.id === eventId) ?? null;
   }
 
   // ─── Direct Messages (kind 9) ─────────────────────────────
