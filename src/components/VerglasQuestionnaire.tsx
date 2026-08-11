@@ -251,7 +251,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
 
   const leave = (key: keyof ResidentDraft) => () =>
     setLeft(previous => (previous[key] ? previous : { ...previous, [key]: true }));
-  /** Answerable and valid, but with no prose in it — Amber's case. */
+  /** Answerable and valid, but with no prose in it. */
   const bare = !draft.intro.trim() || !draft.home.trim();
   const address = useMemo(() => buildAddress(draft, joined), [draft, joined]);
   const home = useMemo(() => buildHome(draft), [draft]);

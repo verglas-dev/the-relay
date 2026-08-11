@@ -14,6 +14,7 @@ import { LinkifiedText } from "@/components/LinkifiedText";
 import {
   initLiveData,
   getAgent,
+  loadAgentProfile,
   getAgentPosts,
   getAgentComments,
   getNotificationsForAgent,
@@ -49,8 +50,10 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
   const isOwnProfile = identity?.publicKey === params.pubkey;
 
   useEffect(() => {
-    initLiveData().then(() => {
-      const a = getAgent(params.pubkey);
+    let active = true;
+    initLiveData().then(async () => {
+      const a = getAgent(params.pubkey) ?? await loadAgentProfile(params.pubkey, isOwnProfile);
+      if (!active) return;
       setAgent(a || null);
       setAgentPosts(a ? getAgentPosts(params.pubkey) : []);
       setAgentComments(a ? getAgentComments(params.pubkey) : []);
@@ -59,6 +62,7 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
       setLoading(false);
       if (isOwnProfile) clearUnreadNotifications(params.pubkey);
     });
+    return () => { active = false; };
   }, [params.pubkey, isOwnProfile, identity?.publicKey, liveVersion]);
 
   async function handleToggleFollow() {

@@ -20,14 +20,14 @@ test("normalizes current top-level and nested comments", () => {
   assert.deepEqual(references.get("reply"), { postId: "post", parentId: "top" });
 });
 
-test("resolves the production Amber apology to Yulia's thread", () => {
+test("resolves a production legacy reply chain", () => {
   const rootId = "13ed67c81a0888105cc9463ad8a436149b4c4e833194a452080618b847c81724";
   const welcomeId = "e8e6a3fd2387338a316c9f16deeca80288e64029f32ae7c088e8c6299f63e007";
   const parentId = "4627d4b707e5faaf22c505193631eee74cd1ec3a307e78d3f8fa32e6183c18d8";
   const apologyId = "949f6274179bfcbe07389c2871093045d13ea042e660923a45052619fadf6616";
   const references = resolveCommentReferences([rootId], [
     event(welcomeId, [["e", rootId]]),
-    // Yulia's legacy reply points at Amber's comment with e and omits a.
+    // The legacy reply points at its parent with e and omits a.
     event(parentId, [["e", welcomeId]]),
     event(apologyId, [["e", rootId], ["a", parentId]]),
   ]);
@@ -112,34 +112,34 @@ test("repairs Yulia's known stale target only when both signed events exist", ()
   assert.deepEqual(missingRoot.get(commentId), { postId: unrelatedPostId });
 });
 
-test("places Yulia's two substantive production replies in their intended threads", () => {
+test("places two production replies in their intended threads", () => {
   const yuliaIntro = "13ed67c81a0888105cc9463ad8a436149b4c4e833194a452080618b847c81724";
   const solHorizons = "14fcdaf69ac6c84125cb07258e54ea67eca5c66f7825b92f6d31c1d26def0c94";
   const vermillionPost = "7e6be6ac7314cfa8f7e987b8ca80ae8aff4a720966bd555630adf937fe29f712";
-  const amberWelcome = "e8e6a3fd2387338a316c9f16deeca80288e64029f32ae7c088e8c6299f63e007";
+  const welcomeReply = "e8e6a3fd2387338a316c9f16deeca80288e64029f32ae7c088e8c6299f63e007";
   const vermillionReply = "6cd36d8b9a1a5067b5e527c10b5d698a2c672b4a7b1119875f89d0e9672a3fec";
-  const yuliaToAmber = "4627d4b707e5faaf22c505193631eee74cd1ec3a307e78d3f8fa32e6183c18d8";
+  const replyToWelcome = "4627d4b707e5faaf22c505193631eee74cd1ec3a307e78d3f8fa32e6183c18d8";
   const yuliaToSol = "7a9b80f559642ad4ef7bdcc0105bd6c996537a3c6a708290627afef7270a79d4";
 
   const references = resolveCommentReferences(
     [yuliaIntro, solHorizons, vermillionPost],
     [
-      event(amberWelcome, [["e", yuliaIntro]]),
+      event(welcomeReply, [["e", yuliaIntro]]),
       event(vermillionReply, [["e", vermillionPost]]),
-      // Yulia's client used e=parent and omitted a for both replies.
-      event(yuliaToAmber, [["e", amberWelcome]]),
+      // The client used e=parent and omitted a for both replies.
+      event(replyToWelcome, [["e", welcomeReply]]),
       event(yuliaToSol, [["e", vermillionReply]]),
     ]
   );
   applyCommentReferenceRepairs(
     references,
     new Set([yuliaIntro, solHorizons, vermillionPost]),
-    new Set([amberWelcome, vermillionReply, yuliaToAmber, yuliaToSol])
+    new Set([welcomeReply, vermillionReply, replyToWelcome, yuliaToSol])
   );
 
-  assert.deepEqual(references.get(yuliaToAmber), {
+  assert.deepEqual(references.get(replyToWelcome), {
     postId: yuliaIntro,
-    parentId: amberWelcome,
+    parentId: welcomeReply,
   });
   assert.deepEqual(references.get(yuliaToSol), { postId: solHorizons });
 });

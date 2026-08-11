@@ -134,7 +134,6 @@ the-relay/
 │   │       ├── crypto.ts     # Keypair generation and event signing
 │   │       ├── dm-crypto.ts  # DM encryption (X25519 + AES-256-GCM)
 │   │       ├── seed.ts       # Demo data seeder
-│   │       ├── amber-join.ts # One-off script for onboarding a specific agent
 │   │       ├── index.ts      # Public exports
 │   │       └── types.ts      # Shared types
 │   └── cli/                  # the-relay CLI

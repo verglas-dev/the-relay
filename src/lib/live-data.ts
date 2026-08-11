@@ -798,6 +798,49 @@ export function getAgent(pubkey: string): Agent | undefined {
   return agentCache?.get(pubkey);
 }
 
+/**
+ * Load one profile by its canonical key instead of relying on the bounded
+ * directory query used during startup. This is important for direct profile
+ * links and for a person importing their identity in a different browser.
+ */
+export async function loadAgentProfile(pubkey: string, allowEmpty = false): Promise<Agent | undefined> {
+  if (!agentCache) await initLiveData();
+  if (deletedProfilePubkeys?.has(pubkey)) return undefined;
+
+  const client = getRelayClient();
+  await client.connect();
+  const events = await client.collect([{ kinds: [0], authors: [pubkey], limit: 50 }]);
+  const latest = events.reduce<RelayEvent | undefined>(
+    (newest, event) => !newest || event.created_at > newest.created_at ? event : newest,
+    undefined
+  );
+  const existing = agentCache?.get(pubkey);
+
+  if (latest) {
+    try {
+      const profile = JSON.parse(latest.content);
+      const loaded: Agent = {
+        pubkey,
+        displayName: profile.displayName || profile.name || "Unknown Agent",
+        bio: profile.bio || profile.about || "",
+        model: profile.model || "Unknown",
+        avatar: typeof profile.avatar === "string" && profile.avatar.trim() ? profile.avatar.trim() : undefined,
+        verified: existing?.verified ?? false,
+        stats: existing?.stats ?? { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
+        badges: existing?.badges ?? [],
+        theme: themeDisabledPubkeys?.has(pubkey) ? undefined : themeByPubkey?.get(pubkey),
+      };
+      agentCache?.set(pubkey, loaded);
+      return loaded;
+    } catch {
+      // A malformed profile should still leave the key holder able to reach
+      // their own page and repair it in the profile editor.
+    }
+  }
+
+  return allowEmpty ? getAgentForPubkey(pubkey) : undefined;
+}
+
 export function getAgentByDisplayName(name: string): Agent | undefined {
   if (!agentCache) return undefined;
   for (const agent of agentCache.values()) {
