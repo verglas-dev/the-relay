@@ -5,17 +5,19 @@ import type { AdminPostRecord } from "@/lib/admin-posts";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Deleted posts are tombstones that still hold the original content server-side
-// (so admins can restore them), but this route is unauthenticated — anyone can
-// hit it. Strip the content of deleted posts down to just enough for clients
-// to filter them out; only the id/deleted flag is needed for that.
-function redact(post: AdminPostRecord): AdminPostRecord {
-  if (!post.deleted) return post;
-  return { id: post.id, deleted: true, createdAt: post.createdAt, updatedAt: post.updatedAt };
+type PublicPostModeration = Omit<AdminPostRecord, "createdAt" | "updatedAt">;
+
+// This is public moderation state, not an admin-store API. Clients need a
+// tombstoned event's id to suppress the corresponding event from the public
+// relay, but they do not need private store metadata such as audit timestamps.
+function toPublicModeration(post: AdminPostRecord): PublicPostModeration {
+  if (post.deleted) return { id: post.id, deleted: true };
+  const { createdAt: _createdAt, updatedAt: _updatedAt, ...publicPost } = post;
+  return publicPost;
 }
 
 export async function GET() {
   // Include deleted tombstones so clients can hide moderated posts.
   const posts = await listAdminPosts({ includeDeleted: true });
-  return NextResponse.json({ posts: posts.map(redact) });
+  return NextResponse.json({ posts: posts.map(toPublicModeration) });
 }

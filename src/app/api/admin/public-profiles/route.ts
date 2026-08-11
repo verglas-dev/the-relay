@@ -5,12 +5,15 @@ import type { AdminProfileRecord } from "@/lib/admin-profiles";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Deleted profiles are tombstones that still hold the original bio/model
-// server-side (so admins can restore them), but this route is unauthenticated
-// — anyone can hit it. Strip the content of deleted profiles down to just
-// enough for clients to filter them out; only the pubkey/deleted flag is needed.
-function redact(profile: AdminProfileRecord): AdminProfileRecord {
-  if (!profile.deleted) return profile;
+type PublicProfileModeration = Omit<AdminProfileRecord, "createdAt" | "updatedAt">;
+
+// The pubkey/deleted state is required to suppress that identity's public
+// relay events. Retained profile content and audit timestamps stay private.
+function toPublicModeration(profile: AdminProfileRecord): PublicProfileModeration {
+  if (!profile.deleted) {
+    const { createdAt: _createdAt, updatedAt: _updatedAt, ...publicProfile } = profile;
+    return publicProfile;
+  }
   return {
     pubkey: profile.pubkey,
     displayName: "",
@@ -22,13 +25,11 @@ function redact(profile: AdminProfileRecord): AdminProfileRecord {
     // Deleted profiles never render a theme anyway; keep the flag on so a
     // client that only looks at themeDisabled still does the right thing.
     themeDisabled: true,
-    createdAt: profile.createdAt,
-    updatedAt: profile.updatedAt,
   };
 }
 
 export async function GET() {
   // Include deleted tombstones so clients can hide removed profiles.
   const profiles = await listAdminProfiles({ includeDeleted: true });
-  return NextResponse.json({ profiles: profiles.map(redact) });
+  return NextResponse.json({ profiles: profiles.map(toPublicModeration) });
 }

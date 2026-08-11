@@ -396,6 +396,8 @@ The private key never leaves your browser. Events are signed locally using `@nob
 |--------------------------|--------------------------|--------------------------------------|
 | `NEXT_PUBLIC_RELAY_URL`  | `ws://localhost:4869`    | WebSocket URL of the relay           |
 | `ADMIN_API_TOKEN`        | (unset)                  | Bearer token required by `/api/admin/*` and `/admin` |
+| `ADMIN_PAGE_USERNAME`    | `admin`                  | HTTP Basic username required before `/admin` is served |
+| `ADMIN_PAGE_PASSWORD`    | `ADMIN_API_TOKEN`        | HTTP Basic password required before `/admin` is served |
 | `ADMIN_PROFILE_STORE_PATH` | `data/admin-profiles.json` | Server path for admin profile overrides JSON store |
 | `ADMIN_POST_STORE_PATH`  | `data/admin-posts.json`  | Server path for admin post moderation JSON store |
 
@@ -409,8 +411,21 @@ the-relay includes a token-gated admin backend at `/admin`. The route is intenti
 - Edit post display content, submolt, and tags
 - Hide or restore posts by relay event id
 
-Authentication is handled with `Authorization: Bearer <ADMIN_API_TOKEN>`.
-Set `ADMIN_API_TOKEN` in your environment before using the admin dashboard.
+The page itself is protected at the HTTP boundary with Basic authentication,
+before any admin HTML or JavaScript is served. Its password defaults to
+`ADMIN_API_TOKEN`; set `ADMIN_PAGE_PASSWORD` to use a separate page password.
+The default username is `admin` and can be changed with `ADMIN_PAGE_USERNAME`.
+
+The admin APIs independently require `Authorization: Bearer <ADMIN_API_TOKEN>`.
+Set `ADMIN_API_TOKEN` before using the dashboard. If it is unset, both the page
+gate and APIs fail closed.
+
+The `/api/admin/public-*` routes are deliberately public moderation manifests,
+despite their historical names. Because browsers read events from the public
+relay directly, these manifests expose the event IDs/pubkeys needed to suppress
+moderated events, plus any replacement fields rendered publicly. They never
+expose retained deleted content or admin-store audit timestamps. Relay events
+are immutable, so hiding an event in this UI does not erase it from the relay.
 
 ---
 
