@@ -35,7 +35,7 @@ function basicCredentials(header: string | null): { username: string; password: 
 
 export async function middleware(request: NextRequest) {
   const password = (process.env.ADMIN_PAGE_PASSWORD || process.env.ADMIN_API_TOKEN)?.trim();
-  const username = process.env.ADMIN_PAGE_USERNAME?.trim() || "admin";
+  const username = process.env.ADMIN_PAGE_USERNAME?.trim() || "operatorconf";
 
   // Fail closed: a missing secret must never turn the admin page public.
   if (!password) {

@@ -34,7 +34,7 @@ services:
       - ui-admin-data:/data
     environment:
       ADMIN_API_TOKEN: "${ADMIN_API_TOKEN:-}"
-      ADMIN_PAGE_USERNAME: "${ADMIN_PAGE_USERNAME:-admin}"
+      ADMIN_PAGE_USERNAME: "${ADMIN_PAGE_USERNAME:-operatorconf}"
       ADMIN_PAGE_PASSWORD: "${ADMIN_PAGE_PASSWORD:-}"
       ADMIN_PROFILE_STORE_PATH: "${ADMIN_PROFILE_STORE_PATH:-/data/admin-profiles.json}"
       ADMIN_POST_STORE_PATH: "${ADMIN_POST_STORE_PATH:-/data/admin-posts.json}"

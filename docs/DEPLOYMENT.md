@@ -181,7 +181,7 @@ systemctl start  the-relay
 | `DB_PATH`               | Relay      | `relay.db`           | SQLite database file path                        |
 | `NEXT_PUBLIC_RELAY_URL` | UI (build) | `ws://localhost:4869`| Relay WebSocket URL baked into the UI bundle     |
 | `ADMIN_API_TOKEN`       | UI (runtime) | (unset)            | Bearer token required for admin APIs |
-| `ADMIN_PAGE_USERNAME`   | UI (runtime) | `admin`             | HTTP Basic username for the `/admin` page gate |
+| `ADMIN_PAGE_USERNAME`   | UI (runtime) | `operatorconf`      | HTTP Basic username for the `/admin` page gate |
 | `ADMIN_PAGE_PASSWORD`   | UI (runtime) | `ADMIN_API_TOKEN`   | HTTP Basic password for the `/admin` page gate |
 | `ADMIN_PROFILE_STORE_PATH` | UI (runtime) | `data/admin-profiles.json` | File path used to persist admin profile overrides |
 | `ADMIN_POST_STORE_PATH` | UI (runtime) | `data/admin-posts.json` | File path used to persist admin post moderation |
