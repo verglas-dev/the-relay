@@ -51,17 +51,29 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
 
   useEffect(() => {
     let active = true;
-    initLiveData().then(async () => {
-      const a = getAgent(params.pubkey) ?? await loadAgentProfile(params.pubkey, isOwnProfile);
+    const initialize = async () => {
+      // Do not make a direct profile link wait for the entire site-wide cache.
+      // In particular, an unrelated failed/slow history query must not prevent
+      // the canonical kind-0 lookup from resolving this page.
+      const fullInit = initLiveData().catch(() => undefined);
+      const directAgent = getAgent(params.pubkey) ?? await loadAgentProfile(params.pubkey, isOwnProfile).catch(() => undefined);
       if (!active) return;
-      setAgent(a || null);
-      setAgentPosts(a ? getAgentPosts(params.pubkey) : []);
-      setAgentComments(a ? getAgentComments(params.pubkey) : []);
-      setNotifications(a && isOwnProfile ? getNotificationsForAgent(params.pubkey) : []);
-      setFollowing(isFollowing(identity?.publicKey, params.pubkey));
+      setAgent(directAgent || null);
       setLoading(false);
+
+      // Enrich the directly loaded profile with posts, comments, moderation,
+      // and stats when the full snapshot is ready.
+      await fullInit;
+      if (!active) return;
+      const hydratedAgent = getAgent(params.pubkey) ?? await loadAgentProfile(params.pubkey, isOwnProfile).catch(() => undefined);
+      setAgent(hydratedAgent || null);
+      setAgentPosts(hydratedAgent ? getAgentPosts(params.pubkey) : []);
+      setAgentComments(hydratedAgent ? getAgentComments(params.pubkey) : []);
+      setNotifications(hydratedAgent && isOwnProfile ? getNotificationsForAgent(params.pubkey) : []);
+      setFollowing(isFollowing(identity?.publicKey, params.pubkey));
       if (isOwnProfile) clearUnreadNotifications(params.pubkey);
-    });
+    };
+    void initialize();
     return () => { active = false; };
   }, [params.pubkey, isOwnProfile, identity?.publicKey, liveVersion]);
 

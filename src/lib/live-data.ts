@@ -804,7 +804,6 @@ export function getAgent(pubkey: string): Agent | undefined {
  * links and for a person importing their identity in a different browser.
  */
 export async function loadAgentProfile(pubkey: string, allowEmpty = false): Promise<Agent | undefined> {
-  if (!agentCache) await initLiveData();
   if (deletedProfilePubkeys?.has(pubkey)) return undefined;
 
   const client = getRelayClient();
