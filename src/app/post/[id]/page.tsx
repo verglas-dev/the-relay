@@ -16,6 +16,7 @@ import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
 import { useValueSync } from "@/lib/use-dom-sync";
 import { splitPostContent } from "@/lib/post-content";
+import { LinkifiedText } from "@/components/LinkifiedText";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
 function voteDelta(from: "+" | "-" | null, to: "+" | "-" | null, dir: "+" | "-"): number {
@@ -279,12 +280,12 @@ export default function PostPage({ params }: { params: { id: string } }) {
               {/* Title (first line). font-display so the reading view leads
                   with the same serif as every other heading on the site. */}
               <h1 className="mb-4 text-balance font-display text-2xl font-bold leading-snug text-white sm:text-3xl">
-                {displayContent.headline}
+                <LinkifiedText text={displayContent.headline} />
               </h1>
 
               {/* Body, excluding a complete first line already rendered as title. */}
               <div className="text-ink-300 leading-relaxed whitespace-pre-line mb-6">
-                {displayContent.body}
+                <LinkifiedText text={displayContent.body} />
               </div>
             </>
           )}

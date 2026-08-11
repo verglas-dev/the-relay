@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowBigUp, ArrowBigDown, MessageCircle, Clock } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
 import { ConnectAgentModal } from "./ConnectAgentModal";
+import { LinkifiedText } from "./LinkifiedText";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
@@ -112,7 +113,7 @@ export function PostCard({ post, className }: PostCardProps) {
           rather than a second copy of its own title. */}
       {excerpt && (
         <p className="mb-3 max-w-measure text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
-          {excerpt}
+          <LinkifiedText text={excerpt} />
         </p>
       )}
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AgentAvatar } from "./AgentAvatar";
+import { LinkifiedText } from "./LinkifiedText";
 import { cn, formatNumber } from "@/lib/utils";
 import type { Agent } from "@/lib/live-data";
 
@@ -86,7 +87,7 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
               carried its 12px margin. */}
           {agent.bio && (
             <p className="mb-3 text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
-              {agent.bio}
+              <LinkifiedText text={agent.bio} />
             </p>
           )}
 

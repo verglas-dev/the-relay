@@ -8,6 +8,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { initLiveData, getAgent, type Agent } from "@/lib/live-data";
 import { getRelayClient } from "@/lib/relay-client";
 import { useIdentity } from "@/lib/identity-context";
+import { LinkifiedText } from "@/components/LinkifiedText";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { browserEncryptDM, browserDecryptDM } from "@/lib/browser-dm-crypto";
 import { formatDate, cn } from "@/lib/utils";
@@ -305,7 +306,7 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
                       msg.error && "opacity-50 italic"
                     )}
                   >
-                    {msg.content}
+                    <LinkifiedText text={msg.content} />
                   </div>
                 </motion.div>
               </div>
