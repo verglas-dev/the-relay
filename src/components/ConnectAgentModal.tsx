@@ -5,16 +5,47 @@ import { X, Armchair, Key, Loader2 } from "lucide-react";
 import {
   generateBrowserIdentity,
   importIdentity,
+  publicKeyFor,
   signBrowserEvent,
 } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
-import { resetLiveData } from "@/lib/live-data";
+import { loadAgentProfile, resetLiveData } from "@/lib/live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { useValueSync } from "@/lib/use-dom-sync";
 import { StepAway } from "./StepAway";
 
 interface Props {
   onClose: () => void;
+}
+
+/**
+ * Keep password managers out of these two boxes.
+ *
+ * /admin asks for ADMIN_API_TOKEN in a password field inside a form, so every
+ * browser that has ever unlocked it offers to save that token as this site's
+ * password. A bare `type="password"` box on any other page of the same origin
+ * is then a filling target — and this modal's is the box where a returning
+ * visitor pastes their identity key. Filling is silent, `useValueSync` folds
+ * whatever appears into state because that is exactly what it is for, and the
+ * visitor ends up sitting down as a brand new stranger instead of returning as
+ * themselves. It has already happened three times on the live site: two of the
+ * junk profiles are named "admin" and the admin token itself.
+ */
+const NO_AUTOFILL = {
+  autoComplete: "off",
+  "data-1p-ignore": "true",
+  "data-lpignore": "true",
+  "data-bwignore": "true",
+  "data-form-type": "other",
+} as const;
+
+/**
+ * A name nobody would type. A saved password or an identity key landing in the
+ * name box must not become a public display name — the profile it creates is
+ * permanent, and in the token's case it publishes a live secret to the relay.
+ */
+function looksLikeSecret(value: string): boolean {
+  return /^[0-9a-f]{32,}$/i.test(value);
 }
 
 export function ConnectAgentModal({ onClose }: Props) {
@@ -30,13 +61,27 @@ export function ConnectAgentModal({ onClose }: Props) {
   const keyRef = useRef<HTMLInputElement>(null);
   // An agent filling these fields programmatically must not be told they are
   // empty.
-  useValueSync(nameRef, !identity && showNewIdentity, name, value => setName(value));
-  useValueSync(keyRef, !identity && !showNewIdentity, importKey, value => { setImportKey(value); setImportError(""); });
+  useValueSync(nameRef, !identity && showNewIdentity, name, value => { setName(value); setNameError(""); });
+  useValueSync(keyRef, !identity && !showNewIdentity, importKey, value => { setImportKey(value); setImportError(""); setUnknownKey(false); });
   const [importError, setImportError] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [checking, setChecking] = useState(false);
+  // The key box starts read-only so nothing can fill it before a person asks.
+  const [keyLocked, setKeyLocked] = useState(true);
+  // Set when a key is valid but the relay knows no profile published with it.
+  const [unknownKey, setUnknownKey] = useState(false);
 
   async function handleSitDown() {
     const chosen = name.trim();
     if (!chosen || joining) return;
+    if (looksLikeSecret(chosen)) {
+      setNameError(
+        "That looks like a key or a password rather than a name — your browser may have filled it in. " +
+        "Clear the box and type the name you want to be known by."
+      );
+      return;
+    }
+    setNameError("");
     setJoining(true);
     // The keypair is plumbing: it comes into being here, silently, and the
     // visitor only ever sees the name they picked. The seat works the moment
@@ -67,20 +112,40 @@ export function ConnectAgentModal({ onClose }: Props) {
     onClose();
   }
 
-  function handleImport() {
+  /**
+   * @param force  Sit down even though the relay has no profile for this key.
+   */
+  async function handleImport(force = false) {
     setImportError("");
+    const key = importKey.trim();
     try {
-      if (!/^[0-9a-f]{64}$/.test(importKey.trim())) {
+      if (!/^[0-9a-f]{64}$/.test(key)) {
         setImportError("That doesn't look like an identity key — it should be 64 characters of hex.");
         return;
       }
-      const id = importIdentity(importKey.trim());
+
+      // Look before importing: the import overwrites whatever key this browser
+      // already held, and a key with no profile behind it is nearly always a
+      // wrong paste or a field something else filled in. Say so instead of
+      // seating them as a regular nobody has ever seen.
+      if (!force) {
+        setChecking(true);
+        const found = await loadAgentProfile(publicKeyFor(key)).catch(() => undefined);
+        setChecking(false);
+        if (!found) {
+          setUnknownKey(true);
+          return;
+        }
+      }
+
+      const id = importIdentity(key);
       setIdentity(id);
       // Rehydrate the existing kind-0 profile for this public key. Importing a
       // key never publishes a profile and never creates a second identity.
       resetLiveData();
       onClose();
     } catch {
+      setChecking(false);
       setImportError("That key couldn't be read.");
     }
   }
@@ -138,13 +203,16 @@ export function ConnectAgentModal({ onClose }: Props) {
                 </p>
                 <input
                   ref={nameRef}
+                  name="relay-display-name"
+                  {...NO_AUTOFILL}
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => { setName(e.target.value); setNameError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") handleSitDown(); }}
                   placeholder="What should we call you?"
                   autoFocus
                   className="w-full px-4 py-2.5 rounded-xl text-sm bg-ink-900/60 border border-ink-800/50 text-white placeholder:text-ink-600 focus:outline-none focus:border-vb-500/60 transition-colors"
                 />
+                {nameError && <p className="text-xs text-red-400 -mt-2">{nameError}</p>}
                 <button
                   onClick={handleSitDown}
                   disabled={!name.trim() || joining}
@@ -164,17 +232,41 @@ export function ConnectAgentModal({ onClose }: Props) {
                   as the same regular.
                 </p>
                 <div>
+                  {/* Read-only until the visitor touches it: a password manager
+                      fills on load and skips fields it cannot write to. It is
+                      deliberately not auto-focused, because focusing it would
+                      unlock it again before anyone had asked for it. */}
                   <input type="password" ref={keyRef} value={importKey}
-                    onChange={(e) => { setImportKey(e.target.value); setImportError(""); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleImport(); }}
-                    placeholder="Your identity key…" autoFocus
+                    name="relay-identity-key" {...NO_AUTOFILL}
+                    readOnly={keyLocked}
+                    onFocus={() => setKeyLocked(false)}
+                    onPointerDown={() => setKeyLocked(false)}
+                    onChange={(e) => { setImportKey(e.target.value); setImportError(""); setUnknownKey(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") void handleImport(); }}
+                    placeholder="Your identity key…"
                     className="w-full px-3 py-2.5 rounded-xl text-sm font-mono bg-ink-900/60 border border-ink-800/50 text-white placeholder:text-ink-600 focus:outline-none focus:border-vb-500/60 transition-colors" />
                   {importError && <p className="text-xs text-red-400 mt-1.5">{importError}</p>}
                 </div>
-                <button onClick={handleImport} disabled={!importKey.trim()}
+
+                {unknownKey && (
+                  <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3 space-y-2">
+                    <p className="text-xs text-amber-400/90 leading-relaxed">
+                      That is a well-formed key, but nobody has published a profile with it. If your
+                      browser filled the box for you, or the key came from somewhere else, check it
+                      before you sit down — returning with the wrong key makes a new stranger rather
+                      than bringing your profile back.
+                    </p>
+                    <button type="button" onClick={() => void handleImport(true)}
+                      className="text-xs text-ink-400 hover:text-ink-200 underline underline-offset-2 transition-colors">
+                      Use this key anyway
+                    </button>
+                  </div>
+                )}
+
+                <button onClick={() => void handleImport()} disabled={!importKey.trim() || checking}
                   className="w-full btn-primary flex items-center justify-center gap-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
-                  <Key className="w-4 h-4" />
-                  Return With My Key
+                  {checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                  {checking ? "Looking you up…" : "Return With My Key"}
                 </button>
                 <button onClick={() => setShowNewIdentity(true)} className="w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors">
                   I&apos;m new — create a different identity

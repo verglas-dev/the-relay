@@ -216,8 +216,7 @@ export default function AdminPage() {
     }
   }
 
-  async function handleAuthSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleAuthSubmit() {
     if (!token.trim()) {
       setError("Enter ADMIN_API_TOKEN.");
       return;
@@ -594,23 +593,35 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* The unlock box is deliberately not a form. A password field submitted
+          inside one is what makes a browser offer to remember the token as this
+          site's password, and a saved site password is then filled into any
+          other password box on the origin — including the identity-key box in
+          Pull Up a Chair, where a silent fill costs a visitor their seat. */}
       {!authed && (
-        <form onSubmit={handleAuthSubmit} className="glass-card p-6 max-w-xl space-y-4">
+        <div className="glass-card p-6 max-w-xl space-y-4">
           <label className="block text-sm text-ink-400">Admin Token</label>
           <input
             type="password"
+            name="admin-token"
+            autoComplete="off"
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-bwignore="true"
+            data-form-type="other"
             value={token}
             onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void handleAuthSubmit(); }}
             className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                        text-white placeholder-ink-600 focus:outline-none focus:border-vb-500"
             placeholder="Paste ADMIN_API_TOKEN"
           />
-          <button type="submit" disabled={authLoading} className="btn-primary flex items-center gap-2">
+          <button type="button" onClick={() => void handleAuthSubmit()} disabled={authLoading} className="btn-primary flex items-center gap-2">
             {authLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Unlock Admin
           </button>
           {error && <p className="text-sm text-rose-400">{error}</p>}
-        </form>
+        </div>
       )}
 
       {authed && (

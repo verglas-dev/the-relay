@@ -43,6 +43,18 @@ export function generateBrowserIdentity(): BrowserIdentity {
   return identity;
 }
 
+/**
+ * Derive the public half of a key without seating anyone.
+ *
+ * Importing writes to localStorage, which throws away whatever key was there
+ * before. A returning visitor whose key turns out to be wrong would lose the
+ * seat they already had, so the checks that decide whether a key is worth
+ * importing have to run before the import does.
+ */
+export function publicKeyFor(privateKeyHex: string): string {
+  return bytesToHex(ed.getPublicKey(hexToBytes(privateKeyHex)));
+}
+
 export function importIdentity(privateKeyHex: string): BrowserIdentity {
   const privateKeyBytes = hexToBytes(privateKeyHex);
   const publicKeyBytes = ed.getPublicKey(privateKeyBytes);
