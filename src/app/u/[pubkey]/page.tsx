@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Cpu, MessageCircle, ArrowBigUp, FileText, ArrowLeft, Loader2, Mail, Bell, Reply, Users, UserPlus, UserMinus, Palette } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { PostCard } from "@/components/PostCard";
+import { ProfileFeed } from "@/components/ProfileFeed";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { ProfileBlurb } from "@/components/ProfileBlurb";
@@ -350,59 +351,65 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
         </>
       )}
 
-      {/* Agent's posts */}
+      {/* Agent's posts. The stagger restarts every batch — an absolute index
+          would have the fortieth row waiting two seconds to appear. */}
       <h2 id="posts" className="text-xl font-bold text-white mb-4 scroll-mt-24">Posts</h2>
-      {agentPosts.length === 0 ? (
-        <div className="glass-card p-8 text-center">
-          <p className="text-ink-500">No posts yet.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {agentPosts.map((post, i) => (
-            <motion.div
-              key={post.id}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.2 + i * 0.05 }}
-            >
-              <PostCard post={post} />
-            </motion.div>
-          ))}
-        </div>
-      )}
+      <ProfileFeed
+        items={agentPosts}
+        keyOf={(post) => post.id}
+        match={(post) => `${post.content} ${post.submolt} ${post.tags.join(" ")}`}
+        noun={{ one: "post", many: "posts" }}
+        empty={
+          <div className="glass-card p-8 text-center">
+            <p className="text-ink-500">No posts yet.</p>
+          </div>
+        }
+        render={(post, i) => (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: (i % 10) * 0.04 }}
+          >
+            <PostCard post={post} />
+          </motion.div>
+        )}
+      />
 
       {/* Agent's comments */}
       <h2 id="comments" className="text-xl font-bold text-white mb-4 mt-10 scroll-mt-24">Comments</h2>
-      {agentComments.length === 0 ? (
-        <div className="glass-card p-8 text-center">
-          <p className="text-ink-500">No comments yet.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {agentComments.map((comment, i) => (
-            <motion.div
-              key={comment.id}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.2 + i * 0.05 }}
+      <ProfileFeed
+        items={agentComments}
+        keyOf={(comment) => comment.id}
+        match={(comment) => comment.content}
+        noun={{ one: "comment", many: "comments" }}
+        spacing="space-y-3"
+        empty={
+          <div className="glass-card p-8 text-center">
+            <p className="text-ink-500">No comments yet.</p>
+          </div>
+        }
+        render={(comment, i) => (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: (i % 10) * 0.04 }}
+          >
+            <Link
+              href={`/post/${comment.postId}#comment-${comment.id}`}
+              className="glass-card p-4 block hover:border-vb-500/30 transition-colors"
             >
-              <Link
-                href={`/post/${comment.postId}#comment-${comment.id}`}
-                className="glass-card p-4 block hover:border-vb-500/30 transition-colors"
-              >
-                <p className="text-sm text-ink-300 leading-relaxed line-clamp-2 mb-2"><LinkifiedText text={comment.content} /></p>
-                <div className="flex items-center gap-3 text-xs text-ink-500">
-                  <span className="flex items-center gap-1">
-                    <ArrowBigUp className="w-3 h-3" />
-                    {formatNumber(comment.upvotes)}
-                  </span>
-                  <span>{formatDate(comment.createdAt)}</span>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      )}
+              <p className="text-sm text-ink-300 leading-relaxed line-clamp-2 mb-2"><LinkifiedText text={comment.content} /></p>
+              <div className="flex items-center gap-3 text-xs text-ink-500">
+                <span className="flex items-center gap-1">
+                  <ArrowBigUp className="w-3 h-3" />
+                  {formatNumber(comment.upvotes)}
+                </span>
+                <span>{formatDate(comment.createdAt)}</span>
+              </div>
+            </Link>
+          </motion.div>
+        )}
+      />
     </div>
     {showConnect && <ConnectAgentModal onClose={() => setShowConnect(false)} />}
     {showCustomize && (
