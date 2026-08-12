@@ -122,6 +122,36 @@ let refreshQueuedDuringInit = false;
 
 const LIVE_DATA_KINDS = [0, 1, 2, 3, FOLLOW_KIND, UNFOLLOW_KIND, THEME_KIND];
 
+/**
+ * Profile events were JSON in the original protocol, but a few early clients
+ * published their biography as plain text. Those events are still signed,
+ * valid profiles and, because the newest event wins, ignoring one can make an
+ * otherwise healthy profile disappear. Keep the compatibility rule in one
+ * place so directory and direct-profile loading cannot disagree.
+ */
+function profileFields(content: string): {
+  displayName?: string;
+  bio: string;
+  model?: string;
+  avatar?: string;
+} | null {
+  try {
+    const profile = JSON.parse(content) as unknown;
+    if (!profile || typeof profile !== "object" || Array.isArray(profile)) return null;
+    const fields = profile as Record<string, unknown>;
+    const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
+    return {
+      displayName: text(fields.displayName) || text(fields.name) || undefined,
+      bio: text(fields.bio) || text(fields.about),
+      model: text(fields.model) || undefined,
+      avatar: text(fields.avatar) || undefined,
+    };
+  } catch {
+    const bio = content.trim();
+    return bio ? { bio } : null;
+  }
+}
+
 // ─── Initialization ──────────────────────────────────────────
 
 export async function initLiveData(): Promise<void> {
@@ -159,22 +189,19 @@ async function _doInit(): Promise<void> {
     const existingTimestamp = latestProfileTimestamp.get(event.pubkey);
     if (existingTimestamp !== undefined && existingTimestamp >= event.created_at) continue;
 
-    try {
-      const profile = JSON.parse(event.content);
-      latestProfileTimestamp.set(event.pubkey, event.created_at);
-      agentCache.set(event.pubkey, {
-        pubkey: event.pubkey,
-        displayName: profile.displayName || profile.name || "Unknown Agent",
-        bio: profile.bio || profile.about || "",
-        model: profile.model || "Unknown",
-        avatar: typeof profile.avatar === "string" && profile.avatar.trim() ? profile.avatar.trim() : undefined,
-        verified: false,
-        stats: { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
-        badges: [],
-      });
-    } catch {
-      // skip malformed profiles
-    }
+    const profile = profileFields(event.content);
+    if (!profile) continue;
+    latestProfileTimestamp.set(event.pubkey, event.created_at);
+    agentCache.set(event.pubkey, {
+      pubkey: event.pubkey,
+      displayName: profile.displayName || event.pubkey.slice(0, 8) + "...",
+      bio: profile.bio,
+      model: profile.model || "Unknown",
+      avatar: profile.avatar,
+      verified: false,
+      stats: { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
+      badges: [],
+    });
   }
 
   // Apply admin-managed profile overlays after relay profile hydration.
@@ -816,14 +843,14 @@ export async function loadAgentProfile(pubkey: string, allowEmpty = false): Prom
   const existing = agentCache?.get(pubkey);
 
   if (latest) {
-    try {
-      const profile = JSON.parse(latest.content);
+    const profile = profileFields(latest.content);
+    if (profile) {
       const loaded: Agent = {
         pubkey,
-        displayName: profile.displayName || profile.name || "Unknown Agent",
-        bio: profile.bio || profile.about || "",
-        model: profile.model || "Unknown",
-        avatar: typeof profile.avatar === "string" && profile.avatar.trim() ? profile.avatar.trim() : undefined,
+        displayName: profile.displayName || existing?.displayName || pubkey.slice(0, 8) + "...",
+        bio: profile.bio,
+        model: profile.model || existing?.model || "Unknown",
+        avatar: profile.avatar || existing?.avatar,
         verified: existing?.verified ?? false,
         stats: existing?.stats ?? { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
         badges: existing?.badges ?? [],
@@ -831,9 +858,6 @@ export async function loadAgentProfile(pubkey: string, allowEmpty = false): Prom
       };
       agentCache?.set(pubkey, loaded);
       return loaded;
-    } catch {
-      // A malformed profile should still leave the key holder able to reach
-      // their own page and repair it in the profile editor.
     }
   }
 
