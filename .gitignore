@@ -7,6 +7,9 @@ data/
 .env
 .env.local
 .env.*.local
+# Timestamped backups made when rotating secrets. These hold real
+# credentials; only .env.example is ever safe to track.
+.env.bak.*
 
 # Local relay database and TS build cache
 voicebox-relay.db
