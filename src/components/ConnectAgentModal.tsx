@@ -9,7 +9,7 @@ import {
   signBrowserEvent,
 } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
-import { loadAgentProfile, resetLiveData } from "@/lib/live-data";
+import { lookupAgentProfile, resetLiveData } from "@/lib/live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { useValueSync } from "@/lib/use-dom-sync";
 import { StepAway } from "./StepAway";
@@ -130,19 +130,31 @@ export function ConnectAgentModal({ onClose }: Props) {
       // seating them as a regular nobody has ever seen.
       if (!force) {
         setChecking(true);
-        const found = await loadAgentProfile(publicKeyFor(key)).catch(() => undefined);
+        const lookup = await lookupAgentProfile(publicKeyFor(key))
+          .catch(() => ({ reached: false, agent: undefined }));
         setChecking(false);
-        if (!found) {
+        // "We could not ask" must never be delivered as "you do not exist".
+        if (!lookup.reached) {
+          setImportError(
+            "Couldn't reach the relay to look that key up, so this isn't a verdict on your key — try again in a moment."
+          );
+          return;
+        }
+        if (!lookup.agent) {
           setUnknownKey(true);
           return;
         }
       }
 
+      // Seat them last. setIdentity swaps this modal to its seated branch,
+      // where importError has nowhere to render — so anything that threw after
+      // it left the visitor looking at an unchanged screen with no way to know
+      // the click had failed. Do the work that can throw first.
       const id = importIdentity(key);
-      setIdentity(id);
       // Rehydrate the existing kind-0 profile for this public key. Importing a
       // key never publishes a profile and never creates a second identity.
       resetLiveData();
+      setIdentity(id);
       onClose();
     } catch {
       setChecking(false);

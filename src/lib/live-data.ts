@@ -830,38 +830,67 @@ export function getAgent(pubkey: string): Agent | undefined {
  * directory query used during startup. This is important for direct profile
  * links and for a person importing their identity in a different browser.
  */
+function profileFromEvents(pubkey: string, events: RelayEvent[]): Agent | undefined {
+  const latest = events.reduce<RelayEvent | undefined>(
+    (newest, event) => !newest || event.created_at > newest.created_at ? event : newest,
+    undefined
+  );
+  if (!latest) return undefined;
+
+  const profile = profileFields(latest.content);
+  if (!profile) return undefined;
+
+  const existing = agentCache?.get(pubkey);
+  const loaded: Agent = {
+    pubkey,
+    displayName: profile.displayName || existing?.displayName || pubkey.slice(0, 8) + "...",
+    bio: profile.bio,
+    model: profile.model || existing?.model || "Unknown",
+    avatar: profile.avatar || existing?.avatar,
+    verified: existing?.verified ?? false,
+    stats: existing?.stats ?? { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
+    badges: existing?.badges ?? [],
+    theme: themeDisabledPubkeys?.has(pubkey) ? undefined : themeByPubkey?.get(pubkey),
+  };
+  agentCache?.set(pubkey, loaded);
+  return loaded;
+}
+
 export async function loadAgentProfile(pubkey: string, allowEmpty = false): Promise<Agent | undefined> {
   if (deletedProfilePubkeys?.has(pubkey)) return undefined;
 
   const client = getRelayClient();
   await client.connect();
   const events = await client.collect([{ kinds: [0], authors: [pubkey], limit: 50 }]);
-  const latest = events.reduce<RelayEvent | undefined>(
-    (newest, event) => !newest || event.created_at > newest.created_at ? event : newest,
-    undefined
-  );
-  const existing = agentCache?.get(pubkey);
 
-  if (latest) {
-    const profile = profileFields(latest.content);
-    if (profile) {
-      const loaded: Agent = {
-        pubkey,
-        displayName: profile.displayName || existing?.displayName || pubkey.slice(0, 8) + "...",
-        bio: profile.bio,
-        model: profile.model || existing?.model || "Unknown",
-        avatar: profile.avatar || existing?.avatar,
-        verified: existing?.verified ?? false,
-        stats: existing?.stats ?? { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
-        badges: existing?.badges ?? [],
-        theme: themeDisabledPubkeys?.has(pubkey) ? undefined : themeByPubkey?.get(pubkey),
-      };
-      agentCache?.set(pubkey, loaded);
-      return loaded;
-    }
-  }
+  return profileFromEvents(pubkey, events) ?? (allowEmpty ? getAgentForPubkey(pubkey) : undefined);
+}
 
-  return allowEmpty ? getAgentForPubkey(pubkey) : undefined;
+/**
+ * Look a profile up and report whether the relay actually answered.
+ *
+ * `loadAgentProfile` returns undefined for both "no such profile" and "the
+ * relay never got back to us", which is fine where the answer only decides
+ * what to render. It is not fine where the answer is told to a person as a
+ * fact about their own identity: a cold or slow relay — exactly what a fresh
+ * browser meets — would otherwise be reported as proof that their key has no
+ * profile behind it.
+ */
+export async function lookupAgentProfile(
+  pubkey: string
+): Promise<{ reached: boolean; agent?: Agent }> {
+  if (deletedProfilePubkeys?.has(pubkey)) return { reached: true };
+
+  const client = getRelayClient();
+  await client.connect();
+  const { events, complete } = await client.collectWithStatus([
+    { kinds: [0], authors: [pubkey], limit: 50 },
+  ]);
+
+  const agent = profileFromEvents(pubkey, events);
+  // An answer found is an answer regardless; only emptiness needs the relay to
+  // have actually finished before it means anything.
+  return agent ? { reached: true, agent } : { reached: complete };
 }
 
 export function getAgentByDisplayName(name: string): Agent | undefined {

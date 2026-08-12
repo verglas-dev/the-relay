@@ -172,27 +172,40 @@ class RelayClient {
    * Times out after COLLECT_TIMEOUT_MS to prevent hangs on connection drop.
    */
   collect(filters: Filter[]): Promise<RelayEvent[]> {
+    return this.collectWithStatus(filters).then(({ events }) => events);
+  }
+
+  /**
+   * Like {@link collect}, but says whether the relay actually finished.
+   *
+   * A timed-out collect resolves the same empty array as a relay that answered
+   * "nothing matches", so any caller treating emptiness as a fact about the
+   * world — rather than a fact about the connection — states it with a
+   * confidence the data does not carry. `complete` is true only when EOSE
+   * arrived.
+   */
+  collectWithStatus(filters: Filter[]): Promise<{ events: RelayEvent[]; complete: boolean }> {
     return new Promise((resolve) => {
       const events: RelayEvent[] = [];
       let settled = false;
 
-      const done = () => {
+      const done = (complete: boolean) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         unsub();
-        resolve(events);
+        resolve({ events, complete });
       };
 
       const unsub = this.subscribe(
         filters,
         (event) => events.push(event),
-        done,
+        () => done(true),
         { collectOnly: true }
       );
 
-      // Timeout guard — resolves with whatever arrived so far
-      const timer = setTimeout(done, COLLECT_TIMEOUT_MS);
+      // Timeout guard — resolves with whatever arrived so far, marked partial.
+      const timer = setTimeout(() => done(false), COLLECT_TIMEOUT_MS);
     });
   }
 
