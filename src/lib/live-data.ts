@@ -574,14 +574,14 @@ async function _doInit(): Promise<void> {
 }
 
 /**
- * Clear the snapshot after an externally observed relay write. If a write
- * lands during initialization, wait for that promise to settle first so
- * resetLiveData() cannot null its concurrency guard and start two collectors.
+ * Refresh the snapshot after an externally observed relay write. If a write
+ * lands during initialization, wait for that promise to settle first so the
+ * refresh cannot race its concurrency guard and start two collectors.
  */
 function requestLiveRefresh(): void {
   if (!initPromise) {
     refreshQueuedDuringInit = false;
-    resetLiveData();
+    revalidateLiveData();
     return;
   }
 
@@ -597,7 +597,7 @@ function requestLiveRefresh(): void {
     setTimeout(() => {
       if (!refreshQueuedDuringInit) return;
       refreshQueuedDuringInit = false;
-      resetLiveData();
+      revalidateLiveData();
     }, 0);
   };
   refreshAfterInitPromise = activeInit.then(refreshWhenSettled, refreshWhenSettled);
@@ -1109,8 +1109,29 @@ export function resetLiveData() {
   followingByPair = null;
   initialized = false;
   initPromise = null;
-  dataVersion += 1;
-  for (const listener of listeners) listener();
+  notifyLiveDataChanged();
+}
+
+/**
+ * Refresh after a relay write we merely *observed*, without blanking the UI.
+ *
+ * resetLiveData() nulls every cache and notifies in the same breath, so each
+ * subscriber re-renders against empty caches and paints a frame of "no agents,
+ * no posts, no theme" before the replacement snapshot lands. That empty frame
+ * is the flicker that shows whenever someone else updates their profile.
+ *
+ * The explicit callers (publishing a post, saving a profile, voting) still want
+ * resetLiveData's hard clear — they immediately await initLiveData() and read
+ * back, so they never render the empty window. This path has no such caller
+ * waiting on it, so instead the previous snapshot stays readable, the refetch
+ * runs underneath it, and listeners are told exactly once, after the new data
+ * is actually in place.
+ */
+function revalidateLiveData(): void {
+  // Mark stale so initLiveData() refetches rather than returning early. The
+  // caches keep their contents until _doInit() swaps in the new ones.
+  initialized = false;
+  void initLiveData().then(notifyLiveDataChanged, notifyLiveDataChanged);
 }
 
 // ─── Change notification ─────────────────────────────────────
@@ -1122,6 +1143,11 @@ export function resetLiveData() {
 let dataVersion = 0;
 const listeners = new Set<() => void>();
 
+function notifyLiveDataChanged(): void {
+  dataVersion += 1;
+  for (const listener of listeners) listener();
+}
+
 /** Register for notification that the caches were cleared. Returns an unsubscribe. */
 export function subscribeLiveData(listener: () => void): () => void {
   listeners.add(listener);
@@ -1130,7 +1156,7 @@ export function subscribeLiveData(listener: () => void): () => void {
   };
 }
 
-/** Bumped by every resetLiveData(); safe to use as a effect dependency. */
+/** Bumped by every cache invalidation; safe to use as a effect dependency. */
 export function getLiveDataVersion(): number {
   return dataVersion;
 }
