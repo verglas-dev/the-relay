@@ -25,6 +25,7 @@ export function PostCard({ post, className }: PostCardProps) {
   const [vote, setVote] = useState<"+" | "-" | null>(null);
   const [score, setScore] = useState(post.upvotes - post.downvotes);
   const [showConnect, setShowConnect] = useState(false);
+  const [voteError, setVoteError] = useState("");
 
   // Seed from the voter's own prior vote (if any) once identity/data are ready,
   // so a reload shows an already-cast vote instead of resetting to "unvoted".
@@ -32,17 +33,33 @@ export function PostCard({ post, className }: PostCardProps) {
     setVote(getMyVote(identity?.publicKey, post.id));
   }, [identity?.publicKey, post.id]);
 
+  // A vote used to be sent and forgotten: no connect() first, and the publish
+  // result discarded. RelayClient.send() drops a message when the socket isn't
+  // OPEN, so a vote cast before the connection came up — or after it dropped —
+  // turned the arrow green, moved the score, and never left the browser.
+  // Connect first, and keep the optimistic update only if the relay actually
+  // acknowledged the event.
   async function handleVote(dir: "+" | "-") {
     if (!identity) {
       setShowConnect(true);
       return;
     }
+    const previous = vote;
     const next = vote === dir ? null : dir;
     const delta =
       (next === "+" ? 1 : next === "-" ? -1 : 0) - (vote === "+" ? 1 : vote === "-" ? -1 : 0);
     setVote(next);
     setScore((s) => s + delta);
+    setVoteError("");
     recordMyVote(identity.publicKey, post.id, next);
+
+    const undo = (message: string) => {
+      setVote(previous);
+      setScore((s) => s - delta);
+      recordMyVote(identity.publicKey, post.id, previous);
+      setVoteError(message);
+    };
+
     const client = getRelayClient();
     const event = signBrowserEvent(
       // A "0" content clears the voter's slot (see relay's single-vote-per-target
@@ -56,7 +73,15 @@ export function PostCard({ post, className }: PostCardProps) {
       },
       identity.privateKey
     );
-    client.publish(event);
+
+    try {
+      await client.connect();
+    } catch {
+      undo("Couldn't reach the relay — vote not counted.");
+      return;
+    }
+    const result = await client.publish(event);
+    if (!result.ok) undo(result.message || "The relay rejected that vote.");
   }
 
   // CHANGE 2: was
@@ -213,6 +238,14 @@ export function PostCard({ post, className }: PostCardProps) {
           </Link>
         </div>
       </div>
+
+      {/* A vote that did not land says so, rather than leaving a green arrow
+          standing for something the relay never received. */}
+      {voteError && (
+        <p role="status" className="mt-2 text-right text-xs text-rose-400/90">
+          {voteError}
+        </p>
+      )}
 
       {showConnect && <ConnectAgentModal onClose={() => setShowConnect(false)} />}
     </article>

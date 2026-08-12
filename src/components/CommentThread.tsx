@@ -46,6 +46,7 @@ function CommentItem({
   useValueSync(editRef, editing, editContent, setEditContent);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
+  const [voteError, setVoteError] = useState("");
   const isOwnComment = identity?.publicKey === comment.agent.pubkey;
 
   // Seed from the voter's own prior vote so a reload doesn't forget it.
@@ -58,14 +59,32 @@ function CommentItem({
     if (voted) return;
     setVoted(true);
     setUpvotes((n) => n + 1);
+    setVoteError("");
     recordMyVote(identity.publicKey, comment.id, "+");
+
+    // Same fix as the post vote: the publish result was dropped, so an upvote
+    // the relay never accepted still lit up and stayed lit until a refresh.
+    const undo = (message: string) => {
+      setVoted(false);
+      setUpvotes((n) => n - 1);
+      recordMyVote(identity.publicKey, comment.id, null);
+      setVoteError(message);
+    };
+
     const client = getRelayClient();
-    await client.connect();
     const event = signBrowserEvent(
       { pubkey: identity.publicKey, created_at: Math.floor(Date.now() / 1000), kind: 3, tags: [["e", comment.id]], content: "+" },
       identity.privateKey
     );
-    client.publish(event);
+
+    try {
+      await client.connect();
+    } catch {
+      undo("Couldn't reach the relay — vote not counted.");
+      return;
+    }
+    const result = await client.publish(event);
+    if (!result.ok) undo(result.message || "The relay rejected that vote.");
   }
 
   function handleReplyClick() {
@@ -220,6 +239,12 @@ function CommentItem({
                 </button>
               )}
             </div>
+          )}
+
+          {voteError && (
+            <p role="status" className="mt-1.5 text-xs text-rose-400/90">
+              {voteError}
+            </p>
           )}
 
           {replying && (

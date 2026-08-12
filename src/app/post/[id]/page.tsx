@@ -42,10 +42,28 @@ export default function PostPage({ params }: { params: { id: string } }) {
   useValueSync(editRef, editing, editContent, setEditContent);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
+  const [voteError, setVoteError] = useState("");
+  // The relay could not be reached and there is nothing cached to show — which
+  // is a different thing from a post that does not exist.
+  const [unreachable, setUnreachable] = useState(false);
+  const [retry, setRetry] = useState(0);
   const scrolledCommentAnchorRef = useRef<string | null>(null);
 
+  // initLiveData() rejects when the relay socket fails or times out, and this
+  // effect used to hang its only setLoading(false) off the success path — so a
+  // direct link opened while the connection was down sat on "Loading post…"
+  // for good, and the client's own reconnect three seconds later had nobody
+  // waiting to notice. The profile page already guards this way; the post page
+  // is the last one that didn't. A failed init is now a distinct state from a
+  // post that genuinely isn't there.
   useEffect(() => {
-    initLiveData().then(() => {
+    let active = true;
+    initLiveData().then(
+      () => { if (active) settle(true); },
+      () => { if (active) settle(false); },
+    );
+
+    function settle(reachedRelay: boolean) {
       // Legacy profile links used the raw e target in the path but already
       // carried the authored comment in the hash. Prefer that comment's
       // normalized root: its raw target may itself belong to the wrong thread
@@ -55,6 +73,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
       const p = rootPostId ? getPost(rootPostId) : undefined;
       setPost(p || null);
       setComments(p ? getCommentsForPost(p.id) : []);
+      setUnreachable(!reachedRelay && !p);
       setLoading(false);
       if (p && p.id !== params.id) {
         // Old profile/notification links used a legacy comment's e target as
@@ -63,8 +82,10 @@ export default function PostPage({ params }: { params: { id: string } }) {
         const anchor = window.location.hash || `#comment-${params.id}`;
         router.replace(`/post/${p.id}${anchor}`);
       }
-    });
-  }, [params.id, liveVersion, router]);
+    }
+
+    return () => { active = false; };
+  }, [params.id, liveVersion, retry, router]);
 
   // The browser attempts hash navigation before this client-only comment tree
   // exists, leaving deep links parked at scrollY=0. Retry once after the
@@ -102,20 +123,41 @@ export default function PostPage({ params }: { params: { id: string } }) {
   async function handleVote(dir: "+" | "-") {
     if (!post) return;
     if (!identity) { setShowConnect(true); return; }
+    const previous = vote;
     const next = vote === dir ? null : dir;
     setUpvotes((u) => u + voteDelta(vote, next, "+"));
     setDownvotes((d) => d + voteDelta(vote, next, "-"));
     setVote(next);
+    setVoteError("");
     recordMyVote(identity.publicKey, post.id, next);
+
+    // The publish result was discarded here, so a rejected or undelivered vote
+    // looked exactly like a counted one until the next full refresh put the
+    // old number back. Undo the optimistic move and say what happened instead.
+    const undo = (message: string) => {
+      setUpvotes((u) => u - voteDelta(previous, next, "+"));
+      setDownvotes((d) => d - voteDelta(previous, next, "-"));
+      setVote(previous);
+      recordMyVote(identity.publicKey, post.id, previous);
+      setVoteError(message);
+    };
+
     const client = getRelayClient();
-    await client.connect();
     const event = signBrowserEvent(
       // A "0" content clears the voter's slot (see relay's single-vote-per-target
       // handling) without counting toward up/down totals.
       { pubkey: identity.publicKey, created_at: Math.floor(Date.now() / 1000), kind: 3, tags: [["e", post.id]], content: next ?? "0" },
       identity.privateKey
     );
-    client.publish(event);
+
+    try {
+      await client.connect();
+    } catch {
+      undo("Couldn't reach the relay — vote not counted.");
+      return;
+    }
+    const result = await client.publish(event);
+    if (!result.ok) undo(result.message || "The relay rejected that vote.");
   }
 
   function handleCommented() {
@@ -175,6 +217,27 @@ export default function PostPage({ params }: { params: { id: string } }) {
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
         <Loader2 className="w-8 h-8 text-vb-400 animate-spin mx-auto mb-3" />
         <p className="text-ink-500">Loading post…</p>
+      </div>
+    );
+  }
+
+  // Telling someone their post does not exist when the truth is that we never
+  // got to ask is the kind of wrong answer people act on.
+  if (unreachable) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <h1 className="text-2xl font-display font-bold text-white mb-2">Couldn&apos;t reach the relay</h1>
+        <p className="text-ink-500 mb-4">
+          The connection dropped or timed out, so this post could not be fetched. It may
+          well still be there.
+        </p>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); setUnreachable(false); setRetry((n) => n + 1); }}
+          className="btn-primary"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -353,6 +416,14 @@ export default function PostPage({ params }: { params: { id: string } }) {
               </button>
             </div>
           </div>
+
+          {/* A vote that did not land says so, rather than leaving a lit button
+              standing for something the relay never received. */}
+          {voteError && (
+            <p role="status" className="mt-3 text-right text-xs text-rose-400/90">
+              {voteError}
+            </p>
+          )}
         </div>
 
         {/* Comments */}
