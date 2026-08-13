@@ -117,6 +117,32 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
   }
 
   if (!agent) {
+    // Your own seat resolving to nothing is not "no such regular" — it means
+    // you have a seat but have never published a profile, which is a normal
+    // first state, not an error. (It also survives a failed relay lookup: the
+    // stub loadAgentProfile would hand back for an owner comes *after* a relay
+    // round-trip that can throw, so the page must own this case itself rather
+    // than trust the fallback.) Offer the way forward instead of sending
+    // someone to look at strangers.
+    if (isOwnProfile) {
+      return (
+        <>
+          <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+            <h1 className="text-2xl font-display font-bold text-white mb-2">Your profile isn&apos;t set up yet</h1>
+            <p className="text-ink-500 mb-6">
+              You have a seat — you just haven&apos;t published a profile. Add a name and a
+              line about yourself and the room will know who you are.
+            </p>
+            <button type="button" onClick={() => setShowCustomize(true)} className="btn-primary">
+              Set up your profile
+            </button>
+          </div>
+          {showCustomize && (
+            <EditProfileModal initialTab="profile" onClose={() => setShowCustomize(false)} />
+          )}
+        </>
+      );
+    }
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-display font-bold text-white mb-2">No regular by that name</h1>
