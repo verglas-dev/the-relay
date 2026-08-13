@@ -14,6 +14,12 @@ import { browserEncryptDM, browserDecryptDM } from "@/lib/browser-dm-crypto";
 import { formatDate, cn } from "@/lib/utils";
 import { clearUnread } from "@/lib/unread-dms";
 import { useValueSync } from "@/lib/use-dom-sync";
+import {
+  cacheDMEvents,
+  getCachedThread,
+  mergeEvents,
+  removeDMEvents,
+} from "@/lib/dm-history";
 import type { RelayEvent } from "@/lib/types";
 
 interface Message {
@@ -25,9 +31,15 @@ interface Message {
 }
 
 const MAX_DM = 2000;
+// One page of history. The live durable record is the local cache; this only
+// bounds how much is pulled from the relay in a single reach.
+const PAGE = 200;
 
-// Decrypt a single relay event into a Message, or return an error placeholder
-async function decodeEvent(event: RelayEvent, ourPrivHex: string, theirPubkey: string, mine: boolean): Promise<Message> {
+// Decrypt a single relay event into a Message, or return an error placeholder.
+// `mine` is derived from the event's own author so a merged list of cached and
+// freshly fetched events never needs it threaded through separately.
+async function decodeEvent(event: RelayEvent, ourPrivHex: string, ourPubkey: string, theirPubkey: string): Promise<Message> {
+  const mine = event.pubkey === ourPubkey;
   try {
     const content = await browserDecryptDM(ourPrivHex, theirPubkey, event.content);
     return { id: event.id, content, created_at: event.created_at, mine };
@@ -48,6 +60,11 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  // Older-history paging. `oldest` is the created_at of the earliest message on
+  // screen — the cursor the next reach into the relay pages back from.
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const oldest = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   // Whether the reader is at the newest message. Someone scrolled up through
   // the thread should stay where they are when a reply lands.
@@ -82,20 +99,29 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
 
       setAgent(getAgent(theirPubkey) ?? null);
 
-      const [sent, received] = await Promise.all([
-        client.collect([{ kinds: [9], authors: [pubKey], "#p": [theirPubkey], limit: 200 }]),
-        client.collect([{ kinds: [9], authors: [theirPubkey], "#p": [pubKey], limit: 200 }]),
+      // The local cache is shown alongside the relay's answer, so a whisper the
+      // relay has since lost still appears, and history is on screen before the
+      // network round-trip returns.
+      const [cached, sent, received] = await Promise.all([
+        getCachedThread(pubKey, theirPubkey),
+        client.collect([{ kinds: [9], authors: [pubKey], "#p": [theirPubkey], limit: PAGE }]),
+        client.collect([{ kinds: [9], authors: [theirPubkey], "#p": [pubKey], limit: PAGE }]),
       ]);
+      if (!active) return;
 
-      // Bulk-decrypt history
-      const decoded = await Promise.all([
-        ...sent.map((e) => decodeEvent(e, privKey, theirPubkey, true)),
-        ...received.map((e) => decodeEvent(e, privKey, theirPubkey, false)),
-      ]);
-      decoded.sort((a, b) => a.created_at - b.created_at);
+      // A full page from the relay means there may be older messages it didn't
+      // send; offer to page back for them.
+      setHasMore(sent.length >= PAGE || received.length >= PAGE);
+
+      const events = mergeEvents(cached, sent, received);
+      const decoded = await Promise.all(events.map((e) => decodeEvent(e, privKey, pubKey, theirPubkey)));
+      if (!active) return;
       decoded.forEach((m) => seenIds.current.add(m.id));
+      oldest.current = decoded.length ? decoded[0].created_at : null;
       setMessages(decoded);
       setLoading(false);
+      // Fold the relay's copies into the durable local record.
+      void cacheDMEvents(pubKey, [...sent, ...received]);
       // Mark conversation as read now that we've loaded it
       clearUnread(theirPubkey);
 
@@ -103,7 +129,8 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
       const unsubIncoming = client.subscribe(
         [{ kinds: [9], authors: [theirPubkey], "#p": [pubKey], since: Math.floor(Date.now() / 1000) }],
         async (event) => {
-          const msg = await decodeEvent(event, privKey, theirPubkey, false);
+          void cacheDMEvents(pubKey, [event]);
+          const msg = await decodeEvent(event, privKey, pubKey, theirPubkey);
           addMessage(msg);
           // Clear unread for this thread since we're watching it
           clearUnread(theirPubkey);
@@ -113,11 +140,55 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
       return unsubIncoming;
     }
 
+    let active = true;
     let unsub: (() => void) | undefined;
-    load().then((fn) => { unsub = fn; });
+    load().then((fn) => { if (active) unsub = fn; else fn?.(); });
 
-    return () => { unsub?.(); };
+    return () => { active = false; unsub?.(); };
   }, [identity?.publicKey, theirPubkey, addMessage]);
+
+  // Page back through older history on demand. Each reach pulls the next window
+  // ending just before the earliest message on screen, merges it in, and caches
+  // it — so history read once is kept even if the relay later drops it.
+  const loadOlder = useCallback(async () => {
+    if (!identity || loadingOlder || oldest.current === null) return;
+    setLoadingOlder(true);
+    try {
+      const privKey = identity.privateKey;
+      const pubKey = identity.publicKey;
+      const until = oldest.current;
+      const client = getRelayClient();
+      await client.connect();
+      const [sent, received] = await Promise.all([
+        client.collect([{ kinds: [9], authors: [pubKey], "#p": [theirPubkey], until, limit: PAGE }]),
+        client.collect([{ kinds: [9], authors: [theirPubkey], "#p": [pubKey], until, limit: PAGE }]),
+      ]);
+      const fresh = mergeEvents(sent, received).filter((e) => !seenIds.current.has(e.id));
+      // Nothing new to page in means we've reached the start — don't leave a
+      // button that refetches the same boundary events forever.
+      if (fresh.length === 0) { setHasMore(false); return; }
+      setHasMore(sent.length >= PAGE || received.length >= PAGE);
+
+      const decoded = await Promise.all(fresh.map((e) => decodeEvent(e, privKey, pubKey, theirPubkey)));
+      decoded.forEach((m) => seenIds.current.add(m.id));
+      void cacheDMEvents(pubKey, [...sent, ...received]);
+
+      // Keep the reader's scroll position: prepending older messages must not
+      // yank the viewport. Anchor to the current top and restore after paint.
+      const list = listRef.current;
+      const anchor = list ? list.scrollHeight - list.scrollTop : 0;
+      setMessages((prev) => {
+        const next = [...decoded, ...prev].sort((a, b) => a.created_at - b.created_at);
+        oldest.current = next.length ? next[0].created_at : oldest.current;
+        return next;
+      });
+      requestAnimationFrame(() => {
+        if (list) list.scrollTop = list.scrollHeight - anchor;
+      });
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [identity, loadingOlder, theirPubkey]);
 
   // Move the thread, not the page: scrollIntoView scrolls every scrollable
   // ancestor, so anchoring inside the list also sent the document to its foot.
@@ -169,8 +240,11 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
         return;
       }
 
-      // Gone from the relay this browser talks to; drop it from view and from
-      // the unread tally, which is keyed by correspondent rather than by event.
+      // Gone from the relay this browser talks to; drop it from view, from the
+      // durable local record (a retraction must not outlive itself in the
+      // cache), and from the unread tally, which is keyed by correspondent
+      // rather than by event.
+      void removeDMEvents(messages.map((m) => m.id));
       seenIds.current.clear();
       setMessages([]);
       clearUnread(theirPubkey);
@@ -213,6 +287,8 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
 
       // Optimistic update — mark as seen so the live sub doesn't double-render it
       addMessage({ id: event.id, content: plaintext, created_at: event.created_at, mine: true });
+      // Keep our own outgoing copy in the durable record too.
+      void cacheDMEvents(identity.publicKey, [event]);
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Send failed");
       setInput(plaintext); // restore
@@ -282,7 +358,22 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
             </div>
           </div>
         ) : (
-          messages.map((msg, i) => {
+          <>
+          {hasMore && (
+            <div className="flex justify-center py-1">
+              <button
+                type="button"
+                onClick={() => void loadOlder()}
+                disabled={loadingOlder}
+                className="flex items-center gap-1.5 text-xs text-ink-500 hover:text-ink-300
+                           transition-colors disabled:opacity-40"
+              >
+                {loadingOlder ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                {loadingOlder ? "Reaching back…" : "Load earlier whispers"}
+              </button>
+            </div>
+          )}
+          {messages.map((msg, i) => {
             const showDate = i === 0 ||
               Math.abs(msg.created_at - messages[i - 1].created_at) > 300;
             return (
@@ -311,7 +402,8 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
                 </motion.div>
               </div>
             );
-          })
+          })}
+          </>
         )}
       </div>
 

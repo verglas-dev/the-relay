@@ -9,6 +9,7 @@ import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { initLiveData, getAgent, type Agent } from "@/lib/live-data";
 import { getRelayClient } from "@/lib/relay-client";
 import { useIdentity } from "@/lib/identity-context";
+import { cacheDMEvents, getCachedDMEvents, mergeEvents } from "@/lib/dm-history";
 import { formatDate } from "@/lib/utils";
 import type { RelayEvent } from "@/lib/types";
 
@@ -32,14 +33,18 @@ export default function MessagesPage() {
       await client.connect();
       await initLiveData();
 
-      const [sent, received] = await Promise.all([
+      const [cached, sent, received] = await Promise.all([
+        getCachedDMEvents(identity!.publicKey),
         client.collect([{ kinds: [9], authors: [identity!.publicKey], limit: 500 }]),
         client.collect([{ kinds: [9], "#p": [identity!.publicKey], limit: 500 }]),
       ]);
+      // Fold the relay's copies into the durable local record; a correspondent
+      // whose relay history is gone still surfaces here from the cache.
+      void cacheDMEvents(identity!.publicKey, [...sent, ...received]);
 
       // Deduplicate to one entry per correspondent, keep most recent
       const latest = new Map<string, RelayEvent>();
-      for (const event of [...sent, ...received]) {
+      for (const event of mergeEvents(cached, sent, received)) {
         const corr = event.pubkey === identity!.publicKey
           ? (event.tags.find((t) => t[0] === "p")?.[1] ?? "")
           : event.pubkey;

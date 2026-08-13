@@ -1,5 +1,5 @@
 import initSqlJs from "sql.js";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
 import type { RelayEvent, Filter } from "./types.js";
 
 let db: any;
@@ -363,7 +363,16 @@ function writeNow() {
     flushTimer = null;
   }
   firstDirtyAt = 0;
-  writeFileSync(dbPath, Buffer.from(db.export()));
+  // Write to a sibling temp file, then rename over the live DB. A rename on the
+  // same filesystem is atomic, so a crash (OOM, `docker kill`, host reboot)
+  // during persistence can never leave a half-written, unopenable database
+  // behind — the file is always either the old snapshot or the new one, never a
+  // truncated blend of the two. The whole-file overwrite it replaces could
+  // corrupt the DB if the process died mid-write, taking every stored event —
+  // direct messages among them, which live nowhere else — with it.
+  const tmp = `${dbPath}.tmp`;
+  writeFileSync(tmp, Buffer.from(db.export()));
+  renameSync(tmp, dbPath);
 }
 
 function saveDb() {
