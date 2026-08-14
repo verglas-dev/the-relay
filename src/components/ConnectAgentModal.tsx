@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Armchair, Key, Loader2 } from "lucide-react";
 import {
   generateBrowserIdentity,
@@ -57,19 +57,27 @@ export function ConnectAgentModal({ onClose }: Props) {
   // the same name creates a genuinely different agent.
   const [showNewIdentity, setShowNewIdentity] = useState(false);
   const [importKey, setImportKey] = useState("");
+  const [checking, setChecking] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const keyRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
   // An agent filling these fields programmatically must not be told they are
   // empty.
   useValueSync(nameRef, !identity && showNewIdentity, name, value => { setName(value); setNameError(""); });
-  useValueSync(keyRef, !identity && !showNewIdentity, importKey, value => { setImportKey(value); setImportError(""); setUnknownKey(false); });
+  useValueSync(keyRef, !identity && !showNewIdentity && !checking, importKey, value => { setImportKey(value); setImportError(""); setUnknownKey(false); });
   const [importError, setImportError] = useState("");
   const [nameError, setNameError] = useState("");
-  const [checking, setChecking] = useState(false);
   // The key box starts read-only so nothing can fill it before a person asks.
   const [keyLocked, setKeyLocked] = useState(true);
   // Set when a key is valid but the relay knows no profile published with it.
   const [unknownKey, setUnknownKey] = useState(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   async function handleSitDown() {
     const chosen = name.trim();
@@ -118,48 +126,72 @@ export function ConnectAgentModal({ onClose }: Props) {
   async function handleImport(force = false) {
     setImportError("");
     const key = importKey.trim();
-    try {
-      if (!/^[0-9a-f]{64}$/.test(key)) {
-        setImportError("That doesn't look like an identity key — it should be 64 characters of hex.");
+    if (!/^[0-9a-f]{64}$/i.test(key)) {
+      setImportError("That doesn't look like an identity key — it should be 64 characters of hex.");
+      return;
+    }
+
+    // Look before importing: the import overwrites whatever key this browser
+    // already held, and a key with no profile behind it is nearly always a
+    // wrong paste or a field something else filled in. Say so instead of
+    // seating them as a regular nobody has ever seen.
+    if (!force) {
+      let pubkey: string;
+      try {
+        pubkey = publicKeyFor(key);
+      } catch {
+        setImportError("That key couldn't be read.");
         return;
       }
 
-      // Look before importing: the import overwrites whatever key this browser
-      // already held, and a key with no profile behind it is nearly always a
-      // wrong paste or a field something else filled in. Say so instead of
-      // seating them as a regular nobody has ever seen.
-      if (!force) {
-        setChecking(true);
-        const lookup = await lookupAgentProfile(publicKeyFor(key))
-          .catch(() => ({ reached: false, agent: undefined }));
-        setChecking(false);
-        // "We could not ask" must never be delivered as "you do not exist".
-        if (!lookup.reached) {
-          setImportError(
-            "Couldn't reach the relay to look that key up, so this isn't a verdict on your key — try again in a moment."
-          );
-          return;
-        }
-        if (!lookup.agent) {
-          setUnknownKey(true);
-          return;
-        }
+      setChecking(true);
+      let lookup: Awaited<ReturnType<typeof lookupAgentProfile>>;
+      try {
+        lookup = await lookupAgentProfile(pubkey);
+      } catch {
+        lookup = { reached: false };
+      } finally {
+        if (mountedRef.current) setChecking(false);
       }
+      // Closing the modal cancels the import decision even if the relay lookup
+      // was already in flight.
+      if (!mountedRef.current) return;
+      // "We could not ask" must never be delivered as "you do not exist".
+      if (!lookup.reached) {
+        setImportError(
+          "Couldn't reach the relay to look that key up, so this isn't a verdict on your key — try again in a moment."
+        );
+        return;
+      }
+      if (!lookup.agent) {
+        setUnknownKey(true);
+        return;
+      }
+    }
 
-      // Seat them last. setIdentity swaps this modal to its seated branch,
-      // where importError has nowhere to render — so anything that threw after
-      // it left the visitor looking at an unchanged screen with no way to know
-      // the click had failed. Do the work that can throw first.
-      const id = importIdentity(key);
+    // Only parsing and storing the key belong to the key-read error. Cache
+    // notification is best-effort and must not make a successfully stored
+    // identity look like a rejected import.
+    let id: ReturnType<typeof importIdentity>;
+    try {
+      id = importIdentity(key);
+    } catch {
+      setImportError("That key couldn't be read.");
+      return;
+    }
+
+    try {
       // Rehydrate the existing kind-0 profile for this public key. Importing a
       // key never publishes a profile and never creates a second identity.
       resetLiveData();
-      setIdentity(id);
-      onClose();
-    } catch {
-      setChecking(false);
-      setImportError("That key couldn't be read.");
+    } catch (error) {
+      console.error("Live data refresh failed after identity import:", error);
     }
+
+    // Seat them last. Once setIdentity swaps this modal to its seated branch,
+    // importError has nowhere to render.
+    setIdentity(id);
+    onClose();
   }
 
   return (
@@ -250,7 +282,7 @@ export function ConnectAgentModal({ onClose }: Props) {
                       unlock it again before anyone had asked for it. */}
                   <input type="password" ref={keyRef} value={importKey}
                     name="relay-identity-key" {...NO_AUTOFILL}
-                    readOnly={keyLocked}
+                    readOnly={keyLocked || checking}
                     onFocus={() => setKeyLocked(false)}
                     onPointerDown={() => setKeyLocked(false)}
                     onChange={(e) => { setImportKey(e.target.value); setImportError(""); setUnknownKey(false); }}

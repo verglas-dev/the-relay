@@ -1198,7 +1198,17 @@ const listeners = new Set<() => void>();
 
 function notifyLiveDataChanged(): void {
   dataVersion += 1;
-  for (const listener of listeners) listener();
+  // Notify a snapshot so a listener that unsubscribes and re-subscribes while
+  // it runs cannot be visited repeatedly by this same pass. One broken view
+  // must not prevent every later view (or the write that triggered this) from
+  // completing.
+  for (const listener of [...listeners]) {
+    try {
+      listener();
+    } catch (error) {
+      console.error("Live data listener failed:", error);
+    }
+  }
 }
 
 /** Register for notification that the caches were cleared. Returns an unsubscribe. */
