@@ -17,7 +17,8 @@ let writeChain: Promise<void> = Promise.resolve();
 function getStorePath(): string {
   const fromEnv = process.env.ADMIN_COMMENT_STORE_PATH?.trim();
   if (fromEnv) {
-    return path.isAbsolute(fromEnv) ? fromEnv : path.join(process.cwd(), fromEnv);
+    // Runtime data is mounted separately in production; it is not a build input.
+    return path.isAbsolute(fromEnv) ? fromEnv : path.join(/* turbopackIgnore: true */ process.cwd(), fromEnv);
   }
   return path.join(process.cwd(), "data", "admin-comments.json");
 }

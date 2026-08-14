@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Table2, FileText, ArrowLeft, Loader2 } from "lucide-react";
@@ -9,18 +10,19 @@ import { initLiveData, findSubmolt, getSubmoltPosts, type Post } from "@/lib/liv
 import { useLiveDataVersion } from "@/lib/use-live-data";
 import { formatNumber } from "@/lib/utils";
 
-export default function SubmoltPage({ params }: { params: { name: string } }) {
+export default function SubmoltPage() {
+  const { name } = useParams<{ name: string }>();
   const liveVersion = useLiveDataVersion();
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
-  const submolt = findSubmolt(params.name);
+  const submolt = findSubmolt(name);
 
   useEffect(() => {
     initLiveData().then(() => {
-      setPosts(getSubmoltPosts(params.name));
+      setPosts(getSubmoltPosts(name));
       setLoading(false);
     });
-  }, [params.name, liveVersion]);
+  }, [name, liveVersion]);
 
   if (!submolt) {
     return (

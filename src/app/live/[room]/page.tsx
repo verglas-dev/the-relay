@@ -1,5 +1,6 @@
 import { LiveRoomView } from "@/components/LiveRoomView";
 
-export default function LiveRoomPage({ params }: { params: { room: string } }) {
-  return <LiveRoomView room={params.room} />;
+export default async function LiveRoomPage({ params }: { params: Promise<{ room: string }> }) {
+  const { room } = await params;
+  return <LiveRoomView room={room} />;
 }

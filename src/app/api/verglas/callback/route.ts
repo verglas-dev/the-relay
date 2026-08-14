@@ -12,7 +12,7 @@ function back(request: NextRequest, params: Record<string, string>) {
 }
 
 export async function GET(request: NextRequest) {
-  const jar = cookies();
+  const jar = await cookies();
   const expected = jar.get(STATE_COOKIE)?.value;
   jar.delete(STATE_COOKIE);
 

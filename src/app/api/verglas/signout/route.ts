@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { forgetSession } from "@/lib/verglas-session";
 
@@ -13,6 +14,6 @@ export const dynamic = "force-dynamic";
  * entirely is done on GitHub, under Applications.
  */
 export async function POST() {
-  forgetSession();
+  forgetSession(await cookies());
   return NextResponse.json({ ok: true });
 }

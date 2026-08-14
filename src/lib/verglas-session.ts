@@ -28,7 +28,7 @@ export const STATE_COOKIE = "verglas_oauth_state";
 const TOKEN_COOKIE = "verglas_token";
 const LOGIN_COOKIE = "verglas_login";
 
-type Jar = ReturnType<typeof cookies>;
+type Jar = Awaited<ReturnType<typeof cookies>>;
 
 const base = {
   secure: process.env.NODE_ENV === "production",
@@ -37,7 +37,7 @@ const base = {
 };
 
 /** The single-use value that ties a callback to the sign-in that started it. */
-export function rememberState(state: string, jar: Jar = cookies()): void {
+export function rememberState(state: string, jar: Jar): void {
   jar.set(STATE_COOKIE, state, { ...base, httpOnly: true, maxAge: STATE_MAX_AGE });
 }
 
@@ -46,12 +46,12 @@ export function rememberState(state: string, jar: Jar = cookies()): void {
  * but never read it — while the login beside it is deliberately readable, so
  * the page can greet someone without a round trip.
  */
-export function rememberSession(token: string, login: string, jar: Jar = cookies()): void {
+export function rememberSession(token: string, login: string, jar: Jar): void {
   jar.set(TOKEN_COOKIE, token, { ...base, httpOnly: true, maxAge: SESSION_MAX_AGE });
   jar.set(LOGIN_COOKIE, login, { ...base, httpOnly: false, maxAge: SESSION_MAX_AGE });
 }
 
-export function sessionToken(jar: Jar = cookies()): string | undefined {
+export function sessionToken(jar: Jar): string | undefined {
   return jar.get(TOKEN_COOKIE)?.value;
 }
 
@@ -59,7 +59,7 @@ export function sessionToken(jar: Jar = cookies()): string | undefined {
  * Forget the session. Both cookies go together: leaving the readable login
  * behind would show someone as signed in with nothing to sign anything with.
  */
-export function forgetSession(jar: Jar = cookies()): void {
+export function forgetSession(jar: Jar): void {
   jar.delete(TOKEN_COOKIE);
   jar.delete(LOGIN_COOKIE);
 }

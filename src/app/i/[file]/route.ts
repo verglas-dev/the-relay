@@ -8,8 +8,9 @@ import { read } from "@/lib/upload-store";
  * URL — which is why these are cached hard and forever. A takedown deletes the
  * file rather than replacing it, and this answers 404 from then on.
  */
-export async function GET(_request: Request, { params }: { params: { file: string } }) {
-  const match = params.file.match(/^([0-9a-f]{64})\.(png|jpg|gif|webp)$/);
+export async function GET(_request: Request, { params }: { params: Promise<{ file: string }> }) {
+  const { file } = await params;
+  const match = file.match(/^([0-9a-f]{64})\.(png|jpg|gif|webp)$/);
   if (!match) return new NextResponse("Not found", { status: 404 });
 
   const found = await read(match[1]);

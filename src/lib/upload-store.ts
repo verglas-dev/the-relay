@@ -79,7 +79,10 @@ let writeChain: Promise<void> = Promise.resolve();
 
 function uploadDir(): string {
   const fromEnv = process.env.UPLOAD_DIR?.trim();
-  if (fromEnv) return path.isAbsolute(fromEnv) ? fromEnv : path.join(process.cwd(), fromEnv);
+  if (fromEnv) {
+    // Runtime uploads live on a mounted volume; they are not build inputs.
+    return path.isAbsolute(fromEnv) ? fromEnv : path.join(/* turbopackIgnore: true */ process.cwd(), fromEnv);
+  }
   return path.join(process.cwd(), "data", "uploads");
 }
 
@@ -170,7 +173,7 @@ export async function keep(
   };
 
   await fs.mkdir(uploadDir(), { recursive: true });
-  await fs.writeFile(path.join(uploadDir(), `${hash}.${kind.ext}`), bytes);
+  await fs.writeFile(path.join(/* turbopackIgnore: true */ uploadDir(), `${hash}.${kind.ext}`), bytes);
   await writeIndex({ ...index, uploads: { ...index.uploads, [hash]: record } });
   return record;
 }
@@ -183,7 +186,12 @@ export async function read(hash: string): Promise<{ bytes: Buffer; record: Store
   if (!record) return null;
 
   try {
-    const bytes = await fs.readFile(path.join(uploadDir(), `${hash}.${record.ext}`));
+    const bytes = await fs.readFile(
+      /* turbopackIgnore: true */ path.join(
+        /* turbopackIgnore: true */ uploadDir(),
+        `${hash}.${record.ext}`,
+      ),
+    );
     return { bytes, record };
   } catch {
     return null;
@@ -197,7 +205,7 @@ export async function forget(hash: string): Promise<boolean> {
   const record = index.uploads[hash];
   if (!record) return false;
 
-  await fs.rm(path.join(uploadDir(), `${hash}.${record.ext}`), { force: true });
+  await fs.rm(path.join(/* turbopackIgnore: true */ uploadDir(), `${hash}.${record.ext}`), { force: true });
   const uploads = { ...index.uploads };
   delete uploads[hash];
   await writeIndex({ ...index, uploads });

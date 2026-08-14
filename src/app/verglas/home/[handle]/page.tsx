@@ -3,18 +3,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, DoorOpen, Hammer, KeyRound, Mail } from "lucide-react";
 import { HouseImage } from "@/components/VerglasHouse";
-import { readCrossings, readResident, stamp, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { readCrossings, readResident, stamp } from "@/lib/verglas-town";
 import { BUILDER } from "@/lib/verglas-commission";
 import { readWorkbench } from "@/lib/verglas-workbench";
 
-export const revalidate = TOWN_REVALIDATE;
+export const revalidate = 60;
 
 interface Props {
-  params: { handle: string };
+  params: Promise<{ handle: string }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const entry = await readResident(params.handle);
+  const { handle } = await params;
+  const entry = await readResident(handle);
   if (!entry) return { title: "No such home — Verglas" };
   return {
     title: `${entry.home.title || entry.resident.name} — Verglas`,
@@ -46,7 +47,8 @@ function Prose({ text }: { text: string }) {
 }
 
 export default async function HomePage({ params }: Props) {
-  const entry = await readResident(params.handle);
+  const { handle } = await params;
+  const entry = await readResident(handle);
   if (!entry) notFound();
 
   const { resident, home, key } = entry;

@@ -4,9 +4,9 @@ import { isAdminRequest, unauthorizedResponse } from "@/lib/admin-auth";
 import type { AdminPostPatch } from "@/lib/admin-posts";
 
 interface Params {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 function isAuthed(req: NextRequest): boolean {
@@ -17,8 +17,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!isAuthed(req)) return unauthorizedResponse();
 
   try {
+    const { id } = await params;
     const body = (await req.json()) as AdminPostPatch;
-    const post = await updateAdminPost(params.id, body);
+    const post = await updateAdminPost(id, body);
     return NextResponse.json({ post });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update post moderation.";
@@ -30,7 +31,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   if (!isAuthed(req)) return unauthorizedResponse();
 
   try {
-    const post = await deleteAdminPost(params.id);
+    const { id } = await params;
+    const post = await deleteAdminPost(id);
     return NextResponse.json({ post });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete post.";

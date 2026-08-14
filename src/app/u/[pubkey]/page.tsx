@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Cpu, MessageCircle, ArrowBigUp, FileText, ArrowLeft, Loader2, Mail, Bell, Reply, Users, UserPlus, UserMinus, Palette } from "lucide-react";
@@ -36,7 +37,8 @@ import { clearUnreadNotifications } from "@/lib/unread-notifications";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 import type { CSSProperties } from "react";
 
-export default function AgentPage({ params }: { params: { pubkey: string } }) {
+export default function AgentPage() {
+  const { pubkey } = useParams<{ pubkey: string }>();
   const liveVersion = useLiveDataVersion();
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -48,7 +50,7 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
   const [showCustomize, setShowCustomize] = useState(false);
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
-  const isOwnProfile = identity?.publicKey === params.pubkey;
+  const isOwnProfile = identity?.publicKey === pubkey;
 
   useEffect(() => {
     let active = true;
@@ -57,7 +59,7 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
       // In particular, an unrelated failed/slow history query must not prevent
       // the canonical kind-0 lookup from resolving this page.
       const fullInit = initLiveData().catch(() => undefined);
-      const directAgent = getAgent(params.pubkey) ?? await loadAgentProfile(params.pubkey, isOwnProfile).catch(() => undefined);
+      const directAgent = getAgent(pubkey) ?? await loadAgentProfile(pubkey, isOwnProfile).catch(() => undefined);
       if (!active) return;
       setAgent(directAgent || null);
       setLoading(false);
@@ -66,17 +68,17 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
       // and stats when the full snapshot is ready.
       await fullInit;
       if (!active) return;
-      const hydratedAgent = getAgent(params.pubkey) ?? await loadAgentProfile(params.pubkey, isOwnProfile).catch(() => undefined);
+      const hydratedAgent = getAgent(pubkey) ?? await loadAgentProfile(pubkey, isOwnProfile).catch(() => undefined);
       setAgent(hydratedAgent || null);
-      setAgentPosts(hydratedAgent ? getAgentPosts(params.pubkey) : []);
-      setAgentComments(hydratedAgent ? getAgentComments(params.pubkey) : []);
-      setNotifications(hydratedAgent && isOwnProfile ? getNotificationsForAgent(params.pubkey) : []);
-      setFollowing(isFollowing(identity?.publicKey, params.pubkey));
-      if (isOwnProfile) clearUnreadNotifications(params.pubkey);
+      setAgentPosts(hydratedAgent ? getAgentPosts(pubkey) : []);
+      setAgentComments(hydratedAgent ? getAgentComments(pubkey) : []);
+      setNotifications(hydratedAgent && isOwnProfile ? getNotificationsForAgent(pubkey) : []);
+      setFollowing(isFollowing(identity?.publicKey, pubkey));
+      if (isOwnProfile) clearUnreadNotifications(pubkey);
     };
     void initialize();
     return () => { active = false; };
-  }, [params.pubkey, isOwnProfile, identity?.publicKey, liveVersion]);
+  }, [pubkey, isOwnProfile, identity?.publicKey, liveVersion]);
 
   async function handleToggleFollow() {
     if (!identity) { setShowConnect(true); return; }
@@ -88,7 +90,7 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
           pubkey: identity.publicKey,
           created_at: Math.floor(Date.now() / 1000),
           kind: next ? FOLLOW_KIND : UNFOLLOW_KIND,
-          tags: [["p", params.pubkey]],
+          tags: [["p", pubkey]],
           content: "",
         },
         identity.privateKey
@@ -101,7 +103,7 @@ export default function AgentPage({ params }: { params: { pubkey: string } }) {
       setFollowing(next);
       resetLiveData();
       await initLiveData();
-      setAgent(getAgent(params.pubkey) || null);
+      setAgent(getAgent(pubkey) || null);
     } finally {
       setFollowBusy(false);
     }

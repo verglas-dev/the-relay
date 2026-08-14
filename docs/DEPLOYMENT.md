@@ -16,7 +16,7 @@ cd the-relay
 # 2. Set environment variables
 cp .env.example .env
 # Edit .env:
-#   NEXT_PUBLIC_RELAY_URL=wss://relay.the-relay.example
+#   RELAY_URL=wss://relay.the-relay.example
 
 # 3. Build and start
 docker-compose up -d
@@ -37,6 +37,11 @@ Nginx handles TLS termination and proxies WebSocket connections to the relay.
 ```nginx
 # /etc/nginx/sites-available/the-relay
 
+# This directive belongs in nginx's http context, outside every server block.
+# If your distro does not include site files from http context, place it in
+# /etc/nginx/nginx.conf instead.
+limit_req_zone $binary_remote_addr zone=relay:10m rate=60r/m;
+
 # ─── Relay (WebSocket) ────────────────────────────────────────
 server {
     listen 443 ssl http2;
@@ -47,7 +52,6 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
 
     # Rate limiting — prevents event spam
-    limit_req_zone $binary_remote_addr zone=relay:10m rate=60r/m;
     limit_req zone=relay burst=20 nodelay;
 
     location / {
@@ -59,6 +63,7 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host       $host;
         proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 
         # Keep WebSocket connections alive
         proxy_read_timeout  3600s;
@@ -125,7 +130,7 @@ docker run -d \
 
 ## Manual Deploy (No Docker)
 
-**Requirements:** Node.js 20+, npm 9+
+**Requirements:** Node.js 20.19+, npm 9+
 
 ```bash
 # 1. Install dependencies
@@ -179,15 +184,20 @@ systemctl start  the-relay
 |-------------------------|------------|----------------------|--------------------------------------------------|
 | `PORT`                  | Relay      | `4869`               | WebSocket server port                            |
 | `DB_PATH`               | Relay      | `relay.db`           | SQLite database file path                        |
-| `NEXT_PUBLIC_RELAY_URL` | UI (build) | `ws://localhost:4869`| Relay WebSocket URL baked into the UI bundle     |
+| `RELAY_URL`             | Compose build | (required)         | Public relay WebSocket URL passed into the UI image |
+| `NEXT_PUBLIC_RELAY_URL` | Local UI build | `ws://localhost:4869` | Relay WebSocket URL when building outside Compose |
 | `ADMIN_API_TOKEN`       | UI (runtime) | (unset)            | Bearer token required for admin APIs |
 | `ADMIN_PAGE_USERNAME`   | UI (runtime) | `operatorconf`      | HTTP Basic username for the `/admin` page gate |
 | `ADMIN_PAGE_PASSWORD`   | UI (runtime) | `ADMIN_API_TOKEN`   | HTTP Basic password for the `/admin` page gate |
-| `ADMIN_PROFILE_STORE_PATH` | UI (runtime) | `data/admin-profiles.json` | File path used to persist admin profile overrides |
-| `ADMIN_POST_STORE_PATH` | UI (runtime) | `data/admin-posts.json` | File path used to persist admin post moderation |
+| `ADMIN_PROFILE_STORE_PATH` | UI (runtime) | `/data/admin-profiles.json` in Compose | File path used to persist admin profile overrides |
+| `ADMIN_POST_STORE_PATH` | UI (runtime) | `/data/admin-posts.json` in Compose | File path used to persist admin post moderation |
+| `ADMIN_COMMENT_STORE_PATH` | UI (runtime) | `/data/admin-comments.json` in Compose | File path used to persist admin comment moderation |
+| `UPLOAD_DIR`            | UI (runtime) | `/data/uploads` in Compose | Directory used to persist uploaded pictures |
 | `DOCKER_BUILD`          | UI (build) | (unset)              | Set to any value to enable Next.js standalone output |
 
-`NEXT_PUBLIC_RELAY_URL` is a **build-time** variable — it is embedded in the JavaScript bundle during `npm run build`. Changing it after build has no effect. Rebuild the UI image when the relay URL changes.
+`RELAY_URL` is a **Compose build-time** variable. The Dockerfile maps it to
+`NEXT_PUBLIC_RELAY_URL`, which is embedded in the browser bundle. Changing it
+after build has no effect; rebuild the UI image when the relay URL changes.
 
 ---
 

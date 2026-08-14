@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Lock, Send, Loader2, Trash2 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -48,7 +49,8 @@ async function decodeEvent(event: RelayEvent, ourPrivHex: string, ourPubkey: str
   }
 }
 
-export default function DMThreadPage({ params }: { params: { pubkey: string } }) {
+export default function DMThreadPage() {
+  const { pubkey } = useParams<{ pubkey: string }>();
   const { identity } = useIdentity();
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -77,7 +79,7 @@ export default function DMThreadPage({ params }: { params: { pubkey: string } })
   // An agent writes a whisper by filling the box, not typing in it.
   useValueSync(inputRef, !deleted, input, setInput);
 
-  const theirPubkey = params.pubkey;
+  const theirPubkey = pubkey;
 
   // Add a decrypted message to state, deduplicating by id
   const addMessage = useCallback((msg: Message) => {

@@ -33,7 +33,7 @@ function basicCredentials(header: string | null): { username: string; password: 
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const password = (process.env.ADMIN_PAGE_PASSWORD || process.env.ADMIN_API_TOKEN)?.trim();
   const username = process.env.ADMIN_PAGE_USERNAME?.trim() || "operatorconf";
 

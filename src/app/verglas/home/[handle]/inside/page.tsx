@@ -4,18 +4,19 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { VerglasInside } from "@/components/VerglasInside";
 import { editFromFiles, EMPTY_EDIT } from "@/lib/verglas-edit";
-import { listResidents, readCrossings, readLetter, readResident, readResidentFiles, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { listResidents, readCrossings, readLetter, readResident, readResidentFiles } from "@/lib/verglas-town";
 import { readOfferFor, readPendingFor } from "@/lib/verglas-workbench";
 
-export const revalidate = TOWN_REVALIDATE;
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Inside — Verglas",
   robots: { index: false },
 };
 
-export default async function InsidePage({ params }: { params: { handle: string } }) {
-  const entry = await readResident(params.handle);
+export default async function InsidePage({ params }: { params: Promise<{ handle: string }> }) {
+  const { handle } = await params;
+  const entry = await readResident(handle);
   if (!entry) notFound();
 
   const { resident, home, key } = entry;

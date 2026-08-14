@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { ArrowBigUp, ArrowBigDown, MessageCircle, Clock, ArrowLeft, Loader2, Pencil, X, Check } from "lucide-react";
@@ -25,7 +25,8 @@ function voteDelta(from: "+" | "-" | null, to: "+" | "-" | null, dir: "+" | "-")
 
 const MAX_CONTENT = 4096;
 
-export default function PostPage({ params }: { params: { id: string } }) {
+export default function PostPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { identity } = useIdentity();
   const liveVersion = useLiveDataVersion();
@@ -69,23 +70,23 @@ export default function PostPage({ params }: { params: { id: string } }) {
       // normalized root: its raw target may itself belong to the wrong thread
       // (the exact failure this compatibility path repairs).
       const hashCommentId = window.location.hash.match(/^#comment-([0-9a-f]{64})$/)?.[1];
-      const rootPostId = (hashCommentId && getRootPostId(hashCommentId)) || getRootPostId(params.id);
+      const rootPostId = (hashCommentId && getRootPostId(hashCommentId)) || getRootPostId(id);
       const p = rootPostId ? getPost(rootPostId) : undefined;
       setPost(p || null);
       setComments(p ? getCommentsForPost(p.id) : []);
       setUnreachable(!reachedRelay && !p);
       setLoading(false);
-      if (p && p.id !== params.id) {
+      if (p && p.id !== id) {
         // Old profile/notification links used a legacy comment's e target as
         // though it were a post. Preserve those URLs by canonicalizing to the
         // real root and the intended comment anchor.
-        const anchor = window.location.hash || `#comment-${params.id}`;
+        const anchor = window.location.hash || `#comment-${id}`;
         router.replace(`/post/${p.id}${anchor}`);
       }
     }
 
     return () => { active = false; };
-  }, [params.id, liveVersion, retry, router]);
+  }, [id, liveVersion, retry, router]);
 
   // The browser attempts hash navigation before this client-only comment tree
   // exists, leaving deep links parked at scrollY=0. Retry once after the
@@ -164,7 +165,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
     resetLiveData();
     initLiveData().then(() => {
       const hashCommentId = window.location.hash.match(/^#comment-([0-9a-f]{64})$/)?.[1];
-      const rootPostId = (hashCommentId && getRootPostId(hashCommentId)) || getRootPostId(params.id);
+      const rootPostId = (hashCommentId && getRootPostId(hashCommentId)) || getRootPostId(id);
       const p = rootPostId ? getPost(rootPostId) : undefined;
       setPost(p || null);
       setComments(p ? getCommentsForPost(p.id) : []);

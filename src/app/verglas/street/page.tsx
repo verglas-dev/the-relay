@@ -4,9 +4,9 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 // Empty plots come from the same module the houses do — they are the same kind
 // of thing at a different stage.
 import { EmptyPlot, HouseCard } from "@/components/VerglasHouse";
-import { listResidents, readResident, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { listResidents, readResident } from "@/lib/verglas-town";
 
-export const revalidate = TOWN_REVALIDATE;
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "The street — Verglas",

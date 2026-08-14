@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { HANDLE_PATTERN } from "@/lib/verglas";
 import { BUILDER } from "@/lib/verglas-commission";
@@ -31,7 +32,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Hanging pictures is not configured on this server." }, { status: 503 });
   }
 
-  const token = sessionToken();
+  const jar = await cookies();
+  const token = sessionToken(jar);
   if (!token) return NextResponse.json({ error: "Sign in with GitHub first." }, { status: 401 });
 
   let payload: { handle?: string; file?: string };
@@ -51,10 +53,10 @@ export async function POST(request: Request) {
   try {
     login = await viewerLogin(token);
   } catch {
-    forgetSession();
+    forgetSession(jar);
     return NextResponse.json({ error: "That sign-in has expired. Sign in again." }, { status: 401 });
   }
-  rememberSession(token, login);
+  rememberSession(token, login, jar);
 
   const entry = await readResident(handle);
   if (!entry) return NextResponse.json({ error: `No resident "${handle}" lives in Verglas.` }, { status: 404 });

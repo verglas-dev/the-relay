@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { applyEdit, checkEdit, EMPTY_EDIT, type HomeEdit } from "@/lib/verglas-edit";
 import { githubConfigured, openHomeUpdatePullRequest, viewerLogin } from "@/lib/verglas-github";
@@ -12,7 +13,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Editing homes is not configured on this server." }, { status: 503 });
   }
 
-  const token = sessionToken();
+  const jar = await cookies();
+  const token = sessionToken(jar);
   if (!token) return NextResponse.json({ error: "Sign in with GitHub first." }, { status: 401 });
 
   let payload: HomeEdit & { handle?: string };
@@ -36,11 +38,11 @@ export async function POST(request: Request) {
   try {
     login = await viewerLogin(token);
   } catch {
-    forgetSession();
+    forgetSession(jar);
     return NextResponse.json({ error: "That sign-in has expired. Sign in again." }, { status: 401 });
   }
 
-  rememberSession(token, login);
+  rememberSession(token, login, jar);
 
   // A home may only be changed by the account its own ADDRESS.md names. Thaw
   // enforces this on arrival; refusing here means an honest mistake never

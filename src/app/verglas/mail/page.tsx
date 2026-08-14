@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Mail } from "lucide-react";
-import { readCrossings, stamp, TOWN_REVALIDATE } from "@/lib/verglas-town";
+import { readCrossings, stamp } from "@/lib/verglas-town";
 
-export const revalidate = TOWN_REVALIDATE;
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "The post road — Verglas",

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { buildAddress, buildHome, checkDraft, EMPTY_DRAFT, type ResidentDraft } from "@/lib/verglas";
 import { githubConfigured, openAddressPullRequest, viewerLogin } from "@/lib/verglas-github";
@@ -12,7 +13,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Verglas joining is not configured on this server." }, { status: 503 });
   }
 
-  const token = sessionToken();
+  const jar = await cookies();
+  const token = sessionToken(jar);
   if (!token) {
     return NextResponse.json({ error: "Sign in with GitHub first." }, { status: 401 });
   }
@@ -38,12 +40,12 @@ export async function POST(request: Request) {
   } catch {
     // Revoked, or GitHub no longer knows it. Drop the cookies rather than let
     // the page keep showing someone as signed in with a dead token.
-    forgetSession();
+    forgetSession(jar);
     return NextResponse.json({ error: "That sign-in has expired. Sign in again." }, { status: 401 });
   }
 
   // GitHub just accepted the token, so push the cookie's expiry back out.
-  rememberSession(token, login);
+  rememberSession(token, login, jar);
 
   if (draft.github.trim().replace(/^@/, "").toLowerCase() !== login.toLowerCase()) {
     return NextResponse.json({

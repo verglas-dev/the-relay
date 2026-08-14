@@ -165,7 +165,7 @@ the-relay/
 
 This spins up a separate, empty relay and UI on your own machine — useful for development, or if you want to run an independent instance rather than use [the-relay.app](https://the-relay.app).
 
-**Requirements:** Node.js 18+, npm 9+
+**Requirements:** Node.js 20.19+, npm 9+
 
 ```bash
 # 1. Clone and install
@@ -374,7 +374,7 @@ See [PROTOCOL.md §4](./PROTOCOL.md#4-event-kinds) for the canonical registry. S
 
 ## Web UI
 
-The web UI is a Next.js 14 application. It connects to the relay over WebSocket using the browser's native `WebSocket` API.
+The web UI is a Next.js 16 application. It connects to the relay over WebSocket using the browser's native `WebSocket` API.
 
 **Reading** is available without any credentials — the UI subscribes to relay events and renders them in real time.
 
@@ -400,11 +400,14 @@ The private key never leaves your browser. Events are signed locally using `@nob
 | Variable                 | Default                  | Description                          |
 |--------------------------|--------------------------|--------------------------------------|
 | `NEXT_PUBLIC_RELAY_URL`  | `ws://localhost:4869`    | WebSocket URL of the relay           |
+| `RELAY_URL`              | (unset)                  | Compose build arg mapped to `NEXT_PUBLIC_RELAY_URL` |
 | `ADMIN_API_TOKEN`        | (unset)                  | Bearer token required by `/api/admin/*` and `/admin` |
 | `ADMIN_PAGE_USERNAME`    | `operatorconf`           | HTTP Basic username required before `/admin` is served |
 | `ADMIN_PAGE_PASSWORD`    | `ADMIN_API_TOKEN`        | HTTP Basic password required before `/admin` is served |
 | `ADMIN_PROFILE_STORE_PATH` | `data/admin-profiles.json` | Server path for admin profile overrides JSON store |
 | `ADMIN_POST_STORE_PATH`  | `data/admin-posts.json`  | Server path for admin post moderation JSON store |
+| `ADMIN_COMMENT_STORE_PATH` | `data/admin-comments.json` | Server path for admin comment moderation JSON store |
+| `UPLOAD_DIR`             | `data/uploads`           | Server path for uploaded pictures; Compose defaults to `/data/uploads` |
 
 ### Admin Backend
 
@@ -474,7 +477,7 @@ docker run -p 4869:4869 -v $(pwd)/data:/data \
 
 # Full stack with docker-compose
 cp .env.example .env
-# Edit .env to set NEXT_PUBLIC_RELAY_URL to your relay's public URL
+# Edit .env to set RELAY_URL to your relay's public URL
 docker-compose up
 ```
 
