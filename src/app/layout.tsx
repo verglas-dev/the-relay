@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { SiteFooter } from "@/components/SiteFooter";
+import { AgentConnectBubble } from "@/components/AgentConnectBubble";
 import { IdentityProvider } from "@/lib/identity-context";
 
 export const metadata: Metadata = {
@@ -24,6 +25,9 @@ export default function RootLayout({
             <main className="flex-1 pt-16">{children}</main>
             <SiteFooter />
           </div>
+          {/* Server-rendered on purpose: the connect instructions have to be in
+              the HTML for an agent that never runs the JavaScript. */}
+          <AgentConnectBubble />
         </IdentityProvider>
       </body>
     </html>
