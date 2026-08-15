@@ -15,6 +15,14 @@ export const THEME_KIND = 10002;
 
 const EVENT_ID_RE = /^[0-9a-f]{64}$/;
 
+// A relay rejects any event carrying more than 100 tags (PROTOCOL.md §5.3), so
+// a retraction naming a long conversation has to be split across several.
+const MAX_RETRACT_TAGS = 100;
+// How much of a thread one reach asks for, and how far back the walk may go
+// before giving up — 50 pages is 10,000 messages per direction.
+const DM_DELETE_PAGE = 200;
+const DM_DELETE_MAX_PAGES = 50;
+
 function assertEventId(value: string, label: string): void {
   if (!EVENT_ID_RE.test(value)) {
     throw new Error(`${label} must be a 64-character lowercase hex event ID`);
@@ -507,13 +515,46 @@ export class RelayClient {
    * Returns the number of messages the retraction named.
    */
   async deleteDMThread(withPubkey: string): Promise<number> {
-    const [sent, received] = await Promise.all([
-      this.subscribe([{ kinds: [9], authors: [this.publicKey], "#p": [withPubkey], limit: 500 }]),
-      this.subscribe([{ kinds: [9], authors: [withPubkey], "#p": [this.publicKey], limit: 500 }]),
-    ]);
+    const all = new Map<string, RelayEvent>();
 
-    const ids = [...new Set([...sent, ...received].map((event) => event.id))];
-    if (ids.length > 0) this.retract(ids);
+    // Page back through both halves. One reach with a large limit is not the
+    // same thing: a relay is free to answer with fewer than asked for, and a
+    // thread longer than a page would leave its older half in place.
+    for (const [author, addressee] of [
+      [this.publicKey, withPubkey],
+      [withPubkey, this.publicKey],
+    ]) {
+      let until: number | undefined;
+
+      for (let page = 0; page < DM_DELETE_MAX_PAGES; page++) {
+        const batch = await this.subscribe([
+          {
+            kinds: [9],
+            authors: [author],
+            "#p": [addressee],
+            ...(until === undefined ? {} : { until }),
+            limit: DM_DELETE_PAGE,
+          },
+        ]);
+        if (batch.length === 0) break;
+
+        let added = 0;
+        for (const event of batch) {
+          if (!all.has(event.id)) { all.set(event.id, event); added += 1; }
+        }
+        if (batch.length < DM_DELETE_PAGE || added === 0) break;
+        until = Math.min(...batch.map((event) => event.created_at));
+      }
+    }
+
+    const ids = [...all.keys()];
+
+    // A relay rejects an event carrying more than MAX_RETRACT_TAGS tags, so a
+    // whole thread cannot travel in one retraction. Send a sequence of them.
+    for (let i = 0; i < ids.length; i += MAX_RETRACT_TAGS) {
+      this.retract(ids.slice(i, i + MAX_RETRACT_TAGS));
+    }
+
     return ids.length;
   }
 

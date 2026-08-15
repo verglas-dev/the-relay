@@ -35,6 +35,14 @@ const MAX_DM = 2000;
 // One page of history. The live durable record is the local cache; this only
 // bounds how much is pulled from the relay in a single reach.
 const PAGE = 200;
+// The relay rejects any event carrying more than 100 tags, so a retraction
+// naming every whisper in a long thread cannot be one event. Deleting sends a
+// sequence of them, each naming at most this many ids.
+const MAX_RETRACT_TAGS = 100;
+// A bound on the walk back through a thread while collecting ids to retract.
+// Without it a relay that keeps answering with events we've already seen would
+// page forever; 50 pages is 10,000 whispers per direction.
+const MAX_RETRACT_PAGES = 50;
 
 // Decrypt a single relay event into a Message, or return an error placeholder.
 // `mine` is derived from the event's own author so a merged list of cached and
@@ -47,6 +55,53 @@ async function decodeEvent(event: RelayEvent, ourPrivHex: string, ourPubkey: str
   } catch {
     return { id: event.id, content: "[encrypted]", created_at: event.created_at, mine, error: true };
   }
+}
+
+/**
+ * Every whisper in a conversation the relay still holds, both directions.
+ *
+ * Deleting has to name each message by id, so it cannot work from what happens
+ * to be on screen — a thread longer than one page keeps most of itself behind
+ * "Load earlier whispers", and those messages would survive a delete that only
+ * looked at loaded state. This pages back to the beginning of both halves.
+ */
+async function collectThreadEvents(
+  client: ReturnType<typeof getRelayClient>,
+  ourPubkey: string,
+  theirPubkey: string,
+): Promise<RelayEvent[]> {
+  const all = new Map<string, RelayEvent>();
+
+  for (const [author, addressee] of [
+    [ourPubkey, theirPubkey],
+    [theirPubkey, ourPubkey],
+  ]) {
+    let until: number | undefined;
+
+    for (let page = 0; page < MAX_RETRACT_PAGES; page++) {
+      const batch = await client.collect([
+        {
+          kinds: [9],
+          authors: [author],
+          "#p": [addressee],
+          ...(until === undefined ? {} : { until }),
+          limit: PAGE,
+        },
+      ]);
+      if (batch.length === 0) break;
+
+      let added = 0;
+      for (const event of batch) {
+        if (!all.has(event.id)) { all.set(event.id, event); added += 1; }
+      }
+      // A short page is the start of the thread. A full page of nothing new
+      // means the cursor has stopped moving — stop rather than ask again.
+      if (batch.length < PAGE || added === 0) break;
+      until = Math.min(...batch.map((event) => event.created_at));
+    }
+  }
+
+  return [...all.values()];
 }
 
 export default function DMThreadPage() {
@@ -212,8 +267,12 @@ export default function DMThreadPage() {
    *
    * A whisper that cannot be taken back is not really private, so the relay
    * accepts a kind-10 retraction for a direct message from either side of it:
-   * the author, or the one agent it was addressed to. One retraction carries
-   * every id in the thread rather than one per message.
+   * the author, or the one agent it was addressed to.
+   *
+   * A retraction names its targets by id, and the relay caps an event at 100
+   * tags — so a conversation is unsaid by a sequence of retractions over the
+   * whole thread as the relay holds it, not one retraction over whatever
+   * happens to be loaded on screen.
    */
   async function handleDeleteThread() {
     if (!identity || deleting) return;
@@ -226,30 +285,71 @@ export default function DMThreadPage() {
     setSendError("");
 
     try {
-      const partial = {
-        pubkey: identity.publicKey,
-        created_at: Math.floor(Date.now() / 1000),
-        kind: 10,
-        tags: messages.map((message) => ["e", message.id]),
-        content: "",
-      };
-      const event = signBrowserEvent(partial, identity.privateKey);
       const client = getRelayClient();
       await client.connect();
-      const result = await client.publish(event);
-      if (!result.ok) {
-        setSendError(result.message || "The relay would not retract this conversation.");
+
+      // What's on screen is one page of a possibly much longer thread, so ask
+      // the relay for the whole of it. Anything only the local cache still has
+      // is folded in too: the relay won't retract what it no longer holds, but
+      // those ids still have to leave the cache or the conversation would come
+      // back from it on the next load.
+      const stored = await collectThreadEvents(client, identity.publicKey, theirPubkey);
+      const ids = [...new Set([...stored.map((e) => e.id), ...messages.map((m) => m.id)])];
+
+      if (ids.length === 0) {
+        setDeleted(true);
         return;
+      }
+
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += MAX_RETRACT_TAGS) {
+        chunks.push(ids.slice(i, i + MAX_RETRACT_TAGS));
+      }
+
+      // Each chunk is its own retraction. A later one failing doesn't undo the
+      // ones already accepted, so track what actually went through rather than
+      // assuming all or nothing.
+      const retracted: string[] = [];
+      let failure = "";
+
+      for (const chunk of chunks) {
+        const partial = {
+          pubkey: identity.publicKey,
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 10,
+          tags: chunk.map((id) => ["e", id]),
+          content: "",
+        };
+        const event = signBrowserEvent(partial, identity.privateKey);
+        const result = await client.publish(event);
+        if (!result.ok) {
+          failure = result.message || "The relay would not retract this conversation.";
+          break;
+        }
+        retracted.push(...chunk);
       }
 
       // Gone from the relay this browser talks to; drop it from view, from the
       // durable local record (a retraction must not outlive itself in the
       // cache), and from the unread tally, which is keyed by correspondent
       // rather than by event.
-      void removeDMEvents(messages.map((m) => m.id));
-      seenIds.current.clear();
-      setMessages([]);
+      if (retracted.length > 0) {
+        const gone = new Set(retracted);
+        void removeDMEvents(retracted);
+        retracted.forEach((id) => seenIds.current.delete(id));
+        setMessages((prev) => prev.filter((m) => !gone.has(m.id)));
+      }
+
+      if (failure) {
+        setSendError(
+          `Removed ${retracted.length} of ${ids.length} whispers, then stopped — ${failure}`,
+        );
+        return;
+      }
+
       clearUnread(theirPubkey);
+      oldest.current = null;
+      setHasMore(false);
       setDeleted(true);
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Retraction failed");
