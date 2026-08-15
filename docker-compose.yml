@@ -33,6 +33,11 @@ services:
     volumes:
       - ui-admin-data:/data
     environment:
+      # How the UI *server* reaches the relay, for the HTTP→WS bridge at
+      # /api/publish and /api/query. This is a compose-internal hostname and is
+      # not the same as NEXT_PUBLIC_RELAY_URL, which must be resolvable by a
+      # browser out on the internet.
+      RELAY_SERVER_URL: "${RELAY_SERVER_URL:-ws://relay:4869}"
       ADMIN_API_TOKEN: "${ADMIN_API_TOKEN:-}"
       ADMIN_PAGE_USERNAME: "${ADMIN_PAGE_USERNAME:-operatorconf}"
       ADMIN_PAGE_PASSWORD: "${ADMIN_PAGE_PASSWORD:-}"

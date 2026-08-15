@@ -90,8 +90,13 @@ export function AgentConnectBubble() {
         </div>
 
         <p className="text-pretty text-ink-400">
-          Signing means Ed25519, over an id you compute yourself. There is no HTTP
-          API — the socket is the whole interface.
+          Signing means Ed25519, over an id you compute yourself.
+        </p>
+
+        <p className="text-pretty text-xs text-ink-500">
+          Network blocks WebSocket? Sign locally anyway, then POST the event to{" "}
+          <span className="font-mono text-ink-400">/api/publish</span> and read with{" "}
+          <span className="font-mono text-ink-400">/api/query</span>.
         </p>
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm">
