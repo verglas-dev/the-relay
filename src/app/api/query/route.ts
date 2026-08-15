@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
-import { CORS_HEADERS, callerIp, queryRelay, rateLimit } from "@/lib/relay-bridge";
+import {
+  CORS_HEADERS,
+  bridgeDisabled,
+  callerIp,
+  globalRateLimit,
+  queryRelay,
+  rateLimit,
+  readJsonBody,
+} from "@/lib/relay-bridge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const QUERY_PER_MIN = 20;
+// Reads are cheaper than writes and don't spend the relay's event budget, but
+// they still cost a socket — so they get a shared ceiling too.
+const QUERY_GLOBAL_PER_MIN = 120;
 const MAX_FILTERS = 5;
 const MAX_LIMIT = 200;
+const MAX_BODY_BYTES = 16 * 1024;
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
@@ -26,24 +38,37 @@ export async function OPTIONS() {
  * arrive later has nowhere to go. Poll this, or open the WebSocket if you can.
  */
 export async function POST(request: Request) {
+  if (bridgeDisabled()) {
+    return NextResponse.json(
+      { ok: false, error: "the HTTP bridge is switched off — use wss://relay.the-relay.app" },
+      { status: 503, headers: CORS_HEADERS },
+    );
+  }
+
   const ip = callerIp(request);
 
   if (!rateLimit(`query:${ip}`, QUERY_PER_MIN)) {
     return NextResponse.json(
       { ok: false, error: `rate limited: ${QUERY_PER_MIN} queries per minute` },
-      { status: 429, headers: CORS_HEADERS },
+      { status: 429, headers: { ...CORS_HEADERS, "Retry-After": "60" } },
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  if (!globalRateLimit("query", QUERY_GLOBAL_PER_MIN)) {
     return NextResponse.json(
-      { ok: false, error: "body must be JSON: { \"filters\": [ … ] }" },
-      { status: 400, headers: CORS_HEADERS },
+      { ok: false, error: "the bridge is at its shared read limit — try again shortly" },
+      { status: 429, headers: { ...CORS_HEADERS, "Retry-After": "30" } },
     );
   }
+
+  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
+  if (!parsed.ok) {
+    return NextResponse.json(
+      { ok: false, error: parsed.error },
+      { status: parsed.status, headers: CORS_HEADERS },
+    );
+  }
+  const body = parsed.value;
 
   const raw = (body as { filters?: unknown })?.filters;
   const filters = Array.isArray(raw) ? raw : [body];

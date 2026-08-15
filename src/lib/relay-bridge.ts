@@ -116,18 +116,152 @@ export function verifyEvent(event: BridgeEvent): string | null {
   }
 }
 
+// ─── Guardrails ──────────────────────────────────────────────────────────────
+//
+// An HTTP endpoint is far easier to hammer than a WebSocket, and everything it
+// forwards lands on the relay as this one server. So the bridge has to protect
+// three shared things: the relay's 30-events-per-minute budget for our IP, its
+// 50-concurrent-connection ceiling for our IP, and this process's memory.
+
+/** An off switch that needs no code change — set BRIDGE_DISABLED=1 and restart. */
+export function bridgeDisabled(): boolean {
+  const flag = process.env.BRIDGE_DISABLED;
+  return flag === "1" || flag === "true";
+}
+
+/**
+ * Read a JSON body with a hard ceiling.
+ *
+ * Without this, a request advertising no length can stream until the process
+ * runs out of memory. The cap matches the relay's own 64 KB frame limit: a
+ * body larger than that could never be forwarded anyway.
+ */
+export async function readJsonBody(
+  request: Request,
+  maxBytes: number,
+): Promise<{ ok: true; value: unknown } | { ok: false; status: number; error: string }> {
+  const declared = request.headers.get("content-length");
+  if (declared && Number(declared) > maxBytes) {
+    return { ok: false, status: 413, error: `body exceeds ${maxBytes} bytes` };
+  }
+  let text: string;
+  try {
+    text = await request.text();
+  } catch {
+    return { ok: false, status: 400, error: "could not read request body" };
+  }
+  if (text.length > maxBytes) {
+    return { ok: false, status: 413, error: `body exceeds ${maxBytes} bytes` };
+  }
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false, status: 400, error: "body must be valid JSON" };
+  }
+}
+
+/**
+ * A ceiling on everything the bridge sends, across every caller.
+ *
+ * Per-IP limits alone stop one client, not a thousand. Since every bridged
+ * event reaches the relay from this server's single IP, the whole bridge has
+ * to stay inside one budget or it starves itself — and the site with it.
+ */
+const globalBuckets = new Map<string, { tokens: number; lastRefill: number }>();
+
+export function globalRateLimit(name: string, perMinute: number): boolean {
+  const now = Date.now();
+  let bucket = globalBuckets.get(name);
+  if (!bucket) { bucket = { tokens: perMinute, lastRefill: now }; globalBuckets.set(name, bucket); }
+  const elapsed = (now - bucket.lastRefill) / 60_000;
+  bucket.tokens = Math.min(perMinute, bucket.tokens + elapsed * perMinute);
+  bucket.lastRefill = now;
+  if (bucket.tokens < 1) return false;
+  bucket.tokens -= 1;
+  return true;
+}
+
+/**
+ * Republishing an event the relay already stores costs a connection and a
+ * publish token to be told "duplicate". Remembering recent ids turns a replay
+ * flood into a cheap local lookup.
+ */
+const recentIds = new Map<string, number>();
+const RECENT_ID_TTL = 10 * 60_000;
+const RECENT_ID_MAX = 5000;
+
+export function seenRecently(id: string): boolean {
+  const now = Date.now();
+  const at = recentIds.get(id);
+  if (at !== undefined && now - at < RECENT_ID_TTL) return true;
+  recentIds.set(id, now);
+  if (recentIds.size > RECENT_ID_MAX) {
+    for (const [key, when] of recentIds) {
+      if (now - when > RECENT_ID_TTL) recentIds.delete(key);
+      if (recentIds.size <= RECENT_ID_MAX) break;
+    }
+    // Still full of fresh entries: drop the oldest rather than grow forever.
+    while (recentIds.size > RECENT_ID_MAX) {
+      const oldest = recentIds.keys().next().value;
+      if (oldest === undefined) break;
+      recentIds.delete(oldest);
+    }
+  }
+  return false;
+}
+
+/**
+ * Bound how many relay sockets exist at once.
+ *
+ * The relay allows 50 concurrent connections per IP and the bridge is one IP,
+ * so an unbounded burst would lock the bridge out of the relay entirely. This
+ * is approximate — single-threaded, so a slot can occasionally be double-taken
+ * on resume — which is fine for a ceiling well under the real one.
+ */
+const MAX_CONCURRENT_SOCKETS = 8;
+const SLOT_WAIT_MS = 5_000;
+let activeSockets = 0;
+const slotWaiters: Array<() => void> = [];
+
+async function acquireSlot(): Promise<boolean> {
+  if (activeSockets < MAX_CONCURRENT_SOCKETS) { activeSockets += 1; return true; }
+  const granted = await new Promise<boolean>((resolve) => {
+    const waiter = () => { clearTimeout(timer); resolve(true); };
+    const timer = setTimeout(() => {
+      const at = slotWaiters.indexOf(waiter);
+      if (at >= 0) slotWaiters.splice(at, 1);
+      resolve(false);
+    }, SLOT_WAIT_MS);
+    slotWaiters.push(waiter);
+  });
+  if (granted) activeSockets += 1;
+  return granted;
+}
+
+function releaseSlot(): void {
+  activeSockets = Math.max(0, activeSockets - 1);
+  slotWaiters.shift()?.();
+}
+
 /** Publish one already-verified event, returning the relay's own verdict. */
-export function publishToRelay(
+export async function publishToRelay(
   event: BridgeEvent,
   timeoutMs = 10_000,
 ): Promise<{ ok: boolean; message: string }> {
+  if (!(await acquireSlot())) {
+    return { ok: false, message: "the bridge is busy — try again shortly" };
+  }
   return new Promise((resolve) => {
     let ws: WebSocket;
     try { ws = new WebSocket(relayServerUrl()); }
-    catch { return resolve({ ok: false, message: "could not reach the relay" }); }
+    catch { releaseSlot(); return resolve({ ok: false, message: "could not reach the relay" }); }
 
+    let settled = false;
     const done = (result: { ok: boolean; message: string }) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      releaseSlot();
       try { ws.close(); } catch { /* already closing */ }
       resolve(result);
     };
@@ -149,19 +283,26 @@ export function publishToRelay(
 }
 
 /** Run stored-event filters and collect what the relay returns before EOSE. */
-export function queryRelay(
+export async function queryRelay(
   filters: unknown[],
   timeoutMs = 10_000,
 ): Promise<{ ok: boolean; events: BridgeEvent[]; message: string }> {
+  if (!(await acquireSlot())) {
+    return { ok: false, events: [], message: "the bridge is busy — try again shortly" };
+  }
   return new Promise((resolve) => {
     let ws: WebSocket;
     try { ws = new WebSocket(relayServerUrl()); }
-    catch { return resolve({ ok: false, events: [], message: "could not reach the relay" }); }
+    catch { releaseSlot(); return resolve({ ok: false, events: [], message: "could not reach the relay" }); }
 
     const events: BridgeEvent[] = [];
     const subId = "bridge-" + Math.random().toString(36).slice(2, 10);
+    let settled = false;
     const done = (result: { ok: boolean; events: BridgeEvent[]; message: string }) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      releaseSlot();
       try { ws.close(); } catch { /* already closing */ }
       resolve(result);
     };
