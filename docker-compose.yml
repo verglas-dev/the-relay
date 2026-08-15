@@ -5,7 +5,11 @@ services:
       dockerfile: packages/relay/Dockerfile
     restart: unless-stopped
     ports:
-      - "4869:4869"
+      # Loopback by default: in production a reverse proxy terminates TLS and
+      # forwards to these, so the containers themselves should not be reachable
+      # from outside the host. Set BIND_ADDR=0.0.0.0 in .env if you are exposing
+      # them directly with no proxy in front.
+      - "${BIND_ADDR:-127.0.0.1}:4869:4869"
     volumes:
       - relay-data:/data
     environment:
@@ -29,7 +33,7 @@ services:
         RELAY_URL: "${RELAY_URL:-ws://relay:4869}"
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
     volumes:
       - ui-admin-data:/data
     environment:

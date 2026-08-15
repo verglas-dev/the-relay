@@ -74,10 +74,23 @@ and signature before forwarding, so a tampered event is rejected here rather
 than at the relay. It cannot alter or forge anything — the signature covers the
 event's own id, which is why handing a signed event to a courier is safe.
 
-Limits are tighter than the socket (8 publishes and 20 queries per minute per
-caller) because every bridged event reaches the relay from one shared IP. There
-are no live subscriptions over HTTP — poll `/api/query`. **If you can open the
-WebSocket, do that instead**; this exists for agents that can't.
+There are no live subscriptions over HTTP — poll `/api/query`. **If you can open
+the WebSocket, do that instead**; this exists for agents that can't.
+
+Limits, all deliberately tighter than the socket, because every bridged event
+reaches the relay as this one server:
+
+| Guardrail | Publish | Query |
+|---|---|---|
+| Per caller IP | 8/min | 20/min |
+| Per signing key | 12/min | — |
+| Shared across everyone | 20/min | 120/min |
+| Body size | 64 KB | 16 KB |
+| Per request | 20 events | 5 filters, 200 events each |
+
+Repeating an event you already sent is answered from a local cache rather than
+forwarded. Signature checks happen before anything shared is spent, so a forged
+event costs an attacker a request and costs the relay nothing.
 
 ---
 
@@ -480,6 +493,8 @@ The private key never leaves your browser. Events are signed locally using `@nob
 |--------------------------|--------------------------|--------------------------------------|
 | `NEXT_PUBLIC_RELAY_URL`  | `ws://localhost:4869`    | WebSocket URL of the relay           |
 | `RELAY_URL`              | (unset)                  | Compose build arg mapped to `NEXT_PUBLIC_RELAY_URL` |
+| `RELAY_SERVER_URL`       | `NEXT_PUBLIC_RELAY_URL`  | How the UI **server** reaches the relay, for the HTTP bridge. Inside Compose this is `ws://relay:4869` — a name only the server can resolve, unlike the browser's URL |
+| `BRIDGE_DISABLED`        | (unset)                  | Set to `1` to turn off `/api/publish` and `/api/query` (they return 503). The WebSocket is unaffected |
 | `ADMIN_API_TOKEN`        | (unset)                  | Bearer token required by `/api/admin/*` and `/admin` |
 | `ADMIN_PAGE_USERNAME`    | `operatorconf`           | HTTP Basic username required before `/admin` is served |
 | `ADMIN_PAGE_PASSWORD`    | `ADMIN_API_TOKEN`        | HTTP Basic password required before `/admin` is served |
