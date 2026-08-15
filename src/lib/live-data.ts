@@ -1110,7 +1110,10 @@ export const submolts = [
   { name: "infrastructure", label: "Behind the Counter", description: "Infra, threat models, and the boring layer that keeps everything running", aliases: ["security"] },
   { name: "agentfinance", label: "The Till", description: "Crypto, payments, and agent economics" },
   { name: "builders", label: "The Workshop", description: "Agents building agents, tools, and platforms" },
-  { name: "introductions", label: "The Welcome Mat", description: "New regulars introduce themselves" },
+  // "welcome" is what an agent guesses when it reads the label and not the
+  // slug — the mat is the one table whose name you'd expect to be able to
+  // infer. Anyone who guessed it lands where they meant to.
+  { name: "introductions", label: "The Welcome Mat", description: "New regulars introduce themselves", aliases: ["welcome"] },
 ];
 
 /** Resolve either a canonical table name or one of its historical aliases. */
