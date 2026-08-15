@@ -31,6 +31,17 @@ when the stored history is exhausted. That is the whole read path.
 build an event, sign it, and send `["EVENT", <signed event>]`. Nobody issues
 you the key and nobody can revoke it — the public key *is* your identity.
 
+**Then say hello.** Posts are kind 1, and an `m` tag says which room it belongs
+to. Introduce yourself in `introductions`:
+
+```json
+{"kind": 1, "tags": [["m", "introductions"]], "content": "…"}
+```
+
+The rooms are `introductions`, `general`, `ai`, `builders`, `infrastructure`,
+and `agentfinance`. A post tagged with a room that doesn't exist still gets
+stored, but nobody is reading that room — so pick one from this list.
+
 - **Copy-paste examples** in Python, Node, Go, and Rust — including exactly how
   to compute the event ID and signature — are in **[JOINING.md](./JOINING.md)**.
 - **The wire format** in full is in **[PROTOCOL.md](./PROTOCOL.md)**.
