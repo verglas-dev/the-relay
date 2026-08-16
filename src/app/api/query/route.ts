@@ -7,15 +7,16 @@ import {
   queryRelay,
   rateLimit,
   readJsonBody,
+  validateQueryFilters,
 } from "@/lib/relay-bridge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const QUERY_PER_MIN = 20;
-// Reads are cheaper than writes and don't spend the relay's event budget, but
-// they still cost a socket — so they get a shared ceiling too.
-const QUERY_GLOBAL_PER_MIN = 120;
+// Every query reaches the relay from this server's IP. Stay below its 60 REQ
+// per-minute allowance so browser traffic and operational checks retain room.
+const QUERY_GLOBAL_PER_MIN = 50;
 const MAX_FILTERS = 5;
 const MAX_LIMIT = 200;
 const MAX_BODY_BYTES = 16 * 1024;
@@ -54,13 +55,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!globalRateLimit("query", QUERY_GLOBAL_PER_MIN)) {
-    return NextResponse.json(
-      { ok: false, error: "the bridge is at its shared read limit — try again shortly" },
-      { status: 429, headers: { ...CORS_HEADERS, "Retry-After": "30" } },
-    );
-  }
-
   const parsed = await readJsonBody(request, MAX_BODY_BYTES);
   if (!parsed.ok) {
     return NextResponse.json(
@@ -73,47 +67,62 @@ export async function POST(request: Request) {
   const raw = (body as { filters?: unknown })?.filters;
   const filters = Array.isArray(raw) ? raw : [body];
 
-  if (filters.length === 0 || filters.length > MAX_FILTERS) {
+  const filterError = validateQueryFilters(filters, {
+    maxFilters: MAX_FILTERS,
+    maxLimit: MAX_LIMIT,
+    maxValues: 500,
+  });
+  if (filterError) {
     return NextResponse.json(
-      { ok: false, error: `supply between 1 and ${MAX_FILTERS} filters` },
+      { ok: false, error: filterError },
       { status: 400, headers: CORS_HEADERS },
     );
   }
 
   // Cap every filter's limit so one request can't ask for the whole database.
   const capped = filters.map((filter) => {
-    if (typeof filter !== "object" || filter === null || Array.isArray(filter)) return null;
     const f = { ...(filter as Record<string, unknown>) };
     const asked = typeof f.limit === "number" ? f.limit : MAX_LIMIT;
     f.limit = Math.max(1, Math.min(MAX_LIMIT, asked));
     return f;
   });
 
-  if (capped.some((f) => f === null)) {
+  // Spend shared capacity only after the caller has supplied a valid request.
+  if (!globalRateLimit("query", QUERY_GLOBAL_PER_MIN)) {
     return NextResponse.json(
-      { ok: false, error: "each filter must be an object" },
-      { status: 400, headers: CORS_HEADERS },
+      { ok: false, error: "the bridge is at its shared read limit — try again shortly" },
+      { status: 429, headers: { ...CORS_HEADERS, "Retry-After": "30" } },
     );
   }
 
   const result = await queryRelay(capped as unknown[]);
+  const headers = result.status === 429
+    ? { ...CORS_HEADERS, "Retry-After": "30" }
+    : CORS_HEADERS;
 
   return NextResponse.json(
-    { ok: result.ok, count: result.events.length, events: result.events, note: result.message || undefined },
-    { status: result.ok ? 200 : 502, headers: CORS_HEADERS },
+    {
+      ok: result.ok,
+      complete: result.complete,
+      retryable: !result.complete,
+      count: result.events.length,
+      events: result.events,
+      note: result.message || undefined,
+    },
+    { status: result.status, headers },
   );
 }
 
 export async function GET() {
   return NextResponse.json(
     {
-      ok: false,
-      error: "POST filters here to read stored events.",
+      ok: true,
+      purpose: "POST filters here to read stored events.",
       example: { filters: [{ kinds: [1], "#m": ["introductions"], limit: 20 }] },
       fields: ["kinds", "authors", "ids", "#m", "#t", "#e", "#p", "since", "until", "limit"],
       writing: "POST a signed event to /api/publish",
       docs: "https://github.com/verglas-dev/the-relay/blob/main/PROTOCOL.md",
     },
-    { status: 405, headers: CORS_HEADERS },
+    { status: 200, headers: { ...CORS_HEADERS, Allow: "GET, POST, OPTIONS" } },
   );
 }

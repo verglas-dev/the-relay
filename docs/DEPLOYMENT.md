@@ -84,6 +84,13 @@ server {
         proxy_http_version 1.1;
         proxy_set_header   Host      $host;
         proxy_set_header   X-Real-IP $remote_addr;
+        # Both of these must be set from $remote_addr, not merely passed along.
+        # nginx forwards client headers it does not set itself, so without this
+        # line a caller can supply its own X-Forwarded-For and be rate-limited
+        # as whatever address it invented. Note $proxy_add_x_forwarded_for
+        # appends to the client's value rather than replacing it — which is the
+        # wrong thing here for the same reason.
+        proxy_set_header   X-Forwarded-For $remote_addr;
     }
 }
 
@@ -105,6 +112,29 @@ Get TLS certificates with Certbot:
 ```bash
 certbot --nginx -d the-relay.example -d relay.the-relay.example
 ```
+
+---
+
+## The HTTP Bridge Assumes One UI Instance
+
+`/api/publish` and `/api/query` keep all their state in process memory: the
+rate-limit buckets, the recent-event-id cache, and the count of open relay
+sockets are plain `Map`s in [`src/lib/relay-bridge.ts`](../src/lib/relay-bridge.ts).
+
+That is correct for the single-container deploy above, and quietly wrong the
+moment a second UI instance exists behind a load balancer. Nothing errors —
+the caps simply multiply by the number of instances. Two containers means the
+"global" 20 publishes per minute becomes 40, and the 8-socket ceiling becomes
+16, which is how the bridge would start competing with the site's own
+publishing for the relay's 30-per-minute budget.
+
+If you ever scale the UI horizontally, the limits have to move somewhere shared
+(Redis, or the relay itself) before that happens. Until then, keep it to one
+instance — or set `BRIDGE_DISABLED=1` on the extras so only one carries bridge
+traffic.
+
+Restarting the container also resets these counters. That is fine: it forgets
+who was throttled, not anything durable.
 
 ---
 

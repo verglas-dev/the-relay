@@ -1,6 +1,108 @@
 import type { RelayEvent } from "./types.js";
 
 const EVENT_ID_RE = /^[0-9a-f]{64}$/;
+const FILTER_KEYS = new Set(["ids", "authors", "kinds", "since", "until", "limit"]);
+
+export interface FilterValidationOptions {
+  maxFilters?: number;
+  maxLimit?: number;
+  maxValues?: number;
+}
+
+/**
+ * Validate untrusted REQ filters before they reach the SQLite query builder.
+ *
+ * JSON parsed from the wire is not a `Filter` merely because TypeScript says
+ * so. The query builder calls array methods and binds numbers directly; a
+ * string where `#m` should be an array used to throw out of the WebSocket
+ * message handler and terminate the relay process.
+ */
+export function validateFilters(
+  filters: unknown[],
+  options: FilterValidationOptions = {},
+): string | null {
+  const maxFilters = options.maxFilters ?? 10;
+  const maxLimit = options.maxLimit ?? 1000;
+  const maxValues = options.maxValues ?? 1000;
+
+  if (filters.length === 0 || filters.length > maxFilters) {
+    return `REQ requires 1–${maxFilters} filters`;
+  }
+
+  let valueCount = 0;
+  for (const [index, candidate] of filters.entries()) {
+    if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+      return `REQ filter ${index + 1} must be an object`;
+    }
+    const filter = candidate as Record<string, unknown>;
+    let hasSelector = false;
+
+    for (const [key, value] of Object.entries(filter)) {
+      if (!FILTER_KEYS.has(key) && !key.startsWith("#")) {
+        return `REQ filter ${index + 1} has unsupported field ${key}`;
+      }
+
+      if (key === "limit") {
+        if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > maxLimit) {
+          return `REQ filter ${index + 1} limit must be an integer from 1 to ${maxLimit}`;
+        }
+        continue;
+      }
+
+      if (key === "since" || key === "until") {
+        if (!Number.isSafeInteger(value) || (value as number) < 0) {
+          return `REQ filter ${index + 1} ${key} must be a non-negative integer`;
+        }
+        hasSelector = true;
+        continue;
+      }
+
+      if (key.startsWith("#")) {
+        if (key.length === 1 || key.length > 65) {
+          return `REQ filter ${index + 1} has an invalid tag field`;
+        }
+        if (!Array.isArray(value) || value.length === 0) {
+          return `REQ filter ${index + 1} ${key} must be a non-empty string array`;
+        }
+        if (value.some((entry) => typeof entry !== "string" || entry.length > 1024)) {
+          return `REQ filter ${index + 1} ${key} values must be strings of at most 1024 characters`;
+        }
+        valueCount += value.length;
+        hasSelector = true;
+        continue;
+      }
+
+      if (!Array.isArray(value) || value.length === 0) {
+        return `REQ filter ${index + 1} ${key} must be a non-empty array`;
+      }
+      if (key === "kinds") {
+        if (value.some((entry) => !Number.isSafeInteger(entry) || entry < 0 || entry > 65535)) {
+          return `REQ filter ${index + 1} kinds must contain integers from 0 to 65535`;
+        }
+      } else if (value.some((entry) => typeof entry !== "string" || !EVENT_ID_RE.test(entry))) {
+        return `REQ filter ${index + 1} ${key} must contain 64-character lowercase hex values`;
+      }
+      valueCount += value.length;
+      hasSelector = true;
+    }
+
+    if (
+      typeof filter.since === "number" &&
+      typeof filter.until === "number" &&
+      filter.since > filter.until
+    ) {
+      return `REQ filter ${index + 1} since must not exceed until`;
+    }
+    if (!hasSelector) {
+      return `REQ filter ${index + 1} needs at least one selector`;
+    }
+  }
+
+  if (valueCount > maxValues) {
+    return `REQ contains too many selector values (max ${maxValues})`;
+  }
+  return null;
+}
 
 /**
  * Kind-specific checks which run after the relay's general structural checks.

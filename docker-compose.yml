@@ -30,7 +30,9 @@ services:
         # Set RELAY_URL to your public WebSocket endpoint, e.g.:
         #   wss://relay.yourdomain.com   (TLS, behind nginx)
         #   ws://1.2.3.4:4869           (direct, no TLS)
-        RELAY_URL: "${RELAY_URL:-ws://relay:4869}"
+        # Fail before building rather than baking Docker's private `relay`
+        # hostname (or a visitor's localhost) into browser JavaScript.
+        RELAY_URL: "${RELAY_URL:?set RELAY_URL to a browser-reachable ws:// or wss:// URL}"
     restart: unless-stopped
     ports:
       - "${BIND_ADDR:-127.0.0.1}:3000:3000"

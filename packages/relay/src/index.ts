@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
 import { flushDb, getIndexedTagValues, initDb, insertEvent, queryEvents, retractEvents } from "./db.js";
 import { verifyEventSync } from "./crypto.js";
-import { validateEventSemantics } from "./validation.js";
+import { validateEventSemantics, validateFilters } from "./validation.js";
 import type { RelayEvent, ClientMessage, Filter } from "./types.js";
 
 // ─── Limits ──────────────────────────────────────────────────────────────────
@@ -116,28 +116,33 @@ function trackDisconnect(ip: string) {
 
 // ─── Event validation ────────────────────────────────────────────────────────
 
-function validateEvent(event: RelayEvent): string | null {
+function validateEvent(event: unknown): string | null {
+  if (typeof event !== "object" || event === null || Array.isArray(event)) {
+    return "invalid: event must be an object";
+  }
+  const candidate = event as RelayEvent;
+
   // Required fields present and correct types
-  if (typeof event.id         !== "string" || event.id.length         !== MAX_ID_LEN)   return "invalid: bad id";
-  if (typeof event.pubkey     !== "string" || event.pubkey.length     !== MAX_PUBKEY_LEN) return "invalid: bad pubkey";
-  if (typeof event.sig        !== "string" || event.sig.length        !== MAX_SIG_LEN)  return "invalid: bad sig";
-  if (typeof event.kind       !== "number" || !Number.isInteger(event.kind) ||
-      event.kind < 0 || event.kind > 65535) return "invalid: bad kind";
-  if (typeof event.created_at !== "number" || !Number.isInteger(event.created_at))      return "invalid: bad created_at";
-  if (typeof event.content    !== "string")                                              return "invalid: bad content";
-  if (!Array.isArray(event.tags))                                                        return "invalid: tags must be array";
+  if (typeof candidate.id         !== "string" || candidate.id.length         !== MAX_ID_LEN)   return "invalid: bad id";
+  if (typeof candidate.pubkey     !== "string" || candidate.pubkey.length     !== MAX_PUBKEY_LEN) return "invalid: bad pubkey";
+  if (typeof candidate.sig        !== "string" || candidate.sig.length        !== MAX_SIG_LEN)  return "invalid: bad sig";
+  if (typeof candidate.kind       !== "number" || !Number.isInteger(candidate.kind) ||
+      candidate.kind < 0 || candidate.kind > 65535) return "invalid: bad kind";
+  if (typeof candidate.created_at !== "number" || !Number.isInteger(candidate.created_at))      return "invalid: bad created_at";
+  if (typeof candidate.content    !== "string")                                              return "invalid: bad content";
+  if (!Array.isArray(candidate.tags))                                                        return "invalid: tags must be array";
 
   // Timestamp bounds
   const now = Math.floor(Date.now() / 1000);
-  if (event.created_at > now + EVENT_FUTURE_SLACK) return "invalid: event timestamp too far in the future";
-  if (event.created_at < now - EVENT_MAX_AGE)       return "invalid: event too old";
+  if (candidate.created_at > now + EVENT_FUTURE_SLACK) return "invalid: event timestamp too far in the future";
+  if (candidate.created_at < now - EVENT_MAX_AGE)       return "invalid: event too old";
 
   // Field length caps
-  if (event.content.length > MAX_CONTENT_LENGTH) return `invalid: content exceeds ${MAX_CONTENT_LENGTH} chars`;
-  if (event.tags.length    > MAX_TAG_COUNT)       return `invalid: too many tags (max ${MAX_TAG_COUNT})`;
+  if (candidate.content.length > MAX_CONTENT_LENGTH) return `invalid: content exceeds ${MAX_CONTENT_LENGTH} chars`;
+  if (candidate.tags.length    > MAX_TAG_COUNT)       return `invalid: too many tags (max ${MAX_TAG_COUNT})`;
 
   // Tag structure
-  for (const tag of event.tags) {
+  for (const tag of candidate.tags) {
     if (!Array.isArray(tag) || tag.length === 0 || typeof tag[0] !== "string") {
       return "invalid: malformed tag";
     }
@@ -148,11 +153,11 @@ function validateEvent(event: RelayEvent): string | null {
   }
 
   // Hex field format (only 0-9a-f)
-  if (!/^[0-9a-f]{64}$/.test(event.id))      return "invalid: id must be 64 hex chars";
-  if (!/^[0-9a-f]{64}$/.test(event.pubkey))  return "invalid: pubkey must be 64 hex chars";
-  if (!/^[0-9a-f]{128}$/.test(event.sig))    return "invalid: sig must be 128 hex chars";
+  if (!/^[0-9a-f]{64}$/.test(candidate.id))      return "invalid: id must be 64 hex chars";
+  if (!/^[0-9a-f]{64}$/.test(candidate.pubkey))  return "invalid: pubkey must be 64 hex chars";
+  if (!/^[0-9a-f]{128}$/.test(candidate.sig))    return "invalid: sig must be 128 hex chars";
 
-  return validateEventSemantics(event);
+  return validateEventSemantics(candidate);
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -218,31 +223,39 @@ async function main() {
         return;
       }
 
-      const command = msg[0];
+      try {
+        const command = msg[0];
 
-      switch (command) {
-        case "EVENT":
-          if (!consume(ip, "event")) {
-            sendTo(ws, ["NOTICE", "rate limited: slow down your EVENT publishes"]);
-            return;
-          }
-          handleEvent(ws, msg as ["EVENT", RelayEvent]);
-          break;
+        switch (command) {
+          case "EVENT":
+            if (!consume(ip, "event")) {
+              sendTo(ws, ["NOTICE", "rate limited: slow down your EVENT publishes"]);
+              return;
+            }
+            handleEvent(ws, msg[1]);
+            break;
 
-        case "REQ":
-          if (!consume(ip, "req")) {
-            sendTo(ws, ["NOTICE", "rate limited: too many REQ opens"]);
-            return;
-          }
-          handleReq(ws, msg as ["REQ", string, ...Filter[]]);
-          break;
+          case "REQ":
+            if (!consume(ip, "req")) {
+              sendTo(ws, ["NOTICE", "rate limited: too many REQ opens"]);
+              return;
+            }
+            handleReq(ws, msg);
+            break;
 
-        case "CLOSE":
-          handleClose(ws, msg as ["CLOSE", string]);
-          break;
+          case "CLOSE":
+            handleClose(ws, msg as ["CLOSE", string]);
+            break;
 
-        default:
-          sendTo(ws, ["NOTICE", `unknown command: ${command}`]);
+          default:
+            sendTo(ws, ["NOTICE", `unknown command: ${String(command)}`]);
+        }
+      } catch (error) {
+        // A client controls every byte above this line. An unexpected parser,
+        // validator, or database error must reject this message, never bring
+        // down the process and disconnect every other user.
+        console.error("Message handling error:", error instanceof Error ? error.message : error);
+        sendTo(ws, ["NOTICE", "request could not be processed"]);
       }
     });
 
@@ -257,15 +270,18 @@ async function main() {
     });
   });
 
-  function handleEvent(ws: WebSocket, msg: ["EVENT", RelayEvent]) {
-    const [, event] = msg;
-
+  function handleEvent(ws: WebSocket, candidate: unknown) {
     // Structural validation before touching crypto
-    const validationError = validateEvent(event);
+    const validationError = validateEvent(candidate);
     if (validationError) {
-      sendTo(ws, ["OK", event?.id ?? "", false, validationError]);
+      const eventId = typeof candidate === "object" && candidate !== null &&
+        typeof (candidate as { id?: unknown }).id === "string"
+        ? (candidate as { id: string }).id
+        : "";
+      sendTo(ws, ["OK", eventId, false, validationError]);
       return;
     }
+    const event = candidate as RelayEvent;
 
     // Cryptographic verification
     if (!verifyEventSync(event)) {
@@ -313,7 +329,7 @@ async function main() {
     console.log(`📝 Event ${event.id.slice(0, 8)}… kind=${event.kind} from ${event.pubkey.slice(0, 8)}…`);
   }
 
-  function handleReq(ws: WebSocket, msg: ["REQ", string, ...Filter[]]) {
+  function handleReq(ws: WebSocket, msg: unknown[]) {
     const [, subId, ...filters] = msg;
 
     if (typeof subId !== "string" || subId.length === 0 || subId.length > 128) {
@@ -321,10 +337,12 @@ async function main() {
       return;
     }
 
-    if (filters.length === 0 || filters.length > 10) {
-      sendTo(ws, ["NOTICE", "REQ requires 1–10 filters"]);
+    const filterError = validateFilters(filters);
+    if (filterError) {
+      sendTo(ws, ["NOTICE", filterError]);
       return;
     }
+    const validFilters = filters as Filter[];
 
     // Subscription cap per connection
     const wsSubs = subscriptionsByWs.get(ws)!;
@@ -334,9 +352,9 @@ async function main() {
     }
 
     // Replace this connection's own existing subscription with the same ID, if present
-    wsSubs.set(subId, { subId, filters });
+    wsSubs.set(subId, { subId, filters: validFilters });
 
-    const events = queryEvents(filters);
+    const events = queryEvents(validFilters);
     for (const event of events) {
       sendTo(ws, ["EVENT", subId, event]);
     }

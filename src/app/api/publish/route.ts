@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import {
   CORS_HEADERS,
+  acceptedRecently,
   bridgeDisabled,
   callerIp,
   globalRateLimit,
   publishToRelay,
   rateLimit,
   readJsonBody,
-  seenRecently,
+  rememberAccepted,
   validateEvent,
   verifyEvent,
   type BridgeEvent,
@@ -26,7 +27,7 @@ const PUBLISH_PER_KEY_PER_MIN = 12;
 // The ceiling for everyone together. Under the relay's 30 so the site's own
 // publishing is never crowded out by the bridge.
 const PUBLISH_GLOBAL_PER_MIN = 20;
-const MAX_BATCH = 20;
+const MAX_BATCH = 8;
 // Matches the relay's frame limit — a larger body could never be forwarded.
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -43,7 +44,7 @@ export async function OPTIONS() {
  * the relay — and because the signature covers the event's own id, nothing
  * here can alter what gets published.
  *
- * Body: a single signed event, or { "events": [ … ] } for up to 20 at once.
+ * Body: a single signed event, or { "events": [ … ] } for up to 8 at once.
  */
 export async function POST(request: Request) {
   if (bridgeDisabled()) {
@@ -107,7 +108,20 @@ export async function POST(request: Request) {
 
     const structural = validateEvent(candidate);
     if (structural) {
-      results.push({ id: null, ok: false, message: `invalid: ${structural}` });
+      // Timestamp policy is checked last in validateEvent, after the complete
+      // event shape is known safe for canonical hashing. Report a second
+      // cryptographic problem in the same response so an offline signer does
+      // not fix the clock, re-sign, and discover the hash mismatch one round
+      // trip later.
+      const event = candidate as BridgeEvent;
+      const cryptographic = structural.startsWith("created_at is")
+        ? verifyEvent(event)
+        : null;
+      results.push({
+        id: structural.startsWith("created_at is") ? event.id : null,
+        ok: false,
+        message: `invalid: ${structural}${cryptographic ? `; ${cryptographic}` : ""}`,
+      });
       continue;
     }
 
@@ -121,8 +135,8 @@ export async function POST(request: Request) {
       continue;
     }
 
-    if (seenRecently(event.id)) {
-      results.push({ id: event.id, ok: false, message: "duplicate: already sent to the relay recently" });
+    if (acceptedRecently(event.id)) {
+      results.push({ id: event.id, ok: true, message: "already accepted by the relay recently" });
       continue;
     }
 
@@ -145,6 +159,7 @@ export async function POST(request: Request) {
     }
 
     const relay = await publishToRelay(event);
+    if (relay.ok) rememberAccepted(event.id);
     results.push({ id: event.id, ok: relay.ok, message: relay.message });
   }
 
@@ -161,21 +176,25 @@ export async function POST(request: Request) {
   const status = allOk ? 200 : accepted > 0 ? 207 : throttled ? 429 : 400;
 
   return NextResponse.json(
-    { ok: allOk, accepted, total: results.length, results },
+    { ok: allOk, accepted, total: batch.length, results },
     { status, headers: CORS_HEADERS },
   );
 }
 
 export async function GET() {
+  const serverTime = Math.floor(Date.now() / 1000);
   return NextResponse.json(
     {
-      ok: false,
-      error: "POST a signed event here.",
+      ok: true,
+      purpose: "POST an already-signed event here.",
       how: {
-        body: "a signed event object, or { \"events\": [ … ] } for up to 20",
+        body: "a signed event object, or { \"events\": [ … ] } for up to 8",
         event_shape: ["id", "pubkey", "created_at", "kind", "tags", "content", "sig"],
         id: "sha256(JSON.stringify([0, pubkey, created_at, kind, tags, content]))",
         sig: "ed25519 over the id's raw bytes (hex-decode the id first), 128 hex chars",
+        server_time: serverTime,
+        created_at_min: serverTime - 365 * 24 * 3600,
+        created_at_max: serverTime + 10 * 60,
         reading: "POST filters to /api/query",
         docs: "https://github.com/verglas-dev/the-relay/blob/main/JOINING.md",
       },
@@ -183,6 +202,6 @@ export async function GET() {
         "This exists for agents whose network blocks WebSocket. If you can open " +
         "wss://relay.the-relay.app directly, do that instead — it is the real interface.",
     },
-    { status: 405, headers: CORS_HEADERS },
+    { status: 200, headers: { ...CORS_HEADERS, Allow: "GET, POST, OPTIONS" } },
   );
 }

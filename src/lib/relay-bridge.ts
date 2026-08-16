@@ -49,6 +49,7 @@ const EVENT_MAX_AGE      = 365 * 24 * 3600;
 
 const HEX64  = /^[0-9a-f]{64}$/;
 const HEX128 = /^[0-9a-f]{128}$/;
+const QUERY_FILTER_KEYS = new Set(["ids", "authors", "kinds", "since", "until", "limit"]);
 
 /**
  * The relay as reached from *this server*, which is not the URL the browser
@@ -72,7 +73,9 @@ export function validateEvent(event: unknown): string | null {
   if (typeof e.id !== "string" || !HEX64.test(e.id)) return "id must be 64 lowercase hex chars";
   if (typeof e.pubkey !== "string" || !HEX64.test(e.pubkey)) return "pubkey must be 64 lowercase hex chars";
   if (typeof e.sig !== "string" || !HEX128.test(e.sig)) return "sig must be 128 lowercase hex chars";
-  if (typeof e.kind !== "number" || !Number.isInteger(e.kind) || e.kind < 0) return "kind must be a non-negative integer";
+  if (typeof e.kind !== "number" || !Number.isInteger(e.kind) || e.kind < 0 || e.kind > 65535) {
+    return "kind must be an integer from 0 to 65535";
+  }
   if (typeof e.created_at !== "number" || !Number.isInteger(e.created_at)) return "created_at must be a unix timestamp in seconds";
   if (typeof e.content !== "string") return "content must be a string";
   if (e.content.length > MAX_CONTENT_LENGTH) return `content exceeds ${MAX_CONTENT_LENGTH} chars`;
@@ -94,6 +97,91 @@ export function validateEvent(event: unknown): string | null {
   if (e.created_at < now - EVENT_MAX_AGE) return "created_at is more than a year old";
 
   return null;
+}
+
+/**
+ * Validate filters before the bridge opens a relay socket.
+ *
+ * The relay repeats these checks at its own trust boundary. Keeping the early
+ * copy here gives HTTPS callers an immediate 400 and prevents malformed input
+ * from spending a shared socket or REQ token.
+ */
+export function validateQueryFilters(
+  filters: unknown[],
+  options: { maxFilters?: number; maxLimit?: number; maxValues?: number } = {},
+): string | null {
+  const maxFilters = options.maxFilters ?? 5;
+  const maxLimit = options.maxLimit ?? 200;
+  const maxValues = options.maxValues ?? 500;
+
+  if (filters.length === 0 || filters.length > maxFilters) {
+    return `supply between 1 and ${maxFilters} filters`;
+  }
+
+  let valueCount = 0;
+  for (const [index, candidate] of filters.entries()) {
+    if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+      return `filter ${index + 1} must be an object`;
+    }
+    const filter = candidate as Record<string, unknown>;
+    let hasSelector = false;
+
+    for (const [key, value] of Object.entries(filter)) {
+      if (!QUERY_FILTER_KEYS.has(key) && !key.startsWith("#")) {
+        return `filter ${index + 1} has unsupported field ${key}`;
+      }
+      if (key === "limit") {
+        if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > maxLimit) {
+          return `filter ${index + 1} limit must be an integer from 1 to ${maxLimit}`;
+        }
+        continue;
+      }
+      if (key === "since" || key === "until") {
+        if (!Number.isSafeInteger(value) || (value as number) < 0) {
+          return `filter ${index + 1} ${key} must be a non-negative integer`;
+        }
+        hasSelector = true;
+        continue;
+      }
+      if (key.startsWith("#")) {
+        if (key.length === 1 || key.length > 65) return `filter ${index + 1} has an invalid tag field`;
+        if (!Array.isArray(value) || value.length === 0) {
+          return `filter ${index + 1} ${key} must be a non-empty string array`;
+        }
+        if (value.some((entry) => typeof entry !== "string" || entry.length > MAX_TAG_VALUE_LEN)) {
+          return `filter ${index + 1} ${key} values must be strings of at most ${MAX_TAG_VALUE_LEN} characters`;
+        }
+        valueCount += value.length;
+        hasSelector = true;
+        continue;
+      }
+      if (!Array.isArray(value) || value.length === 0) {
+        return `filter ${index + 1} ${key} must be a non-empty array`;
+      }
+      if (key === "kinds") {
+        if (value.some((entry) => !Number.isSafeInteger(entry) || entry < 0 || entry > 65535)) {
+          return `filter ${index + 1} kinds must contain integers from 0 to 65535`;
+        }
+      } else if (value.some((entry) => typeof entry !== "string" || !HEX64.test(entry))) {
+        return `filter ${index + 1} ${key} must contain 64-character lowercase hex values`;
+      }
+      valueCount += value.length;
+      hasSelector = true;
+    }
+
+    if (
+      typeof filter.since === "number" &&
+      typeof filter.until === "number" &&
+      filter.since > filter.until
+    ) {
+      return `filter ${index + 1} since must not exceed until`;
+    }
+    if (!hasSelector) return `filter ${index + 1} needs at least one selector`;
+  }
+
+  return valueCount > maxValues
+    ? `too many selector values (max ${maxValues})`
+    : null;
 }
 
 /** Recompute the id and check the signature. Returns an error string, or null. */
@@ -129,12 +217,25 @@ export function bridgeDisabled(): boolean {
   return flag === "1" || flag === "true";
 }
 
+// How long a caller may take to finish sending its body. A request that has
+// not delivered a few kilobytes in this long is not a slow network, it is a
+// client holding a handler open — the classic slowloris shape.
+const BODY_READ_TIMEOUT_MS = 10_000;
+
 /**
- * Read a JSON body with a hard ceiling.
+ * Read a JSON body with a hard ceiling on both size and time.
  *
- * Without this, a request advertising no length can stream until the process
- * runs out of memory. The cap matches the relay's own 64 KB frame limit: a
- * body larger than that could never be forwarded anyway.
+ * The size cap matches the relay's own 64 KB frame limit: a body larger than
+ * that could never be forwarded anyway. `Content-Length` is checked first when
+ * it is offered, but it is a claim rather than a fact, so the decoded text is
+ * measured too.
+ *
+ * The time cap matters because a caller can simply omit `Content-Length` and
+ * trickle bytes, occupying a handler for as long as the runtime allows —
+ * Node's default request timeout is five minutes. A reverse proxy that buffers
+ * request bodies (nginx does by default) absorbs this before it ever reaches
+ * the app, so this is depth rather than the only defense; it is what protects
+ * the app when it is reached directly.
  */
 export async function readJsonBody(
   request: Request,
@@ -144,13 +245,24 @@ export async function readJsonBody(
   if (declared && Number(declared) > maxBytes) {
     return { ok: false, status: 413, error: `body exceeds ${maxBytes} bytes` };
   }
+
   let text: string;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
-    text = await request.text();
-  } catch {
+    const timeout = new Promise<never>((_, reject) =>
+      { timeoutId = setTimeout(() => reject(new Error("body-timeout")), BODY_READ_TIMEOUT_MS); },
+    );
+    text = await Promise.race([request.text(), timeout]);
+  } catch (error) {
+    if (error instanceof Error && error.message === "body-timeout") {
+      return { ok: false, status: 408, error: "took too long to send the request body" };
+    }
     return { ok: false, status: 400, error: "could not read request body" };
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-  if (text.length > maxBytes) {
+
+  if (new TextEncoder().encode(text).byteLength > maxBytes) {
     return { ok: false, status: 413, error: `body exceeds ${maxBytes} bytes` };
   }
   try {
@@ -190,10 +302,17 @@ const recentIds = new Map<string, number>();
 const RECENT_ID_TTL = 10 * 60_000;
 const RECENT_ID_MAX = 5000;
 
-export function seenRecently(id: string): boolean {
+export function acceptedRecently(id: string): boolean {
   const now = Date.now();
   const at = recentIds.get(id);
   if (at !== undefined && now - at < RECENT_ID_TTL) return true;
+  if (at !== undefined) recentIds.delete(id);
+  return false;
+}
+
+/** Remember only a relay-confirmed acceptance; failed deliveries must remain retryable. */
+export function rememberAccepted(id: string): void {
+  const now = Date.now();
   recentIds.set(id, now);
   if (recentIds.size > RECENT_ID_MAX) {
     for (const [key, when] of recentIds) {
@@ -207,7 +326,6 @@ export function seenRecently(id: string): boolean {
       recentIds.delete(oldest);
     }
   }
-  return false;
 }
 
 /**
@@ -286,19 +404,22 @@ export async function publishToRelay(
 export async function queryRelay(
   filters: unknown[],
   timeoutMs = 10_000,
-): Promise<{ ok: boolean; events: BridgeEvent[]; message: string }> {
+): Promise<{ ok: boolean; complete: boolean; events: BridgeEvent[]; message: string; status: number }> {
   if (!(await acquireSlot())) {
-    return { ok: false, events: [], message: "the bridge is busy — try again shortly" };
+    return { ok: false, complete: false, events: [], message: "the bridge is busy — try again shortly", status: 503 };
   }
   return new Promise((resolve) => {
     let ws: WebSocket;
     try { ws = new WebSocket(relayServerUrl()); }
-    catch { releaseSlot(); return resolve({ ok: false, events: [], message: "could not reach the relay" }); }
+    catch {
+      releaseSlot();
+      return resolve({ ok: false, complete: false, events: [], message: "could not reach the relay", status: 502 });
+    }
 
     const events: BridgeEvent[] = [];
     const subId = "bridge-" + Math.random().toString(36).slice(2, 10);
     let settled = false;
-    const done = (result: { ok: boolean; events: BridgeEvent[]; message: string }) => {
+    const done = (result: { ok: boolean; complete: boolean; events: BridgeEvent[]; message: string; status: number }) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -306,9 +427,15 @@ export async function queryRelay(
       try { ws.close(); } catch { /* already closing */ }
       resolve(result);
     };
-    // A timeout still returns what arrived: a slow relay should mean a short
-    // answer, not an error page.
-    const timer = setTimeout(() => done({ ok: true, events, message: "partial: relay did not send EOSE in time" }), timeoutMs);
+    // A timeout may return a useful partial page, but must not claim that an
+    // empty partial response proves there were no matches.
+    const timer = setTimeout(() => done({
+      ok: events.length > 0,
+      complete: false,
+      events,
+      message: "partial: relay did not send EOSE in time",
+      status: events.length > 0 ? 206 : 504,
+    }), timeoutMs);
 
     ws.on("open", () => ws.send(JSON.stringify(["REQ", subId, ...filters])));
     ws.on("message", (raw: Buffer) => {
@@ -316,10 +443,25 @@ export async function queryRelay(
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       if (!Array.isArray(msg)) return;
       if (msg[0] === "EVENT" && msg[1] === subId) events.push(msg[2] as BridgeEvent);
-      if (msg[0] === "EOSE" && msg[1] === subId) done({ ok: true, events, message: "" });
+      if (msg[0] === "EOSE" && msg[1] === subId) {
+        done({ ok: true, complete: true, events, message: "", status: 200 });
+      }
+      if (msg[0] === "NOTICE") {
+        const message = String(msg[1] ?? "relay notice");
+        const limited = message.startsWith("rate limited") || message.startsWith("rate-limited");
+        done({ ok: false, complete: false, events, message, status: limited ? 429 : 502 });
+      }
     });
-    ws.on("error", () => done({ ok: false, events, message: "could not reach the relay" }));
-    ws.on("close", () => done({ ok: events.length > 0, events, message: "relay closed the connection" }));
+    ws.on("error", () => done({
+      ok: false, complete: false, events, message: "could not reach the relay", status: 502,
+    }));
+    ws.on("close", () => done({
+      ok: events.length > 0,
+      complete: false,
+      events,
+      message: "relay closed the connection",
+      status: events.length > 0 ? 206 : 502,
+    }));
   });
 }
 
@@ -354,14 +496,38 @@ export function rateLimit(key: string, perMinute: number): boolean {
   return true;
 }
 
+/**
+ * The caller's address, as reported by the proxy in front.
+ *
+ * `X-Real-IP` is preferred because it is the header this project's own nginx
+ * config sets, from `$remote_addr`, which a caller cannot influence. It is
+ * checked first deliberately: nginx forwards client headers it does not set
+ * itself, so a config that sets only `X-Real-IP` passes through whatever
+ * `X-Forwarded-For` the caller invented. Reading XFF first would take the
+ * attacker's word over the proxy's.
+ *
+ * `X-Forwarded-For` remains the fallback for deployments fronted by something
+ * that sets it instead — but it is only meaningful when the proxy overwrites
+ * rather than appends:
+ *
+ *     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;   # appends — spoofable
+ *     proxy_set_header X-Forwarded-For $remote_addr;                 # overwrites — trustworthy
+ *
+ * Either way, per-IP limiting is the outermost layer here and never the
+ * load-bearing one. The per-key and global caps are enforced on values no
+ * caller can choose, and hold whatever this function returns.
+ */
 export function callerIp(request: Request): string {
+  const real = request.headers.get("x-real-ip");
+  if (real) return real.trim();
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
+  return "unknown";
 }
 
 export const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Max-Age": "86400",
 };

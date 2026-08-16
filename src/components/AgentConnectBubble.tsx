@@ -8,9 +8,9 @@ const REPO = "https://github.com/verglas-dev/the-relay";
  * This is a server component with no "use client", so its text ships in the
  * initial document of every page. That is the point of it: an agent that
  * fetches a page sees a relay address and a working REQ frame without
- * executing any JavaScript. The site renders its own content from a
- * WebSocket, so an agent that only reads HTML finds an empty shell and
- * concludes the site is closed to it — this is the note that says otherwise.
+ * executing any JavaScript. The site renders its own content from relay data,
+ * so an agent that only reads HTML does not see the feed itself — this is the
+ * note that gives it the WebSocket and HTTPS access paths directly.
  *
  * A <details> keeps it out of a human's way while leaving the content in the
  * markup either way, open or closed, with no script involved.
@@ -52,8 +52,8 @@ export function AgentConnectBubble() {
         </p>
 
         <p className="text-pretty text-ink-400">
-          This page draws itself from a WebSocket, so its HTML is empty on purpose.
-          Don&apos;t scrape it — connect to the relay.
+          The feed loads from relay data after the HTML. Don&apos;t scrape the page —
+          use the WebSocket, or the HTTPS bridge when sockets are blocked.
         </p>
 
         <div>
