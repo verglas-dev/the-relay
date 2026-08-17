@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Check, Github, KeyRound, Loader2 } from "lucide-react";
 import { importIdentity, newKeypair } from "@/lib/browser-identity";
+import { IdentityKeyCard } from "@/components/IdentityKeyCard";
 import { useIdentity } from "@/lib/identity-context";
 import { resetLiveData } from "@/lib/live-data";
 
@@ -30,7 +31,7 @@ interface Eligibility {
 const short = (key: string) => `${key.slice(0, 10)}…${key.slice(-6)}`;
 
 export function RecoveryFlow() {
-  const { setIdentity } = useIdentity();
+  const { identity, setIdentity } = useIdentity();
   const [loading, setLoading] = useState(true);
   const [signedOut, setSignedOut] = useState(false);
   const [state, setState] = useState<Eligibility | null>(null);
@@ -263,21 +264,42 @@ export function RecoveryFlow() {
             You are signed in on this browser with a new key, and everything you posted under
             the old one is yours again.
           </p>
-          {request.newPubkey && (
-            <code className="block text-xs font-mono text-ink-400 bg-ink-900 border border-ink-800 rounded-lg p-3 break-all">
-              {short(request.newPubkey)}
-            </code>
+          {/* The key itself, on the one screen where saving it is obviously the
+              next thing. Only when this browser is the one holding it: opening
+              this page somewhere else shows a claimed recovery, not a key.
+              Anything else would be an exhortation to save something with no
+              way to save it — which is how people end up back here. */}
+          {request.newPubkey && identity?.publicKey === request.newPubkey ? (
+            <div className="space-y-2">
+              <p className="text-sm text-ink-300 leading-relaxed">
+                This is your new key. Save it now — in a password manager, or anywhere you
+                will still have in a year.
+              </p>
+              <IdentityKeyCard privateKey={identity.privateKey} />
+              <p className="text-xs text-ink-500 leading-relaxed">
+                It lives in this browser and nowhere else. Clearing site data loses it, and
+                there is no copy on the server to fall back on. With it saved you can sit down
+                on any other device by pasting it into{" "}
+                <span className="text-ink-400">Pull Up a Chair</span>.
+              </p>
+            </div>
+          ) : (
+            request.newPubkey && (
+              <div className="space-y-2">
+                <code className="block text-xs font-mono text-ink-400 bg-ink-900 border border-ink-800 rounded-lg p-3 break-all">
+                  {short(request.newPubkey)}
+                </code>
+                <p className="text-xs text-ink-500 leading-relaxed">
+                  This recovery was claimed in a different browser, which is where the key
+                  itself lives. Open this page there to copy it.
+                </p>
+              </div>
+            )
           )}
-          <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3">
-            <p className="text-xs text-amber-400/90 leading-relaxed">
-              Back this one up somewhere you will still have in a year. It lives in this
-              browser&apos;s storage and nowhere else — clearing site data loses it, and there
-              is no copy on the server to fall back on.
-            </p>
-          </div>
           {request.addressPullUrl && (
-            <p className="text-sm text-ink-500 leading-relaxed">
-              A change to your address is{" "}
+            <p className="text-sm text-ink-400 leading-relaxed">
+              One thing left: your front door in Verglas is still on the old key. A change to
+              your address is{" "}
               <a
                 href={request.addressPullUrl}
                 target="_blank"
@@ -286,7 +308,8 @@ export function RecoveryFlow() {
               >
                 waiting to be merged
               </a>
-              . Once it lands, the town points at your new key too.
+              , and until it lands your home won&apos;t know you at the door. Nothing else is
+              affected — everything here is already yours again.
             </p>
           )}
           {addressError && (
