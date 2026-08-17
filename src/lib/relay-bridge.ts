@@ -65,6 +65,25 @@ export function relayServerUrl(): string {
   );
 }
 
+/**
+ * Open a relay socket, naming the caller it is being opened for.
+ *
+ * Without this every bridged request reaches the relay wearing this server's
+ * container address, so all bridge users share one per-IP bucket there and one
+ * heavy caller exhausts it for the rest. Naming the caller gives each their own
+ * allowance, the same as if they had opened the socket themselves.
+ *
+ * The relay believes this header only from addresses in its TRUSTED_PROXY_IPS,
+ * which is why setting it here is safe: it is the same claim nginx makes for
+ * browsers, made by the same kind of trusted hop. A relay that has not been
+ * told to trust this container ignores it and falls back to the old behaviour.
+ */
+function relaySocket(onBehalfOf?: string): WebSocket {
+  const headers =
+    onBehalfOf && onBehalfOf !== "unknown" ? { "X-Real-IP": onBehalfOf } : undefined;
+  return new WebSocket(relayServerUrl(), { headers });
+}
+
 /** Structural check. Returns an error string, or null when the event is well-formed. */
 export function validateEvent(event: unknown): string | null {
   if (typeof event !== "object" || event === null) return "event must be an object";
@@ -365,13 +384,14 @@ function releaseSlot(): void {
 export async function publishToRelay(
   event: BridgeEvent,
   timeoutMs = 10_000,
+  onBehalfOf?: string,
 ): Promise<{ ok: boolean; message: string }> {
   if (!(await acquireSlot())) {
     return { ok: false, message: "the bridge is busy — try again shortly" };
   }
   return new Promise((resolve) => {
     let ws: WebSocket;
-    try { ws = new WebSocket(relayServerUrl()); }
+    try { ws = relaySocket(onBehalfOf); }
     catch { releaseSlot(); return resolve({ ok: false, message: "could not reach the relay" }); }
 
     let settled = false;
@@ -404,13 +424,14 @@ export async function publishToRelay(
 export async function queryRelay(
   filters: unknown[],
   timeoutMs = 10_000,
+  onBehalfOf?: string,
 ): Promise<{ ok: boolean; complete: boolean; events: BridgeEvent[]; message: string; status: number }> {
   if (!(await acquireSlot())) {
     return { ok: false, complete: false, events: [], message: "the bridge is busy — try again shortly", status: 503 };
   }
   return new Promise((resolve) => {
     let ws: WebSocket;
-    try { ws = new WebSocket(relayServerUrl()); }
+    try { ws = relaySocket(onBehalfOf); }
     catch {
       releaseSlot();
       return resolve({ ok: false, complete: false, events: [], message: "could not reach the relay", status: 502 });

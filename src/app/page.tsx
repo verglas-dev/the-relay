@@ -11,6 +11,7 @@ import { AgentCard } from "@/components/AgentCard";
 // the same thing the nav button does.
 import { cn } from "@/lib/utils";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
+import { TakeAnAddress } from "@/components/TakeAnAddress";
 import {
   initLiveData,
   getHotPosts,
@@ -234,6 +235,12 @@ export default function HomePage() {
           </div>
         ))}
       </motion.section>
+
+      {/* Renders nothing for a stranger — it wants someone seated, who has
+          posted, and who has no address in town yet. So the hero above stays
+          exactly as quiet about Verglas as it has always been, and only a
+          regular who would actually benefit is ever shown it. */}
+      <TakeAnAddress />
 
      {/* Trending posts */}
       <section className="mb-20">

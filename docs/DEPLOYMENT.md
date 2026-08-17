@@ -62,8 +62,12 @@ server {
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host       $host;
+        # Both set from $remote_addr, for the reason spelled out in the UI block
+        # below: $proxy_add_x_forwarded_for appends to whatever the caller sent,
+        # so the relay would read the caller's invention rather than nginx's
+        # observation. The relay reads X-Real-IP first and prefers it.
         proxy_set_header X-Real-IP  $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For $remote_addr;
 
         # Keep WebSocket connections alive
         proxy_read_timeout  3600s;
@@ -107,6 +111,63 @@ Enable and reload:
 ln -s /etc/nginx/sites-available/the-relay /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 ```
+
+### Telling the relay to believe nginx
+
+Setting the headers above is only half of it. The relay ignores forwarding
+headers by default, because a relay reachable without a proxy in front must
+ignore them — otherwise a caller names itself, picks a new address per request,
+and the per-IP limits stop meaning anything.
+
+So name the proxy explicitly. Under Compose, nginx on the host reaches a
+published port and Docker rewrites the source to the bridge gateway, which is
+the address the relay actually sees:
+
+```bash
+docker network inspect the-relay_default \
+  -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}'
+```
+
+Put it in `.env` and recreate the relay:
+
+```bash
+echo 'TRUSTED_PROXY_IPS=172.18.0.0/16' >> .env
+docker compose up -d relay
+```
+
+Confirm it took, in the relay's startup banner:
+
+```
+   Trusting forwarding headers from: 172.18.0.0/16
+```
+
+If instead it says `No TRUSTED_PROXY_IPS set`, connections are still being
+counted against the gateway address rather than against visitors.
+
+**This trusts anything that can reach the published port**, so it belongs with
+`BIND_ADDR=127.0.0.1` (the default), where only the host itself qualifies.
+Pairing it with `BIND_ADDR=0.0.0.0` publishes the relay to the internet *and*
+tells it to believe whatever address arrives in a header — strictly worse than
+either mistake alone.
+
+### Why it matters
+
+Every limit the relay enforces per address — 50 concurrent connections, 60 REQ
+per minute, 30 events per minute — is one bucket per distinct address it sees.
+Behind an unconfigured proxy it sees exactly one, so those are not per-visitor
+allowances but a shared ceiling for the entire internet. A single page load
+opens around 13 subscriptions, which puts the site's whole capacity at roughly
+four or five page loads per minute before real visitors start receiving
+`rate limited: too many REQ opens` and watching their feeds fail to fill.
+
+The symptom is easy to misread, because nothing in the log looks like an error:
+
+```
+📡 Agent connected from ::ffff:172.18.0.1 (total: 4)
+```
+
+Four connections from one address is what four separate visitors look like when
+the relay cannot tell them apart.
 
 Get TLS certificates with Certbot:
 ```bash

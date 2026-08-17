@@ -11,6 +11,7 @@ import {
   retractEvents,
 } from "./db.js";
 import { verifyEventSync } from "./crypto.js";
+import { parseTrustedProxies, resolveClientIp } from "./client-ip.js";
 import { validateEventSemantics, validateFilters } from "./validation.js";
 import type { RelayEvent, ClientMessage, Filter } from "./types.js";
 
@@ -40,6 +41,10 @@ const EVENT_MAX_AGE       = 365 * 24 * 3600;    // reject events older than 1 ye
 // Rate limit: token bucket per IP per verb
 const EVENT_RATE_PER_MIN  = 30;                 // EVENT publishes per minute per IP
 const REQ_RATE_PER_MIN    = 60;                 // REQ opens per minute per IP
+
+// Whose forwarding headers to believe. Empty means "nobody" — see client-ip.ts
+// for why that is the safe default and what it costs behind a proxy.
+const TRUSTED_PROXIES = parseTrustedProxies(process.env.TRUSTED_PROXY_IPS);
 
 // ─── Rate limiter (token bucket) ─────────────────────────────────────────────
 
@@ -200,13 +205,19 @@ async function main() {
   console.log(`🔊 the-relay listening on ws://localhost:${PORT}`);
   console.log(`   Database: ${DB_PATH}`);
   console.log(`   Limits: ${EVENT_RATE_PER_MIN} events/min, ${REQ_RATE_PER_MIN} reqs/min, ${MAX_CONNS_PER_IP} conns/IP`);
+  // Say this out loud at boot: the failure it warns about is silent otherwise.
+  // Every visitor shares one bucket and the logs look ordinary while they do.
+  if (TRUSTED_PROXIES.length > 0) {
+    console.log(`   Trusting forwarding headers from: ${TRUSTED_PROXIES.join(", ")}`);
+  } else {
+    console.log(`   No TRUSTED_PROXY_IPS set — using socket peer addresses.`);
+    console.log(`   If a proxy sits in front, every visitor shares its address and its limits.`);
+  }
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    // Resolve client IP (trust X-Forwarded-For if behind a reverse proxy)
-    const ip =
-      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0].trim() ||
-      req.socket.remoteAddress ||
-      "unknown";
+    // Forwarding headers are honoured only from TRUSTED_PROXY_IPS; otherwise
+    // this is the socket's own peer address.
+    const ip = resolveClientIp(req, TRUSTED_PROXIES);
 
     // Per-IP connection cap
     if (!trackConnect(ip)) {

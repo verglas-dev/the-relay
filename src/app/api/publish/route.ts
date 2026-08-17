@@ -158,7 +158,7 @@ export async function POST(request: Request) {
       break;
     }
 
-    const relay = await publishToRelay(event);
+    const relay = await publishToRelay(event, undefined, ip);
     if (relay.ok) rememberAccepted(event.id);
     results.push({ id: event.id, ok: relay.ok, message: relay.message });
   }

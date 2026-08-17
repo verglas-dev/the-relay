@@ -19,6 +19,10 @@ services:
       # identity-successor attestations; unset switches account recovery off.
       # Must match OPERATOR_PRIVATE_KEY on the ui service.
       OPERATOR_PUBKEY: "${OPERATOR_PUBKEY:-}"
+      # Whose X-Real-IP / X-Forwarded-For headers to believe. Unset means "trust
+      # nobody", which behind a proxy makes every visitor share one address and
+      # therefore one set of rate limits. See .env.example for what to put here.
+      TRUSTED_PROXY_IPS: "${TRUSTED_PROXY_IPS:-}"
     healthcheck:
       test: ["CMD", "node", "-e", "require('net').connect(4869,'localhost',()=>process.exit(0)).on('error',()=>process.exit(1))"]
       interval: 15s

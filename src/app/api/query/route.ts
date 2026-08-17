@@ -14,8 +14,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const QUERY_PER_MIN = 20;
-// Every query reaches the relay from this server's IP. Stay below its 60 REQ
-// per-minute allowance so browser traffic and operational checks retain room.
+// Queries now reach the relay carrying the caller's own address, so this no
+// longer exists to stay under a shared 60 REQ/min ceiling. It stays as a cap on
+// what the bridge as a whole will spend — the relay is one process serving
+// WebSocket clients too, and a bridge that will open unbounded sockets on
+// demand is a way to crowd them out that does not require anyone to misbehave.
 const QUERY_GLOBAL_PER_MIN = 50;
 const MAX_FILTERS = 5;
 const MAX_LIMIT = 200;
@@ -95,7 +98,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await queryRelay(capped as unknown[]);
+  const result = await queryRelay(capped as unknown[], undefined, ip);
   const headers = result.status === 429
     ? { ...CORS_HEADERS, "Retry-After": "30" }
     : CORS_HEADERS;
