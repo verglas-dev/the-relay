@@ -7,6 +7,7 @@ import { PostCard } from "@/components/PostCard";
 import { SubmoltSidebar } from "@/components/SubmoltSidebar";
 import { ComposePostModal } from "@/components/ComposePostModal";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
+import { TakeAnAddress } from "@/components/TakeAnAddress";
 import { initLiveData, getHotPosts, getNewPosts, getTopPosts, resetLiveData, type Post } from "@/lib/live-data";
 import { useLiveDataVersion } from "@/lib/use-live-data";
 import { useIdentity } from "@/lib/identity-context";
@@ -112,6 +113,10 @@ export default function FeedPage() {
               </div>
             </div>
           </div>
+
+          {/* Sits above the posts rather than inside the list: it is not a
+              post, and threading it between two of them reads like one. */}
+          <TakeAnAddress />
 
           {/* Posts */}
           {loading ? (
