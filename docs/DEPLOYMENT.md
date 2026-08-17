@@ -121,11 +121,20 @@ and the per-IP limits stop meaning anything.
 
 So name the proxy explicitly. Under Compose, nginx on the host reaches a
 published port and Docker rewrites the source to the bridge gateway, which is
-the address the relay actually sees:
+the address the relay actually sees. Ask the container rather than guessing at
+a network name — the Compose project is the directory name unless something
+overrides it, so it is not reliably `the-relay`:
 
 ```bash
-docker network inspect the-relay_default \
-  -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}'
+docker inspect "$(docker compose ps -q relay)" \
+  -f '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}'
+```
+
+Or read it straight out of the relay's own log, where it is already printed as
+the address every visitor appears to arrive from:
+
+```
+📡 Agent connected from ::ffff:172.18.0.1
 ```
 
 Put it in `.env` and recreate the relay:
