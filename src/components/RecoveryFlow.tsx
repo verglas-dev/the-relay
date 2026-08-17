@@ -38,6 +38,9 @@ export function RecoveryFlow() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addressError, setAddressError] = useState<string | null>(null);
+  // Set only when the claim succeeded but this browser refused to store the
+  // key. It exists nowhere else at that point, so it goes on screen.
+  const [orphanKey, setOrphanKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -83,32 +86,41 @@ export function RecoveryFlow() {
     setBusy(true);
     setError(null);
     setAddressError(null);
-    try {
-      const candidate = newKeypair();
 
+    const candidate = newKeypair();
+    let data: { request?: RequestView; addressError?: string; error?: string };
+
+    try {
       const res = await fetch("/api/verglas/recovery/claim", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ newPubkey: candidate.publicKey }),
       });
-      const data = await res.json();
-
+      data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "That claim did not go through.");
         return;
       }
-
-      // Accepted — only now does it become this browser's identity.
-      const identity = importIdentity(candidate.privateKey);
-      try { resetLiveData(); } catch { /* the profile will load on next fetch */ }
-      setIdentity(identity);
-      setAddressError(data.addressError ?? null);
-      setState((prev) => (prev ? { ...prev, request: data.request } : prev));
     } catch {
       setError("Could not reach the server.");
+      return;
     } finally {
       setBusy(false);
     }
+
+    // Past this line the relay has already bound the identity to this key, so
+    // it is the only key that will ever own their history. Losing it here is
+    // unrecoverable without another operator-approved recovery — so storage
+    // failing must surface the key, never swallow it.
+    try {
+      setIdentity(importIdentity(candidate.privateKey));
+    } catch {
+      setOrphanKey(candidate.privateKey);
+    }
+
+    try { resetLiveData(); } catch { /* the profile will load on next fetch */ }
+    setAddressError(data.addressError ?? null);
+    setState((prev) => (prev ? { ...prev, request: data.request ?? prev.request } : prev));
   }
 
   if (loading && !signedOut) {
@@ -160,6 +172,28 @@ export function RecoveryFlow() {
   }
 
   const request = state?.request ?? null;
+
+  if (orphanKey) {
+    return (
+      <div className="glass-card p-6 space-y-4 border border-rose-500/50">
+        <p className="text-sm font-semibold text-rose-300">
+          Copy this key before you close this page
+        </p>
+        <p className="text-sm text-ink-300 leading-relaxed">
+          Your account was recovered, but this browser would not save the key — that usually
+          means private browsing, or storage being full. This is the only copy of it anywhere.
+          If this page closes without you copying it, the recovery has to be done again from
+          the beginning.
+        </p>
+        <IdentityKeyCard privateKey={orphanKey} />
+        <p className="text-sm text-ink-400 leading-relaxed">
+          Once it is somewhere safe, open <span className="text-ink-300">Pull Up a Chair</span>{" "}
+          and paste it in to sit down — turning off private browsing first, or it will not stick
+          there either.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
