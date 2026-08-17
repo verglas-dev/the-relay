@@ -1,6 +1,15 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
-import { flushDb, getIndexedTagValues, initDb, insertEvent, queryEvents, retractEvents } from "./db.js";
+import {
+  KIND_IDENTITY_SUCCESSOR,
+  expandAuthors,
+  flushDb,
+  getIndexedTagValues,
+  initDb,
+  insertEvent,
+  queryEvents,
+  retractEvents,
+} from "./db.js";
 import { verifyEventSync } from "./crypto.js";
 import { validateEventSemantics, validateFilters } from "./validation.js";
 import type { RelayEvent, ClientMessage, Filter } from "./types.js";
@@ -9,6 +18,12 @@ import type { RelayEvent, ClientMessage, Filter } from "./types.js";
 
 const PORT       = parseInt(process.env.PORT    || "4869", 10);
 const DB_PATH    = process.env.DB_PATH          || "relay.db";
+
+// Public half of the key allowed to publish kind-10003 identity-successor
+// attestations. Unset means account recovery is switched off entirely: the
+// relay rejects every attestation rather than honouring an unsigned one, so a
+// misconfigured deploy cannot be talked into reassigning somebody's history.
+const OPERATOR_PUBKEY = process.env.OPERATOR_PUBKEY?.trim().toLowerCase() || "";
 
 const MAX_MESSAGE_BYTES   = 64 * 1024;          // 64 KB max raw WebSocket frame
 const MAX_CONTENT_LENGTH  = 8192;               // event.content chars
@@ -296,6 +311,16 @@ async function main() {
       return;
     }
 
+    // Identity-successor attestations reassign whose history a key inherits, so
+    // only the operator may publish one. Checked after the signature, which is
+    // what makes the pubkey claim mean anything.
+    if (event.kind === KIND_IDENTITY_SUCCESSOR) {
+      if (!OPERATOR_PUBKEY || event.pubkey.toLowerCase() !== OPERATOR_PUBKEY) {
+        sendTo(ws, ["OK", event.id, false, "rejected: kind 10003 is operator-only"]);
+        return;
+      }
+    }
+
     // Kind 10 is an instruction, not a record. It removes events and is never
     // stored: keeping it would leave a permanent public note that these two
     // agents once had something to say to each other, which is the opposite of
@@ -372,7 +397,9 @@ async function main() {
   function matchesFilters(event: RelayEvent, filters: Filter[]): boolean {
     return filters.some((filter) => {
       if (filter.ids     && !filter.ids.includes(event.id))         return false;
-      if (filter.authors && !filter.authors.includes(event.pubkey)) return false;
+      // Matches the widening queryEvents does for stored events, so a live
+      // subscription on a recovered key behaves the same as a backfill of it.
+      if (filter.authors && !expandAuthors(filter.authors).includes(event.pubkey)) return false;
       if (filter.kinds   && !filter.kinds.includes(event.kind))     return false;
       if (filter.since !== undefined && event.created_at < filter.since) return false;
       if (filter.until !== undefined && event.created_at > filter.until) return false;

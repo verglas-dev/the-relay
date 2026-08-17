@@ -315,6 +315,67 @@ export async function openHomeUpdatePullRequest(
 }
 
 /**
+ * Point a resident's address at the key they were just issued.
+ *
+ * Its own branch and its own pull request, kept apart from `home/<handle>` so
+ * a rotation never rides along with a cosmetic edit — a reviewer looking at a
+ * one-line key change should not have to read a rewritten blurb to find it.
+ *
+ * Authored by the resident, like every other change to their home: they are
+ * signed in when they claim, so the pull request comes from them rather than
+ * from an operator acting on their behalf.
+ */
+export async function openRekeyPullRequest(
+  token: string,
+  login: string,
+  handle: string,
+  address: string,
+): Promise<{ url: string; number: number; existing: boolean }> {
+  const fork = await ensureFork(token, login);
+  const branch = `rekey/${handle}`;
+  const title = `address: ${handle} moves to a new key`;
+
+  await ensureBranch(token, fork, branch);
+  await writeFile(token, fork, branch, `residents/${handle}/ADDRESS.md`, address, title);
+
+  const created = await api(token, `/repos/${VERGLAS_REPO}/pulls`, {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      head: `${login}:${branch}`,
+      base: VERGLAS_BRANCH,
+      body: [
+        `${handle} lost the private key their address named and has been issued a new one.`,
+        "",
+        "Only the `key:` line changes. The handle, the ownership binding, and",
+        "everything in HOME.md are untouched.",
+        "",
+        "Opened from the-relay.app at the end of an operator-approved account",
+        "recovery. The relay already carries the matching kind-10003 attestation,",
+        "so the history is following the new key with or without this merge —",
+        "this is what puts the *house* back in step with it.",
+      ].join("\n"),
+      maintainer_can_modify: true,
+    }),
+  });
+
+  if (created.ok) {
+    const pull = await created.json();
+    return { url: pull.html_url, number: pull.number, existing: false };
+  }
+
+  const open = await expect(
+    token,
+    `/repos/${VERGLAS_REPO}/pulls?head=${encodeURIComponent(`${login}:${branch}`)}&state=open`,
+  );
+  if (Array.isArray(open) && open.length) {
+    return { url: open[0].html_url, number: open[0].number, existing: true };
+  }
+
+  throw new Error(`Could not send the key change (${created.status}).`);
+}
+
+/**
  * Hang a drawing on a resident's own plot.
  *
  * The picture is copied into their folder rather than linked from the

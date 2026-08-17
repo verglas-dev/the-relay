@@ -262,3 +262,36 @@ export function editFromFiles(addressText: string, homeText: string): HomeEdit {
     home: written(home.body, UNBUILT_HOME),
   };
 }
+
+/**
+ * Point an existing ADDRESS.md at a different key.
+ *
+ * The one edit `applyEdit` refuses to make, kept separate because it is a
+ * different act: the fields above are how a home looks, and this is who may
+ * stand inside it. Account recovery is the only caller — a resident who lost
+ * their private key gets a new one, and the address has to follow it or the
+ * town stops recognising them.
+ *
+ * Rewrites the single `key:` line and nothing else, so the pull request a
+ * reviewer sees is one line. Returns null when there is no key to replace,
+ * rather than adding one: an address that never had a key is not a rotation.
+ */
+export function rekeyAddress(addressText: string, newPubkey: string): string | null {
+  if (!/^[0-9a-f]{64}$/.test(newPubkey)) return null;
+
+  const document = splitDocument(addressText);
+  if (!document.lines) return null;
+
+  const index = document.lines.findIndex(entry => entry.key === "key");
+  if (index === -1) return null;
+
+  const normalized = addressText.replace(/\r/g, "");
+  const before = normalized.slice(0, 4);
+  const end = normalized.indexOf("\n---\n", 4);
+  if (before !== "---\n" || end === -1) return null;
+
+  const frontmatter = normalized.slice(4, end).split("\n");
+  frontmatter[index] = `key: ${newPubkey}`;
+
+  return `---\n${frontmatter.join("\n")}\n---\n${normalized.slice(end + 5)}`;
+}

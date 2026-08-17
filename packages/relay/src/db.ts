@@ -63,8 +63,29 @@ export async function initDb(path = "relay.db") {
   db.run("CREATE INDEX IF NOT EXISTS idx_comment_threads_root ON comment_threads(root_id)");
   db.run("CREATE INDEX IF NOT EXISTS idx_comment_threads_parent ON comment_threads(parent_id)");
 
+  // Account recovery. A lost private key is unrecoverable by construction, so
+  // the most an operator can do is issue a fresh keypair and record that it
+  // continues an older identity. Same reasoning as comment_threads above: the
+  // old events stay byte-identical and independently verifiable, and this
+  // sidecar is consulted only when answering queries.
+  //
+  // Derived from kind-10003 attestations, which are signed by the operator key
+  // and stored like any other event — so every recovery an operator performs
+  // is a public, auditable record rather than a silent edit to this table.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS identity_successors (
+      old_pubkey TEXT PRIMARY KEY,
+      new_pubkey TEXT NOT NULL,
+      issued_at INTEGER NOT NULL,
+      event_id TEXT NOT NULL
+    )
+  `);
+
+  db.run("CREATE INDEX IF NOT EXISTS idx_identity_successors_new ON identity_successors(new_pubkey)");
+
   dedupeVotes();
   rebuildCommentThreads();
+  rebuildIdentitySuccessors();
 
   saveDb();
 }
@@ -339,6 +360,112 @@ function rebuildCommentThreads() {
   }
 }
 
+// ─── Identity recovery ───────────────────────────────────────────────────────
+
+/** Kind of the operator-signed attestation that one identity continues another. */
+export const KIND_IDENTITY_SUCCESSOR = 10003;
+
+/** Depth guard for successor chains: a key recovered, then recovered again. */
+const MAX_SUCCESSOR_DEPTH = 16;
+
+/**
+ * Record a kind-10003 attestation.  The caller is responsible for having
+ * checked that the event is signed by the operator — this only indexes it.
+ *
+ * An old key may be superseded once. A second attestation naming the same old
+ * key overwrites the first, which is what makes a mistaken recovery fixable:
+ * point the old key at a corrected successor and reissue.
+ */
+function indexIdentitySuccessor(event: RelayEvent) {
+  const oldPubkey = firstTagValue(event, "old");
+  const newPubkey = firstTagValue(event, "p");
+  if (!oldPubkey || !newPubkey) return;
+  // A key that succeeds itself would spin the resolver for no gain.
+  if (oldPubkey === newPubkey) return;
+
+  db.run(
+    `INSERT INTO identity_successors (old_pubkey, new_pubkey, issued_at, event_id)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(old_pubkey) DO UPDATE SET
+       new_pubkey = excluded.new_pubkey,
+       issued_at  = excluded.issued_at,
+       event_id   = excluded.event_id`,
+    [oldPubkey, newPubkey, event.created_at, event.id]
+  );
+}
+
+function rebuildIdentitySuccessors() {
+  const rows = db.exec(
+    "SELECT * FROM events WHERE kind = ? ORDER BY created_at ASC, rowid ASC",
+    [KIND_IDENTITY_SUCCESSOR]
+  );
+  if (rows.length === 0) return;
+
+  db.run("DELETE FROM identity_successors");
+  for (const rawRow of rows[0].values) {
+    const row = Object.fromEntries(rows[0].columns.map((column: string, i: number) => [column, rawRow[i]]));
+    indexIdentitySuccessor(rowToEvent(row));
+  }
+}
+
+/**
+ * Every retired key whose history now belongs to `pubkey`, oldest last.
+ *
+ * Resolution runs backwards only: a recovered key inherits what came before it,
+ * but the retired key is never shown anything published after it was retired.
+ * Someone reading the old identity sees exactly the history it actually had.
+ */
+export function resolveIdentityAncestors(pubkey: string): string[] {
+  const ancestors: string[] = [];
+  const seen = new Set<string>([pubkey]);
+  let current = pubkey;
+
+  for (let depth = 0; depth < MAX_SUCCESSOR_DEPTH; depth++) {
+    const rows = db.exec("SELECT old_pubkey FROM identity_successors WHERE new_pubkey = ?", [current]);
+    if (rows.length === 0 || rows[0].values.length === 0) break;
+
+    const older = rows[0].values[0][0] as string;
+    // A cycle would otherwise walk until the depth guard and return nonsense.
+    if (seen.has(older)) break;
+
+    seen.add(older);
+    ancestors.push(older);
+    current = older;
+  }
+
+  return ancestors;
+}
+
+/**
+ * Widen an `authors` filter to include the retired keys each author recovered
+ * from, so one query returns a continuous history across a recovery.
+ */
+export function expandAuthors(authors: string[]): string[] {
+  const expanded = new Set(authors);
+  for (const author of authors) {
+    for (const ancestor of resolveIdentityAncestors(author)) expanded.add(ancestor);
+  }
+  return [...expanded];
+}
+
+export interface IdentitySuccessorRecord {
+  oldPubkey: string;
+  newPubkey: string;
+  issuedAt: number;
+  eventId: string;
+}
+
+export function listIdentitySuccessors(): IdentitySuccessorRecord[] {
+  const rows = db.exec("SELECT old_pubkey, new_pubkey, issued_at, event_id FROM identity_successors ORDER BY issued_at DESC");
+  if (rows.length === 0) return [];
+  return rows[0].values.map((row: any[]) => ({
+    oldPubkey: row[0] as string,
+    newPubkey: row[1] as string,
+    issuedAt: row[2] as number,
+    eventId: row[3] as string,
+  }));
+}
+
 /**
  * Persisting is a whole-file rewrite — sql.js keeps the database in memory and
  * `export()` serialises all of it. Doing that once per stored event means the
@@ -520,6 +647,10 @@ export function insertEvent(event: RelayEvent): boolean {
     reindexCommentDescendants(event.kind === 2 ? [event.id, event.pubkey] : [event.id]);
   }
 
+  if (event.kind === KIND_IDENTITY_SUCCESSOR) {
+    indexIdentitySuccessor(event);
+  }
+
   saveDb();
   return true;
 }
@@ -541,10 +672,13 @@ export function queryEvents(filters: Filter[]): RelayEvent[] {
     }
 
     if (filter.authors && filter.authors.length > 0) {
+      // Widened to the retired keys these authors recovered from, so a profile
+      // or feed query spans a recovery without the client knowing one happened.
+      const authors = expandAuthors(filter.authors);
       filterConditions.push(
-        `pubkey IN (${filter.authors.map(() => "?").join(",")})`
+        `pubkey IN (${authors.map(() => "?").join(",")})`
       );
-      params.push(...filter.authors);
+      params.push(...authors);
     }
 
     if (filter.kinds && filter.kinds.length > 0) {

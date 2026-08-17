@@ -1,6 +1,8 @@
 import type { RelayEvent } from "./types.js";
 
 const EVENT_ID_RE = /^[0-9a-f]{64}$/;
+// Same shape as an event id — 32 bytes of hex — but named for what it holds.
+const PUBKEY_RE = /^[0-9a-f]{64}$/;
 const FILTER_KEYS = new Set(["ids", "authors", "kinds", "since", "until", "limit"]);
 
 export interface FilterValidationOptions {
@@ -113,6 +115,24 @@ export function validateFilters(
  * forms; an abrupt requirement for `a` would reject clients during rollout.
  */
 export function validateEventSemantics(event: RelayEvent): string | null {
+  // Identity-successor attestation: both keys must be present and well-formed
+  // before it is stored, because a malformed one indexes as a silent no-op and
+  // the operator would be told the recovery succeeded.
+  if (event.kind === 10003) {
+    const oldPubkey = event.tags.find((tag) => tag[0] === "old")?.[1] ?? "";
+    const newPubkey = event.tags.find((tag) => tag[0] === "p")?.[1] ?? "";
+    if (!PUBKEY_RE.test(oldPubkey)) {
+      return "invalid: identity successor requires an old tag with a 64-character pubkey";
+    }
+    if (!PUBKEY_RE.test(newPubkey)) {
+      return "invalid: identity successor requires a p tag with a 64-character pubkey";
+    }
+    if (oldPubkey === newPubkey) {
+      return "invalid: identity successor old and p tags must differ";
+    }
+    return null;
+  }
+
   if (event.kind !== 2) return null;
 
   if (event.content.trim().length === 0) {

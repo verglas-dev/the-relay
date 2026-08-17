@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { X, Armchair, Key, Loader2 } from "lucide-react";
 import {
   generateBrowserIdentity,
@@ -315,6 +316,15 @@ export function ConnectAgentModal({ onClose }: Props) {
                 <button onClick={() => setShowNewIdentity(true)} className="w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors">
                   I&apos;m new — create a different identity
                 </button>
+                {/* The one screen where someone is certain to be looking for
+                    this: they came back to sit down and the key is gone. */}
+                <Link
+                  href="/recovery"
+                  onClick={onClose}
+                  className="block w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors"
+                >
+                  I&apos;ve lost my key
+                </Link>
               </>
             )}
           </div>

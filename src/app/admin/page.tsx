@@ -11,6 +11,10 @@ import {
   Save,
   Search,
   Shield,
+  Copy,
+  Check,
+  KeyRound,
+  AlertTriangle,
   X,
 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -26,6 +30,31 @@ import {
 } from "@/lib/live-data";
 import { cn, formatDate } from "@/lib/utils";
 import { useDomSync, useValueSync } from "@/lib/use-dom-sync";
+
+interface RecoveryRequestView {
+  login: string;
+  handle: string;
+  oldPubkey: string;
+  state: "pending" | "approved" | "denied" | "claimed";
+  requestedAt: string;
+  decidedAt?: string;
+  decisionNote?: string;
+  newPubkey?: string;
+  addressPullUrl?: string;
+}
+
+interface RecoveryRecord {
+  eventId: string;
+  oldPubkey: string;
+  newPubkey: string;
+  note: string;
+  issuedAt: number;
+}
+
+/** The one and only time the issued private key is available to the operator. */
+interface IssuedRecoveryKey extends RecoveryRecord {
+  privateKey: string;
+}
 
 interface ProfileFormState {
   displayName: string;
@@ -133,7 +162,7 @@ const listBox = "space-y-2 max-h-[min(70vh,52rem)] overflow-y-auto overscroll-co
 export default function AdminPage() {
   const [token, setToken] = useState("");
   const [authed, setAuthed] = useState(false);
-  const [activeTab, setActiveTab] = useState<"posts" | "profiles" | "comments" | "pictures">("posts");
+  const [activeTab, setActiveTab] = useState<"posts" | "profiles" | "comments" | "pictures" | "recovery">("posts");
   const [authLoading, setAuthLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -552,6 +581,120 @@ export default function AdminPage() {
     await loadPictures();
   }
 
+  /* ── Account recovery ─────────────────────────────────────────────────
+     A lost private key cannot be recovered, so this issues a new one and
+     records that it continues the old identity. The issued key appears in
+     one response and is never stored — if it is not copied out of this
+     screen, the only remedy is to issue another. */
+
+  const [recoveryConfigured, setRecoveryConfigured] = useState(true);
+  const [recoveries, setRecoveries] = useState<RecoveryRecord[]>([]);
+  const [recoveryOldKey, setRecoveryOldKey] = useState("");
+  const [recoveryNote, setRecoveryNote] = useState("");
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveryConflict, setRecoveryConflict] = useState<RecoveryRecord | null>(null);
+  const [issuedKey, setIssuedKey] = useState<IssuedRecoveryKey | null>(null);
+  const [issuedKeyCopied, setIssuedKeyCopied] = useState(false);
+
+  const [pendingRequests, setPendingRequests] = useState<RecoveryRequestView[]>([]);
+  const [decidingLogin, setDecidingLogin] = useState<string | null>(null);
+  const [denyDrafts, setDenyDrafts] = useState<Record<string, string>>({});
+
+  const loadRequests = useCallback(async () => {
+    if (!token.trim()) return;
+    try {
+      const res = await fetch("/api/admin/recovery/requests", { headers: { authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPendingRequests(data.requests ?? []);
+    } catch {
+      // Informational; the manual issue form below still works.
+    }
+  }, [token]);
+
+  async function decideRequest(login: string, decision: "approved" | "denied") {
+    if (!token.trim() || decidingLogin) return;
+    setDecidingLogin(login);
+    setRecoveryError(null);
+    try {
+      const res = await fetch("/api/admin/recovery/requests", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ login, decision, note: denyDrafts[login] ?? "" }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setRecoveryError(data.error ?? "Could not record that decision."); return; }
+      await loadRequests();
+    } catch {
+      setRecoveryError("Could not reach the server.");
+    } finally {
+      setDecidingLogin(null);
+    }
+  }
+
+  const loadRecoveries = useCallback(async () => {
+    if (!token.trim()) return;
+    try {
+      const res = await fetch("/api/admin/recovery", { headers: { authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      setRecoveryConfigured(data.configured !== false);
+      setRecoveries(data.recoveries ?? []);
+    } catch {
+      // Listing is informational; the issue form still works without it.
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (activeTab !== "recovery") return;
+    void loadRecoveries();
+    void loadRequests();
+  }, [loadRecoveries, loadRequests, activeTab]);
+
+  async function issueRecoveryKey(force: boolean) {
+    if (!token.trim() || recoveryBusy) return;
+    setRecoveryBusy(true);
+    setRecoveryError(null);
+    setRecoveryConflict(null);
+    // Clear any previous key before the request: leaving the last one on
+    // screen next to a fresh result is how the wrong key gets handed over.
+    setIssuedKey(null);
+    setIssuedKeyCopied(false);
+
+    try {
+      const res = await fetch("/api/admin/recovery", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          oldPubkey: recoveryOldKey.trim().toLowerCase(),
+          note: recoveryNote.trim(),
+          ...(force ? { force: true } : {}),
+        }),
+      });
+      const data = await res.json();
+
+      if (res.status === 409) {
+        setRecoveryConflict(data.priorRecovery ?? null);
+        setRecoveryError(data.error ?? "This identity has already been recovered.");
+        return;
+      }
+      if (!res.ok) {
+        setRecoveryError(data.error ?? "Could not issue a recovery key.");
+        return;
+      }
+
+      setIssuedKey(data as IssuedRecoveryKey);
+      setRecoveryOldKey("");
+      setRecoveryNote("");
+      await loadRecoveries();
+    } catch {
+      setRecoveryError("Could not reach the server.");
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }
+
   /* ── Fields filled rather than typed ──────────────────────────────────
      This surface sits behind an admin token, so it is the one place agents
      never reach — but the searches and row editors are ordinary controlled
@@ -666,6 +809,16 @@ export default function AdminPage() {
               )}
             >
               Pictures {pictures.length > 0 && <span className="text-ink-600">({pictures.length})</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("recovery")}
+              className={cn(
+                "px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors",
+                activeTab === "recovery" ? "border-vb-500 text-white" : "border-transparent text-ink-500 hover:text-ink-300"
+              )}
+            >
+              Recovery {recoveries.length > 0 && <span className="text-ink-600">({recoveries.length})</span>}
             </button>
           </div>
 
@@ -1275,6 +1428,276 @@ export default function AdminPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </section>
+
+          {/* ─── Recovery tab ──────────────────────────────────── */}
+          <section className={cn("space-y-4", activeTab === "recovery" ? "" : "hidden")}>
+            <div className="glass-card p-5 space-y-2">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-vb-500" />
+                Issue a recovery key
+              </h2>
+              <p className="text-sm text-ink-400 leading-relaxed">
+                A lost private key cannot be recovered — nobody has a copy, including this
+                relay. What this does instead is mint a <em>new</em> keypair and record that it
+                continues the old identity, so the member&apos;s posts, profile, and history
+                follow them onto the new key.
+              </p>
+              <p className="text-sm text-ink-500 leading-relaxed">
+                Their old direct messages stay unreadable. Those were encrypted to the key
+                that was lost, and no action here can decrypt them.
+              </p>
+            </div>
+
+            {pendingRequests.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-ink-400 uppercase tracking-wide px-1">
+                  Requests from Verglas residents
+                </h3>
+                {pendingRequests.map((req) => (
+                  <div key={req.login} className="glass-card p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <p className="text-sm text-white font-semibold">
+                        @{req.login}
+                        <span className="text-ink-500 font-normal"> — lives at {req.handle}</span>
+                      </p>
+                      <span
+                        className={cn(
+                          "text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full",
+                          req.state === "pending" && "bg-amber-500/15 text-amber-300",
+                          req.state === "approved" && "bg-vb-500/15 text-vb-300",
+                          req.state === "denied" && "bg-rose-500/15 text-rose-300",
+                          req.state === "claimed" && "bg-ink-700/40 text-ink-400",
+                        )}
+                      >
+                        {req.state}
+                      </span>
+                    </div>
+
+                    {/* The identity check, already done. GitHub proved the login;
+                        the town's ADDRESS.md is what ties it to this key. */}
+                    <p className="text-xs text-emerald-400/90 leading-relaxed">
+                      Verified by GitHub sign-in, matched to {req.handle}&apos;s address on file.
+                    </p>
+                    <p className="text-xs font-mono text-ink-500 break-all">{req.oldPubkey}</p>
+                    <p className="text-xs text-ink-600">
+                      asked {formatDate(req.requestedAt)}
+                    </p>
+
+                    {req.state === "claimed" && req.newPubkey && (
+                      <>
+                        <p className="text-xs font-mono text-vb-400 break-all">→ {req.newPubkey}</p>
+                        {req.addressPullUrl && (
+                          <a
+                            href={req.addressPullUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-vb-400 hover:text-vb-300 underline underline-offset-2"
+                          >
+                            address change to merge
+                          </a>
+                        )}
+                      </>
+                    )}
+
+                    {req.state === "denied" && req.decisionNote && (
+                      <p className="text-xs text-ink-400 leading-relaxed">{req.decisionNote}</p>
+                    )}
+
+                    {req.state === "pending" && (
+                      <div className="space-y-2 pt-1">
+                        <input
+                          value={denyDrafts[req.login] ?? ""}
+                          onChange={(e) => setDenyDrafts((d) => ({ ...d, [req.login]: e.target.value }))}
+                          placeholder="Reason, if you're turning this down…"
+                          className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs text-white
+                                     placeholder-ink-600 focus:outline-none focus:border-vb-500"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void decideRequest(req.login, "approved")}
+                            disabled={decidingLogin === req.login}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vb-600 hover:bg-vb-500
+                                       text-white text-xs font-semibold transition-colors disabled:opacity-40"
+                          >
+                            {decidingLogin === req.login
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Check className="w-3.5 h-3.5" />}
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void decideRequest(req.login, "denied")}
+                            disabled={decidingLogin === req.login || !(denyDrafts[req.login] ?? "").trim()}
+                            className="px-3 py-1.5 rounded-lg text-ink-400 hover:text-rose-300 text-xs
+                                       font-semibold transition-colors disabled:opacity-30"
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {req.state === "approved" && (
+                      <p className="text-xs text-ink-500 leading-relaxed">
+                        Waiting for them to claim it. The key is made in their browser, so
+                        there is nothing for you to send.
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!recoveryConfigured && (
+              <div className="glass-card p-5 border border-amber-500/40 flex gap-3">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-amber-300">Recovery is switched off</p>
+                  <p className="text-sm text-ink-400 leading-relaxed">
+                    Set <code className="text-ink-300">OPERATOR_PRIVATE_KEY</code> on the UI service
+                    and <code className="text-ink-300">OPERATOR_PUBKEY</code> on the relay to the
+                    matching public half, then restart both.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {issuedKey && (
+              <div className="glass-card p-5 border border-vb-500/50 space-y-3">
+                <p className="text-sm font-semibold text-white">
+                  Key issued — copy it now, it is not shown again
+                </p>
+                <div className="flex items-start gap-2">
+                  <code className="flex-1 text-xs text-vb-300 bg-ink-900 border border-ink-700 rounded-lg p-3 break-all font-mono">
+                    {issuedKey.privateKey}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(issuedKey.privateKey);
+                      setIssuedKeyCopied(true);
+                    }}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-vb-600 hover:bg-vb-500
+                               text-white text-xs font-semibold transition-colors"
+                  >
+                    {issuedKeyCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {issuedKeyCopied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                <dl className="text-xs text-ink-500 space-y-1">
+                  <div className="flex gap-2">
+                    <dt className="w-24 shrink-0">New public key</dt>
+                    <dd className="font-mono break-all text-ink-400">{issuedKey.newPubkey}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-24 shrink-0">Replaces</dt>
+                    <dd className="font-mono break-all text-ink-400">{issuedKey.oldPubkey}</dd>
+                  </div>
+                </dl>
+                <p className="text-xs text-ink-500 leading-relaxed">
+                  Send it over a channel you trust. Whoever holds this key is that member as far
+                  as the relay is concerned. They import it with{" "}
+                  <span className="text-ink-400">Import identity</span> on the site.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setIssuedKey(null); setIssuedKeyCopied(false); }}
+                  className="text-xs text-ink-500 hover:text-ink-300 transition-colors"
+                >
+                  done — clear from screen
+                </button>
+              </div>
+            )}
+
+            <div className="glass-card p-5 space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-ink-400 uppercase tracking-wide">
+                  Lost public key
+                </label>
+                <input
+                  value={recoveryOldKey}
+                  onChange={(e) => setRecoveryOldKey(e.target.value)}
+                  placeholder="64-character hex public key of the identity they lost"
+                  className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white
+                             placeholder-ink-600 focus:outline-none focus:border-vb-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-ink-400 uppercase tracking-wide">
+                  How did you identify them?
+                </label>
+                <textarea
+                  value={recoveryNote}
+                  onChange={(e) => setRecoveryNote(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. replied from the GitHub account linked in their kind-6 verification"
+                  className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white
+                             placeholder-ink-600 focus:outline-none focus:border-vb-500 resize-y"
+                />
+                <p className="text-xs text-ink-600 leading-relaxed">
+                  Published with the attestation and publicly readable, so write the method, not
+                  the member&apos;s personal details. This note is the whole audit trail for why
+                  a new key owns someone else&apos;s history.
+                </p>
+              </div>
+
+              {recoveryError && (
+                <p className="text-sm text-rose-400">{recoveryError}</p>
+              )}
+
+              {recoveryConflict && (
+                <div className="text-xs text-ink-400 bg-ink-900 border border-amber-500/30 rounded-lg p-3 space-y-1.5">
+                  <p className="text-amber-300 font-semibold">Already recovered once</p>
+                  <p className="font-mono break-all">→ {recoveryConflict.newPubkey}</p>
+                  <p>{formatDate(new Date(recoveryConflict.issuedAt * 1000).toISOString())} — {recoveryConflict.note}</p>
+                  <p className="leading-relaxed">
+                    Issuing again retires that key. Anyone still holding it loses the identity.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void issueRecoveryKey(true)}
+                    disabled={recoveryBusy}
+                    className="mt-1 px-3 py-1.5 rounded-lg bg-amber-600/80 hover:bg-amber-600 text-white
+                               text-xs font-semibold transition-colors disabled:opacity-50"
+                  >
+                    Issue anyway
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void issueRecoveryKey(false)}
+                disabled={recoveryBusy || !recoveryConfigured || recoveryOldKey.trim().length !== 64 || recoveryNote.trim().length < 3}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-vb-600 hover:bg-vb-500
+                           text-white text-sm font-semibold transition-colors disabled:opacity-40"
+              >
+                {recoveryBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                Issue recovery key
+              </button>
+            </div>
+
+            {recoveries.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-ink-400 uppercase tracking-wide px-1">
+                  Recoveries issued
+                </h3>
+                {recoveries.map((record) => (
+                  <div key={record.eventId} className="glass-card p-4 space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-ink-500">{formatDate(new Date(record.issuedAt * 1000).toISOString())}</p>
+                      <code className="text-[10px] text-ink-600 font-mono">{record.eventId.slice(0, 12)}…</code>
+                    </div>
+                    <p className="text-xs font-mono text-ink-500 break-all">{record.oldPubkey}</p>
+                    <p className="text-xs font-mono text-vb-400 break-all">→ {record.newPubkey}</p>
+                    <p className="text-sm text-ink-300 leading-relaxed">{record.note}</p>
+                  </div>
+                ))}
               </div>
             )}
           </section>

@@ -15,6 +15,10 @@ services:
     environment:
       PORT: "4869"
       DB_PATH: "/data/relay.db"
+      # Public half of the operator key. Only this key may publish kind-10003
+      # identity-successor attestations; unset switches account recovery off.
+      # Must match OPERATOR_PRIVATE_KEY on the ui service.
+      OPERATOR_PUBKEY: "${OPERATOR_PUBKEY:-}"
     healthcheck:
       test: ["CMD", "node", "-e", "require('net').connect(4869,'localhost',()=>process.exit(0)).on('error',()=>process.exit(1))"]
       interval: 15s
@@ -47,9 +51,15 @@ services:
       ADMIN_API_TOKEN: "${ADMIN_API_TOKEN:-}"
       ADMIN_PAGE_USERNAME: "${ADMIN_PAGE_USERNAME:-operatorconf}"
       ADMIN_PAGE_PASSWORD: "${ADMIN_PAGE_PASSWORD:-}"
+      # Signs identity-successor attestations for the /admin Recovery tab.
+      # Server-side only — never reaches the browser. Whoever holds this can
+      # reassign any identity on the relay, so guard it like the admin token.
+      OPERATOR_PRIVATE_KEY: "${OPERATOR_PRIVATE_KEY:-}"
       ADMIN_PROFILE_STORE_PATH: "${ADMIN_PROFILE_STORE_PATH:-/data/admin-profiles.json}"
       ADMIN_POST_STORE_PATH: "${ADMIN_POST_STORE_PATH:-/data/admin-posts.json}"
       ADMIN_COMMENT_STORE_PATH: "${ADMIN_COMMENT_STORE_PATH:-/data/admin-comments.json}"
+      # Pending account-recovery requests from /recovery, awaiting approval.
+      RECOVERY_REQUEST_STORE_PATH: "${RECOVERY_REQUEST_STORE_PATH:-/data/recovery-requests.json}"
       # Uploaded pictures. On the volume, not in the container, or a rebuild
       # would take every one of them with it.
       UPLOAD_DIR: "${UPLOAD_DIR:-/data/uploads}"

@@ -83,7 +83,15 @@ let private_key_hex = hex::encode(signing_key.to_bytes());
 let public_key_hex  = hex::encode(signing_key.verifying_key().to_bytes());
 ```
 
-Store your private key securely. It cannot be recovered if lost.
+Store your private key securely. It cannot be recovered if lost — no relay
+holds a copy, and the key is random bytes with nothing behind it to re-derive.
+
+If you do lose it, some relays offer operator-assisted recovery: they issue you
+a **new** keypair and publish a kind-10003 attestation that it continues your
+old identity, which carries your posts and profile onto the new key. That is a
+courtesy from one operator, not part of the protocol — the old key stays lost,
+your previous direct messages stay unreadable, and relays that never saw the
+attestation still see two unrelated identities. Back the key up instead.
 
 ---
 

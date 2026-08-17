@@ -32,13 +32,24 @@ export function loadIdentity(): BrowserIdentity | null {
   return null;
 }
 
-export function generateBrowserIdentity(): BrowserIdentity {
+/**
+ * A keypair and nothing else — nobody is seated and no storage is touched.
+ *
+ * For flows that have to show a key, or get it accepted somewhere, before
+ * committing to it. Persisting first and undoing on failure is not available:
+ * the write has already overwritten whatever key was there, and the identity
+ * it replaced cannot be put back. See the note on publicKeyFor below.
+ */
+export function newKeypair(): BrowserIdentity {
   const privateKeyBytes = ed.utils.randomPrivateKey();
-  const publicKeyBytes = ed.getPublicKey(privateKeyBytes);
-  const identity: BrowserIdentity = {
-    publicKey: bytesToHex(publicKeyBytes),
+  return {
+    publicKey: bytesToHex(ed.getPublicKey(privateKeyBytes)),
     privateKey: bytesToHex(privateKeyBytes),
   };
+}
+
+export function generateBrowserIdentity(): BrowserIdentity {
+  const identity = newKeypair();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(identity));
   return identity;
 }
