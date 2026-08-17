@@ -51,8 +51,13 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/relay.the-relay.example/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
 
-    # Rate limiting — prevents event spam
+    # Limits how fast one address may *open* connections. Event spam is not
+    # what this catches — that traffic rides inside an established socket,
+    # where the relay's own per-address and per-key limiters handle it. Sized
+    # above a client stuck in a reconnect loop (one attempt per 3s, so 20/min)
+    # to leave a browser with several tabs room after a relay restart.
     limit_req zone=relay burst=20 nodelay;
+    limit_req_status 429;
 
     location / {
         proxy_pass         http://127.0.0.1:4869;
@@ -76,6 +81,13 @@ server {
 }
 
 # ─── UI (HTTP) ────────────────────────────────────────────────
+# Two zones, because one number cannot serve both kinds of traffic here. A
+# single page load of the UI pulls the document plus dozens of hashed JS and
+# CSS chunks, so a limit strict enough to be interesting against an API abuser
+# would throttle an ordinary visitor halfway through opening the site.
+limit_req_zone $binary_remote_addr zone=ui_pages:10m rate=300r/m;
+limit_req_zone $binary_remote_addr zone=ui_api:10m   rate=60r/m;
+
 server {
     listen 443 ssl http2;
     server_name the-relay.example;
@@ -83,18 +95,26 @@ server {
     ssl_certificate     /etc/letsencrypt/live/the-relay.example/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/the-relay.example/privkey.pem;
 
+    # Build output: content-hashed, immutable, cached hard by the browser, and
+    # the bulk of every first visit. Deliberately unlimited — rate-limiting
+    # these throttles people for the offence of loading the page. next/image
+    # output belongs here too when the app uses it.
+    location /_next/static/ { include snippets/the-relay-proxy.conf; }
+    location /_next/image   { include snippets/the-relay-proxy.conf; }
+
+    # The bridge and the admin surface. The bridge enforces its own per-caller
+    # and global limits; this is the coarser outer net that stops a flood
+    # before it reaches Node at all.
+    location /api/ {
+        limit_req zone=ui_api burst=20 nodelay;
+        limit_req_status 429;
+        include snippets/the-relay-proxy.conf;
+    }
+
     location / {
-        proxy_pass         http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host      $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        # Both of these must be set from $remote_addr, not merely passed along.
-        # nginx forwards client headers it does not set itself, so without this
-        # line a caller can supply its own X-Forwarded-For and be rate-limited
-        # as whatever address it invented. Note $proxy_add_x_forwarded_for
-        # appends to the client's value rather than replacing it — which is the
-        # wrong thing here for the same reason.
-        proxy_set_header   X-Forwarded-For $remote_addr;
+        limit_req zone=ui_pages burst=60 nodelay;
+        limit_req_status 429;
+        include snippets/the-relay-proxy.conf;
     }
 }
 
@@ -104,6 +124,22 @@ server {
     server_name the-relay.example relay.the-relay.example;
     return 301 https://$host$request_uri;
 }
+```
+
+The UI blocks above share their proxy directives through a snippet, so that
+splitting one `location` into four does not mean maintaining four copies of the
+same headers — and, more to the point, so that a header fix cannot be applied to
+three of them and silently missed on the fourth.
+
+```nginx
+# /etc/nginx/snippets/the-relay-proxy.conf
+proxy_pass         http://127.0.0.1:3000;
+proxy_http_version 1.1;
+proxy_set_header   Host             $host;
+proxy_set_header   X-Real-IP        $remote_addr;
+proxy_set_header   X-Forwarded-For  $remote_addr;
+proxy_set_header   X-Forwarded-Proto $scheme;
+proxy_set_header   X-Forwarded-Host $host;
 ```
 
 Enable and reload:
@@ -334,7 +370,8 @@ A relay-to-relay replication protocol is planned for spec v0.2.0.
 ## Security Considerations
 
 - **Run behind a reverse proxy.** Never expose the relay's raw TCP port to the internet; always put nginx or Caddy in front with TLS.
-- **Add rate limiting at the proxy layer.** The relay has no built-in rate limiter. Use `limit_req` in nginx (see config above).
-- **Validate content length.** The relay does not enforce event size limits. Add a `client_max_body_size 64k;` directive in nginx to cap incoming WebSocket frames.
+- **Know what the relay already enforces.** It rate-limits per client address and per signing key — 30 events and 60 REQ opens a minute, 50 concurrent connections — and caps a raw frame at 64 KB, `content` at 8192 chars, and tags at 100. These are the load-bearing limits, and they are only as good as the relay's view of who the client is: see *Telling the relay to believe nginx* above.
+- **Add proxy-layer limiting for what the relay never sees.** `limit_req` on the relay's block limits WebSocket *handshakes*, not messages — once a connection is upgraded, nginx tunnels bytes and every REQ and EVENT inside it is invisible to the proxy. That makes it the right tool against connection-churn floods and the wrong one against event spam, which the relay's own limiter handles. The UI block is where proxy limiting earns most of its keep, since ordinary HTTP is all nginx can see there.
+- **Do not reach for `client_max_body_size` to bound WebSocket frames.** It caps HTTP request bodies, and an upgrade request has none, so it does nothing here. The 64 KB frame cap is enforced in the relay.
 - **Keep the database path out of the web root.** The SQLite file contains all events including private content. Store it in `/var/data/` or `/data/`, never in the web-accessible directory.
 - **Rotate your relay host's TLS cert automatically** with Certbot's systemd timer: `certbot renew --quiet`.
