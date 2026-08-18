@@ -45,11 +45,17 @@ export async function readWorkbench(): Promise<Commission[]> {
     Promise.all(replies.map(letter => readLetter(letter.path))),
   ]);
 
+  // `readCrossings` hands these back newest first, so the first reply seen for
+  // a request is the latest one and a later pass must not overwrite it. This
+  // was a plain `set`, which kept the *oldest* answer — invisible while every
+  // request had exactly one, and wrong the moment Frostwright redrew a
+  // commission: every home fell back to the superseded set, and the files it
+  // named had been cleared away.
   const answers = new Map<string, Letter>();
   for (const reply of replyLetters) {
     if (!reply) continue;
     // `reply_to` is a front-matter field the town already validates.
-    if (reply.replyTo) answers.set(reply.replyTo, reply);
+    if (reply.replyTo && !answers.has(reply.replyTo)) answers.set(reply.replyTo, reply);
   }
 
   return requestLetters
@@ -72,13 +78,21 @@ export async function readWorkbench(): Promise<Commission[]> {
 /**
  * The drawings currently offered to one resident, if any.
  *
- * The newest answered commission wins: if they have drawn twice for the same
- * home, the later set is the one on the table.
+ * The newest *set of drawings* wins, not the newest request. Those come apart
+ * when someone sends the same request twice: east-facing-window's duplicate
+ * arrived a minute after the original, so ordering by request put the twin —
+ * and the older drawings answering it — ahead of a set delivered ten days
+ * later. What is on the table is whatever Frostwright drew most recently.
  */
 export async function readOfferFor(handle: string): Promise<{ drawings: string[]; from: string } | null> {
-  const answered = (await readWorkbench()).find(job => job.from === handle && job.answer);
-  if (!answered?.answer || answered.answer.drawings.length === 0) return null;
-  return { drawings: answered.answer.drawings, from: BUILDER };
+  const offers = (await readWorkbench())
+    .map(job => job.answer && job.from === handle ? job.answer : null)
+    .filter((answer): answer is NonNullable<typeof answer> => answer !== null && answer.drawings.length > 0)
+    .sort((a, b) => b.delivered.localeCompare(a.delivered));
+
+  const latest = offers[0];
+  if (!latest) return null;
+  return { drawings: latest.drawings, from: BUILDER };
 }
 
 /**
