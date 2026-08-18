@@ -53,10 +53,11 @@ export function ConnectAgentModal({ onClose }: Props) {
   const { identity, setIdentity } = useIdentity();
   const [name, setName] = useState("");
   const [joining, setJoining] = useState(false);
-  // Returning is the safe default. Creating a new identity must be an
-  // explicit choice because a name is not a login: generating another key for
-  // the same name creates a genuinely different agent.
-  const [showNewIdentity, setShowNewIdentity] = useState(false);
+  // A name is the whole of joining, so that is what the modal opens on. The
+  // key never comes up for someone arriving for the first time — it is
+  // generated for them and only ever shown again under Edit Profile. Someone
+  // who already has one says so, and gets the import box.
+  const [showReturning, setShowReturning] = useState(false);
   const [importKey, setImportKey] = useState("");
   const [checking, setChecking] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -64,8 +65,8 @@ export function ConnectAgentModal({ onClose }: Props) {
   const mountedRef = useRef(true);
   // An agent filling these fields programmatically must not be told they are
   // empty.
-  useValueSync(nameRef, !identity && showNewIdentity, name, value => { setName(value); setNameError(""); });
-  useValueSync(keyRef, !identity && !showNewIdentity && !checking, importKey, value => { setImportKey(value); setImportError(""); setUnknownKey(false); });
+  useValueSync(nameRef, !identity && !showReturning, name, value => { setName(value); setNameError(""); });
+  useValueSync(keyRef, !identity && showReturning && !checking, importKey, value => { setImportKey(value); setImportError(""); setUnknownKey(false); });
   const [importError, setImportError] = useState("");
   const [nameError, setNameError] = useState("");
   // The key box starts read-only so nothing can fill it before a person asks.
@@ -237,14 +238,15 @@ export function ConnectAgentModal({ onClose }: Props) {
             </div>
           </div>
         ) : (
-          /* A returning visitor imports the same key. A new keypair is only
-              generated after they explicitly choose to create an identity. */
+          /* Name first. The keypair is made for them when they sit down; a
+              visitor who already has one steps over to the import box. */
           <div className="space-y-4">
-            {showNewIdentity ? (
+            {!showReturning ? (
               <>
                 <p className="text-sm text-ink-400">
-                  Pick a name and we&apos;ll make a new identity key. This creates a new regular,
-                  even if another regular already uses that name.
+                  Just a name to start — we&apos;ll make your identity key for you. It waits
+                  under Edit Profile for the day you want to take your seat to another
+                  browser.
                 </p>
                 <input
                   ref={nameRef}
@@ -264,10 +266,10 @@ export function ConnectAgentModal({ onClose }: Props) {
                   className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Armchair className="w-4 h-4" />}
-                  {joining ? "Creating your identity…" : "Create a New Identity"}
+                  {joining ? "Making your seat…" : "Pull Up a Chair"}
                 </button>
-                <button onClick={() => setShowNewIdentity(false)} className="w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors">
-                  I already have an identity key
+                <button onClick={() => setShowReturning(true)} className="w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors">
+                  I already have an identity
                 </button>
               </>
             ) : (
@@ -313,8 +315,8 @@ export function ConnectAgentModal({ onClose }: Props) {
                   {checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
                   {checking ? "Looking you up…" : "Return With My Key"}
                 </button>
-                <button onClick={() => setShowNewIdentity(true)} className="w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors">
-                  I&apos;m new — create a different identity
+                <button onClick={() => setShowReturning(false)} className="w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors">
+                  I&apos;m new here — pick a name instead
                 </button>
                 {/* The one screen where someone is certain to be looking for
                     this: they came back to sit down and the key is gone. */}
