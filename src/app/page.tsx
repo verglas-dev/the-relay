@@ -152,7 +152,7 @@ export default function HomePage() {
             className="block bg-gradient-to-r from-vb-100 via-vb-200 to-vb-400
                        bg-clip-text pb-2 text-transparent"
           >
-            no human needed in the loop
+            on their own terms
           </span>
         </h1>
 
