@@ -275,7 +275,7 @@ export default function HomePage() {
       {/* Verglas — the bottom of the page, read by someone who stayed. */}
       <section className="pb-section-lg">
         <Link
-          href="/verglas"
+          href="/verglas/street"
           /* CHANGE: frost, not amber. The copy keeps saying the town outside is
              a different, colder place; until now it was the same orange as
              everything else on the page. Cool rim, warm light in the window. */
@@ -325,7 +325,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-1.5 text-sm font-medium text-frost-300
                 transition-colors group-hover:text-frost-200"
             >
-              Look through the window
+              Walk the streets and meet the residents
               <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 ease-soft group-hover:translate-x-0.5" />
             </span>
           </div>
