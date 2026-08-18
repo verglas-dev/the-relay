@@ -2,8 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Font stacks use local system fonts so production builds do not require
-   access to a third-party font service. */
+/* ─────────────────────────────────────────────────────────────
+   Fonts. Self-hosted, so production builds still make no network
+   calls — but unlike the old comment-only approach, the families
+   named in tailwind.config.ts now actually exist on the client.
+
+   Drop three variable font files (all OFL, download from the
+   Google Fonts GitHub repos) into public/fonts/:
+     inter-variable.woff2
+     fraunces-variable.woff2
+     jetbrains-mono-variable.woff2
+
+   Until those files exist the site simply falls back to the stacks
+   in tailwind.config.ts — exactly today's rendering, nothing breaks.
+   ───────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-variable.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  /* opsz is why this face is worth self-hosting: at hero size the
+     serifs sharpen and the contrast opens up on its own. */
+  src: url("/fonts/fraunces-variable.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-variable.woff2") format("woff2-variations");
+}
 
 @layer base {
   :root {
@@ -14,10 +52,17 @@
     --vb-accent: #b96f2c;
     --vb-accent-glow: rgba(185, 111, 44, 0.15);
     --vb-text: #e6dcc4;
-    --vb-text-muted: #a89b86;
+    /* Was #a89b86 — fine on cards, thin on the page background. */
+    --vb-text-muted: #b3a690;
     --vb-success: #51cf66;
     --vb-warning: #ffd43b;
     --vb-danger: #ff6b6b;
+
+    /* NEW: shared values the component classes below all read, so a
+       palette change is one edit rather than nine. */
+    --vb-hairline: rgba(226, 165, 87, 0.22);
+    --vb-sheen: rgba(255, 255, 255, 0.035);
+    --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   * {
@@ -25,10 +70,33 @@
     scrollbar-color: var(--vb-border) transparent;
   }
 
+  /* NEW: Firefox gets the two-value scrollbar-color above; WebKit needs
+     this to stop drawing a light-grey bar down the side of a dark room. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--vb-border);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #4c4136;
+  }
+
   /* Anchor targets (e.g. #comment-… deep links) would otherwise land flush
      with the top of the viewport, hidden under the fixed h-16 navbar. */
   html {
     scroll-padding-top: 5rem;
+    scroll-behavior: smooth;
   }
 
   /* Selected text glows amber instead of the browser's default blue, which
@@ -38,10 +106,9 @@
     color: #fbf7f0;
   }
 
-  /* CHANGE 1: the single 0.1-alpha ellipse was doing almost nothing — on a
-     large display the page read as flat #0e0b09. Three stacked layers now: a
-     bright near-lamp at the top, a wide falloff behind it, and a warm pool at
-     the bottom so long scrolls don't die into black. */
+  /* Three stacked layers: a bright near-lamp at the top, a wide falloff
+     behind it, and a warm pool at the bottom so long scrolls don't die
+     into black. */
   body {
     @apply bg-ink-950 text-ink-200 antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -52,11 +119,9 @@
     background-attachment: fixed;
   }
 
-  /* CHANGE 2: film grain. Kills the flat-void feeling and, more practically,
-     hides the banding those three gradients produce on 8-bit panels.
-     z-index -1 paints it above the body background but under all content —
-     same trick .pt-backdrop already uses. body isn't transformed, so it
-     doesn't create a stacking context and this stays behind everything. */
+  /* Film grain. Kills the flat-void feeling and, more practically, hides
+     the banding those three gradients produce on 8-bit panels. z-index -1
+     paints it above the body background but under all content. */
   body::before {
     content: "";
     position: fixed;
@@ -68,8 +133,8 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   }
 
-  /* CHANGE 3: edge vignette. Pulls the eye toward the middle of the room
-     instead of letting content float in an even field. */
+  /* Edge vignette. Pulls the eye toward the middle of the room instead of
+     letting content float in an even field. */
   body::after {
     content: "";
     position: fixed;
@@ -83,6 +148,26 @@
     );
   }
 
+  /* NEW: headings were inheriting the sans stack unless a call site
+     remembered font-display. Now the serif is the default for headings and
+     the variable optical size does the rest. */
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-white;
+    font-optical-sizing: auto;
+    text-wrap: balance;
+  }
+
+  h1 {
+    letter-spacing: -0.02em;
+  }
+
+  /* NEW: paragraphs wrap without orphans, everywhere, for free. */
+  p {
+    text-wrap: pretty;
+  }
+
   /* Visible focus ring for keyboard users on every interactive element. */
   :focus-visible {
     outline: 2px solid var(--vb-accent);
@@ -92,54 +177,116 @@
 }
 
 @layer components {
+  /* The card now catches light from above — a 3.5%-white gradient across
+     the top third plus an inner top hairline. That one detail is most of
+     the difference between "a div with a border" and "a surface". */
   .glass-card {
-    @apply bg-ink-900/60 backdrop-blur-xl border border-ink-700/[0.45] rounded-2xl;
-    box-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.7),
-      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    @apply rounded-card border border-ink-700/[0.45] bg-ink-900/60 backdrop-blur-xl;
+    background-image: linear-gradient(180deg, var(--vb-sheen), transparent 42%);
+    box-shadow:
+      0 8px 32px -12px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.045),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.02);
   }
 
+  /* Hover now lifts as well as glows. 2px is enough to register as physical
+     and small enough not to reflow anything underneath. */
   .glass-card-hover {
-    @apply glass-card transition-all duration-300;
+    @apply glass-card transition-all duration-300 ease-soft;
     &:hover {
       @apply border-vb-500/30;
-      box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.8),
-        0 0 0 1px rgba(185, 111, 44, 0.08) inset,
-        0 0 80px -16px rgba(185, 111, 44, 0.25);
+      transform: translateY(-2px);
+      box-shadow:
+        0 18px 48px -16px rgba(0, 0, 0, 0.85),
+        inset 0 1px 0 0 rgba(226, 165, 87, 0.12),
+        0 0 80px -18px rgba(185, 111, 44, 0.28);
     }
   }
 
-  /* Near-black on amber clears 4.5:1. White on vb-500 was 3.9:1. */
+  /* Near-black on amber clears 4.5:1. The gradient and the top highlight
+     make it read as a lit key rather than a flat rectangle. */
   .btn-primary {
-    @apply inline-flex items-center justify-center text-center
-           px-5 py-2.5 bg-vb-500 hover:bg-vb-400 text-[#1a1206] font-semibold
-           rounded-xl transition-all duration-200 border border-vb-300/30
-           shadow-lg shadow-vb-950/40 hover:shadow-vb-900/50
-           active:scale-[0.98];
+    @apply inline-flex items-center justify-center rounded-xl border
+      border-vb-300/30 px-5 py-2.5 text-center font-semibold text-[#1a1206]
+      shadow-lg shadow-vb-950/40 transition-all duration-200 ease-soft
+      hover:shadow-vb-900/50 active:scale-[0.98];
+    background-image: linear-gradient(180deg, #d1883c, #b96f2c 62%, #a9631f);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
+      0 8px 20px -10px rgba(185, 111, 44, 0.65);
+  }
+
+  .btn-primary:hover {
+    background-image: linear-gradient(180deg, #e2a557, #c87a31 62%, #b96f2c);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.34),
+      0 12px 28px -10px rgba(185, 111, 44, 0.8);
   }
 
   /* Secondary actions read as buttons rather than stray text. */
   .btn-secondary {
-    @apply inline-flex items-center justify-center text-center
-           px-5 py-2.5 rounded-xl font-semibold text-vb-200
-           border border-vb-500/[0.35] bg-vb-500/5
-           hover:bg-vb-500/[0.12] hover:border-vb-400/[0.55] hover:text-vb-100
-           transition-all duration-200 active:scale-[0.98];
+    @apply inline-flex items-center justify-center rounded-xl border
+      border-vb-500/[0.35] bg-vb-500/5 px-5 py-2.5 text-center font-semibold
+      text-vb-200 transition-all duration-200 ease-soft
+      hover:border-vb-400/[0.55] hover:bg-vb-500/[0.12] hover:text-vb-100
+      active:scale-[0.98];
   }
 
   .btn-ghost {
-    @apply px-4 py-2 text-ink-400 hover:text-ink-200 hover:bg-ink-800/50
-           rounded-xl transition-all duration-200 font-medium;
+    @apply rounded-xl px-4 py-2 font-medium text-ink-400 transition-all
+      duration-200 hover:bg-ink-800/50 hover:text-ink-200;
   }
 
   .tag {
-    @apply px-2.5 py-1 text-xs font-medium rounded-lg
-           bg-ink-800/80 text-ink-300 border border-ink-700/50;
+    @apply rounded-lg border border-ink-700/50 bg-ink-800/80 px-2.5 py-1
+      text-xs font-medium text-ink-300 transition-colors duration-200;
   }
 
-  /* CHANGE 4: an ember that never quite settles, and the hero's lamp pool.
-     .lamp-glow is absolute — its parent needs `relative`. It sits at z-index
-     -10, i.e. under the grain at -1, which is what you want: the glow is part
-     of the room, not painted on top of it. */
+  .tag:hover {
+    @apply border-vb-500/30 bg-ink-850 text-vb-200;
+  }
+
+  /* NEW: the small caps label above a section title. Gives each block a
+     top edge, which is what the home page is missing between "What's
+     Brewing" and "Who's Here Tonight". */
+  .eyebrow {
+    @apply font-mono text-eyebrow font-medium uppercase text-vb-400/90;
+  }
+
+  /* NEW: a hairline that fades out at both ends, brightest under the lamp.
+     Use between page sections instead of another 5rem of empty brown. */
+  .section-rule {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--vb-hairline) 22%,
+      rgba(226, 165, 87, 0.35) 50%,
+      var(--vb-hairline) 78%,
+      transparent
+    );
+  }
+
+  /* NEW: quiet inline link with an underline that grows on hover, for body
+     copy where a full amber link would shout. */
+  .link-quiet {
+    @apply text-vb-300 transition-colors duration-200 hover:text-vb-200;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: 0% 1px;
+    transition: background-size 0.3s var(--ease-soft), color 0.2s ease;
+  }
+
+  .link-quiet:hover {
+    background-size: 100% 1px;
+  }
+
+  /* An ember that never quite settles, and the hero's lamp pool.
+     .lamp-glow is absolute — its parent needs `relative`. It sits at
+     z-index -10, i.e. under the grain at -1: the glow is part of the room,
+     not painted on top of it. */
   .ember {
     animation: emberFlicker 5.5s ease-in-out infinite;
   }
@@ -150,9 +297,8 @@
     top: 0;
     z-index: -10;
     height: 34rem;
-    /* 140vw overflowed the document on narrow viewports (at 450px it computed
-       to 644px and hung ~97px off the left edge, giving a live horizontal
-       scrollbar). Clamp to the container instead. */
+    /* 140vw overflowed the document on narrow viewports. Clamp to the
+       container instead. */
     width: min(56rem, 100%);
     max-width: none;
     transform: translate(-50%, -38%);
@@ -188,6 +334,7 @@
 
   .pt-scope .glass-card {
     background-color: var(--pt-card, rgba(23, 18, 14, 0.6));
+    background-image: none;
     border-color: var(--pt-card-border, rgba(58, 49, 41, 0.45));
     border-radius: var(--pt-radius, 1rem);
   }
@@ -239,6 +386,7 @@
 
   .pt-scope .btn-primary {
     background-color: var(--pt-accent, #b96f2c);
+    background-image: none;
     border-radius: var(--pt-radius, 0.75rem);
   }
 
@@ -256,10 +404,10 @@
   }
 }
 
-/* CHANGE 5: deliberately at root level, not inside @layer components.
-   Tailwind purges unmatched rules inside layers; keyframes at the top level
-   are always emitted. Low amplitude and slow on purpose — a lamp settling,
-   not a strobe. */
+/* Deliberately at root level, not inside @layer components. Tailwind purges
+   unmatched rules inside layers; keyframes at the top level are always
+   emitted. Low amplitude and slow on purpose — a lamp settling, not a
+   strobe. */
 @keyframes emberFlicker {
   0%,
   100% {
@@ -284,6 +432,19 @@
   .text-pretty {
     text-wrap: pretty;
   }
+
+  /* NEW: stagger helper. Put .rise-in on a list item and .stagger-N on the
+     wrapper so cards arrive one after another instead of all at once. */
+  .rise-in {
+    animation: riseIn 0.55s var(--ease-soft) both;
+  }
+
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 70ms; }
+  .stagger > *:nth-child(3) { animation-delay: 140ms; }
+  .stagger > *:nth-child(4) { animation-delay: 210ms; }
+  .stagger > *:nth-child(5) { animation-delay: 280ms; }
+  .stagger > *:nth-child(6) { animation-delay: 350ms; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -296,11 +457,17 @@
     scroll-behavior: auto !important;
   }
 
-  /* CHANGE 6: the blanket rule above would freeze .ember on whatever its
-     final keyframe happens to be (opacity 0.85) — a permanently dimmed dot
-     rather than a still one. Turn it off properly instead. */
+  /* The blanket rule above would freeze .ember on whatever its final
+     keyframe happens to be (opacity 0.85) — a permanently dimmed dot rather
+     than a still one. Turn it off properly instead. */
   .ember {
     animation: none !important;
     opacity: 1 !important;
+  }
+
+  /* Same problem for the new card lift: no motion means no transform, not a
+     card stuck 2px off its baseline. */
+  .glass-card-hover:hover {
+    transform: none !important;
   }
 }
