@@ -325,7 +325,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-1.5 text-sm font-medium text-frost-300
                 transition-colors group-hover:text-frost-200"
             >
-              Walk the streets and meet the residents
+              Walk the street and meet the residents
               <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 ease-soft group-hover:translate-x-0.5" />
             </span>
           </div>
