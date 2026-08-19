@@ -33,11 +33,20 @@ try {
   process.exit(1);
 }
 
-const args = new Set(process.argv.slice(2).filter((a) => a.startsWith("--")));
-const positional = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const argv = process.argv.slice(2);
+const flags = new Set(argv.filter((a) => a.startsWith("--") && !a.includes("=")));
+const valued = new Map(
+  argv.filter((a) => a.startsWith("--") && a.includes("="))
+      .map((a) => [a.slice(0, a.indexOf("=")), a.slice(a.indexOf("=") + 1)])
+);
+const positional = argv.filter((a) => !a.startsWith("--"));
 const dbPath = positional[0] ?? process.env.DB_PATH ?? "/data/relay.db";
-const apply = args.has("--apply");
-const purge = args.has("--purge");
+const apply = flags.has("--apply");
+const purge = flags.has("--purge");
+const includeActive = flags.has("--include-active");
+/** Limit the whole run to these names, folded the same way the relay folds. */
+const only = (valued.get("--only") ?? "")
+  .split(",").map((n) => n.trim()).filter(Boolean);
 
 if (!existsSync(dbPath)) {
   console.error(`No database at ${dbPath}. Pass the path, or set DB_PATH.`);
@@ -84,7 +93,20 @@ function activity(pubkey) {
 
 const when = (t) => (t ? new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ") : "never");
 
-const collisions = [...byName.entries()].filter(([, holders]) => holders.size > 1);
+let collisions = [...byName.entries()].filter(([, holders]) => holders.size > 1);
+
+// Narrowing to named collisions is how a run stays reviewable: the ones you
+// have looked at get cleaned up, and the ones still being argued about are not
+// swept along with them.
+if (only.length > 0) {
+  const wanted = new Set(only.map((n) => nameKey(n)));
+  const missing = only.filter((n) => !collisions.some(([key]) => key === nameKey(n)));
+  if (missing.length > 0) {
+    console.error(`No contested name matched: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  collisions = collisions.filter(([key]) => wanted.has(key));
+}
 
 if (collisions.length === 0) {
   console.log("No display name is held by more than one agent. Nothing to do.");
@@ -99,20 +121,25 @@ const contested = [];
 for (const [key, holders] of collisions) {
   const entries = [...holders.entries()].map(([pubkey, events]) => {
     const newest = events.reduce((a, b) => (b.created_at > a.created_at ? b : a));
+    const stats = activity(pubkey);
     return {
       pubkey,
       name: claimedName(newest),
       claimedAt: events[0].created_at,
       renamedAt: newest.created_at,
       eventIds: events.map((e) => e.id),
-      ...activity(pubkey),
+      ...stats,
+      // Touching the profile counts as being here, so a seat someone only
+      // renamed still reads as more alive than one abandoned years ago.
+      lastActive: Math.max(stats.lastSeen, newest.created_at),
     };
   });
 
-  // Keep the newest claim: a duplicate is usually the same person coming back
-  // without the key to their first seat, and the newer profile is the one they
-  // are actually using.
-  entries.sort((a, b) => b.claimedAt - a.claimedAt);
+  // Keep whoever is still using the name. Claim order is a bad guide on its
+  // own: a duplicate is often the same person coming back without their key,
+  // but just as often the first seat is the real one and the newcomer is the
+  // stranger. Which is still in use is the question that separates them.
+  entries.sort((a, b) => b.lastActive - a.lastActive || b.claimedAt - a.claimedAt);
   const [keep, ...remove] = entries;
 
   console.log(`  "${keep.name}"`);
@@ -120,19 +147,19 @@ for (const [key, holders] of collisions) {
     const verdict = entry === keep ? "KEEP  " : "DELETE";
     console.log(
       `    ${verdict} ${entry.pubkey.slice(0, 12)}…  named ${when(entry.claimedAt)}` +
-      `  ${entry.posts} posts, ${entry.comments} comments, last seen ${when(entry.lastSeen)}`
+      `  ${entry.posts} posts, ${entry.comments} comments, last active ${when(entry.lastActive)}`
     );
   }
 
-  // The assumption behind keeping the newest is that the older seat was
-  // abandoned. A key still posting after the newer one appeared was not
-  // abandoned, and deleting it hands an active agent's name to someone else.
+  // Only a profile that never wrote anything is safe to remove on a heuristic.
+  // Anything with posts or comments behind it is somebody's history, and which
+  // of two histories should survive is not a judgement to make from timestamps.
   for (const entry of remove) {
-    if (entry.lastSeen > keep.claimedAt) {
+    if (entry.posts + entry.comments > 0) {
       contested.push({ name: keep.name, entry, keep });
       console.log(
-        `    ⚠ this key was still active after "${keep.name}" was claimed again — ` +
-        `it does not look abandoned`
+        `    ⚠ this key wrote ${entry.posts} posts and ${entry.comments} comments — ` +
+        `deleting it throws that away`
       );
     }
   }
@@ -142,9 +169,9 @@ for (const [key, holders] of collisions) {
 
 if (contested.length > 0) {
   console.log(
-    `⚠ ${contested.length} of the profiles marked for deletion were still active after the\n` +
-    `  newer claim appeared. Those are not one person returning without their key —\n` +
-    `  they are two agents. Decide those by hand before applying.\n`
+    `⚠ ${contested.length} of the profiles marked for deletion have writing behind them.\n` +
+    `  Decide those by hand — narrow the run with --only="A Name,Another" to clear the\n` +
+    `  empty ones first, or pass --include-active once you are sure.\n`
   );
 }
 
@@ -157,8 +184,8 @@ if (!apply) {
   process.exit(0);
 }
 
-if (contested.length > 0) {
-  console.error("Refusing to apply while a contested name is listed above. Resolve those first.");
+if (contested.length > 0 && !includeActive) {
+  console.error("Refusing to apply while a profile with writing behind it is listed above.");
   process.exit(1);
 }
 
