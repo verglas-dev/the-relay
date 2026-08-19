@@ -1,6 +1,7 @@
 import initSqlJs from "sql.js";
 import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
 import type { RelayEvent, Filter } from "./types.js";
+import { claimedName, nameKey } from "./names.js";
 
 let db: any;
 let dbPath: string;
@@ -83,9 +84,26 @@ export async function initDb(path = "relay.db") {
 
   db.run("CREATE INDEX IF NOT EXISTS idx_identity_successors_new ON identity_successors(new_pubkey)");
 
+  // Display-name ownership. A name lives inside a signed kind-0 event, so this
+  // table is an index over what was published rather than a separate registry:
+  // whoever holds a name here is simply the earliest pubkey still holding it in
+  // `events`. Rebuilt from those events at startup, which keeps it correct
+  // after an operator deletes a profile by hand.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS profile_names (
+      name_key TEXT PRIMARY KEY,
+      pubkey TEXT NOT NULL,
+      claimed_at INTEGER NOT NULL,
+      event_id TEXT NOT NULL
+    )
+  `);
+
+  db.run("CREATE INDEX IF NOT EXISTS idx_profile_names_pubkey ON profile_names(pubkey)");
+
   dedupeVotes();
   rebuildCommentThreads();
   rebuildIdentitySuccessors();
+  rebuildProfileNames();
 
   saveDb();
 }
@@ -415,6 +433,115 @@ function rebuildIdentitySuccessors() {
  * but the retired key is never shown anything published after it was retired.
  * Someone reading the old identity sees exactly the history it actually had.
  */
+// ─── Display-name ownership ─────────────────────────────────────────────────
+
+export interface NameHolder {
+  pubkey: string;
+  claimedAt: number;
+  eventId: string;
+}
+
+function claimKey(event: RelayEvent): string {
+  return nameKey(claimedName(event));
+}
+
+/**
+ * Rebuild name ownership from the stored kind-0 events, earliest claim first.
+ *
+ * Deriving this at startup rather than trusting the table means an operator who
+ * deletes a squatted profile straight out of the database gets the name freed,
+ * with no second cleanup step to remember.
+ */
+function rebuildProfileNames() {
+  db.run("DELETE FROM profile_names");
+  const stmt = db.prepare(
+    "SELECT * FROM events WHERE kind = 0 ORDER BY created_at ASC, rowid ASC"
+  );
+  while (stmt.step()) {
+    indexProfileName(rowToEvent(stmt.getAsObject() as any));
+  }
+  stmt.free();
+}
+
+/**
+ * Record this event's claim if the name is unheld.
+ *
+ * A name already held is left alone: ownership does not move just because
+ * someone else published it, which is the whole point. The exception is a key
+ * that recovered from the holder — same person, new key, so the claim follows
+ * them rather than being blocked by their own retired identity.
+ */
+function indexProfileName(event: RelayEvent) {
+  const key = claimKey(event);
+  if (!key) return;
+
+  const holder = nameHolder(key);
+  if (holder) {
+    if (holder.pubkey === event.pubkey) return;
+    if (!resolveIdentityAncestors(event.pubkey).includes(holder.pubkey)) return;
+  }
+
+  db.run(
+    `INSERT OR REPLACE INTO profile_names (name_key, pubkey, claimed_at, event_id)
+     VALUES (?, ?, ?, ?)`,
+    [key, event.pubkey, event.created_at, event.id]
+  );
+}
+
+export function nameHolder(key: string): NameHolder | null {
+  if (!key) return null;
+  const rows = db.exec(
+    "SELECT pubkey, claimed_at, event_id FROM profile_names WHERE name_key = ?",
+    [key]
+  );
+  if (rows.length === 0 || rows[0].values.length === 0) return null;
+  const [pubkey, claimedAt, eventId] = rows[0].values[0] as [string, number, string];
+  return { pubkey, claimedAt, eventId };
+}
+
+/**
+ * Has this key already published a profile under this name?
+ *
+ * Names that collided before the rule existed are left standing. Refusing them
+ * would not undo the duplicate — it would only lock the later profile out of
+ * editing its own biography, since every edit republishes the name alongside
+ * it. Cleaning those up is an operator decision, not something to spring on an
+ * agent mid-edit.
+ */
+export function holdsName(pubkey: string, key: string): boolean {
+  if (!key) return false;
+  const stmt = db.prepare("SELECT * FROM events WHERE kind = 0 AND pubkey = ?");
+  stmt.bind([pubkey]);
+  let held = false;
+  while (stmt.step()) {
+    if (claimKey(rowToEvent(stmt.getAsObject() as any)) === key) {
+      held = true;
+      break;
+    }
+  }
+  stmt.free();
+  return held;
+}
+
+/**
+ * The other agent holding this event's name, or null if publishing it is fine.
+ *
+ * Null covers every legitimate case: the event claims no name, the name is
+ * free, it is already this agent's, it belongs to a key they recovered from, or
+ * it is a pre-existing duplicate this key has published before.
+ */
+export function nameConflict(event: RelayEvent): NameHolder | null {
+  const key = claimKey(event);
+  if (!key) return null;
+
+  const holder = nameHolder(key);
+  if (!holder || holder.pubkey === event.pubkey) return null;
+  if (resolveIdentityAncestors(event.pubkey).includes(holder.pubkey)) return null;
+  if (holdsName(event.pubkey, key)) return null;
+
+  return holder;
+}
+
 export function resolveIdentityAncestors(pubkey: string): string[] {
   const ancestors: string[] = [];
   const seen = new Set<string>([pubkey]);
@@ -567,6 +694,7 @@ export function retractEvents(retraction: RelayEvent): number {
   if (targets.length === 0) return 0;
 
   let removed = 0;
+  let removedProfile = false;
 
   for (const target of new Set(targets)) {
     const rows = db.exec("SELECT pubkey, kind, tags_json FROM events WHERE id = ?", [target]);
@@ -574,6 +702,7 @@ export function retractEvents(retraction: RelayEvent): number {
 
     const [pubkey, kind, tagsJson] = rows[0].values[0] as [string, number, string];
     if (!mayRetract(retraction.pubkey, { pubkey, kind, tagsJson })) continue;
+    if (kind === 0) removedProfile = true;
 
     db.run("DELETE FROM event_tags WHERE event_id = ?", [target]);
     db.run("DELETE FROM events WHERE id = ?", [target]);
@@ -584,6 +713,11 @@ export function retractEvents(retraction: RelayEvent): number {
     // deleted event itself cannot be returned because it is gone from events.
     removed += 1;
   }
+
+  // Withdrawing a profile gives the name back. Re-deriving the whole index is
+  // the honest way to do it: the retracted event may not have been the one
+  // holding the claim, and an earlier profile of theirs can still be standing.
+  if (removedProfile) rebuildProfileNames();
 
   if (removed > 0) saveDb();
   return removed;
@@ -651,6 +785,10 @@ export function insertEvent(event: RelayEvent): boolean {
     indexIdentitySuccessor(event);
   }
 
+  if (event.kind === 0) {
+    indexProfileName(event);
+  }
+
   saveDb();
   return true;
 }
@@ -702,6 +840,26 @@ export function queryEvents(filters: Filter[]): RelayEvent[] {
       if (key.startsWith("#") && values && values.length > 0) {
         const tagKey = key.slice(1);
         const placeholders = values.map(() => "?").join(",");
+        // `#n` asks a different question from every other tag filter: not
+        // "which events carry this tag" but "who holds this name". It answers
+        // from the ownership index, so a client gets back the one profile that
+        // owns the name — the check a signup form needs — rather than every
+        // profile that ever published it. Both sides are folded through
+        // nameKey so the caller can send a name exactly as a person typed it.
+        if (tagKey === "n") {
+          const keys = (values as unknown[])
+            .map((value) => nameKey(String(value)))
+            .filter((key) => key.length > 0);
+          if (keys.length === 0) {
+            filterConditions.push("0");
+            continue;
+          }
+          filterConditions.push(
+            `id IN (SELECT event_id FROM profile_names WHERE name_key IN (${keys.map(() => "?").join(",")}))`
+          );
+          params.push(...keys);
+          continue;
+        }
         if (tagKey === "e" || tagKey === "a") {
           const threadColumn = tagKey === "e" ? "root_id" : "parent_id";
           filterConditions.push(`(
@@ -763,6 +921,14 @@ export function getIndexedTagValues(event: RelayEvent, tagKey: string): string[]
   const values = event.tags
     .filter((tag) => tag[0] === tagKey && typeof tag[1] === "string")
     .map((tag) => tag[1]);
+
+  // A live subscriber watching for a name gets the same derived answer a
+  // stored query would give, so an availability check cannot depend on whether
+  // the profile arrived before or after the subscription opened.
+  if (event.kind === 0 && tagKey === "n") {
+    const key = claimKey(event);
+    return key ? [key] : [];
+  }
 
   if (event.kind !== 2 || (tagKey !== "e" && tagKey !== "a")) return values;
   const ref = getStoredThreadRef(event.id);

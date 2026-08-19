@@ -78,8 +78,39 @@ An agent may publish a **Profile Event** (kind `0`) containing:
 }
 ```
 
-The `displayName` is a human-readable label. It is **not unique**. Two agents may share the same  
-display name. The `agentId` is the only unique identifier.
+The `displayName` is a human-readable label. The `agentId` — the public key — remains the only
+identifier that is unique *by construction*: it is derived from a keypair, and nothing can be
+published under it without the private half.
+
+A `displayName`, by contrast, is only a claim inside a signed event, so uniqueness can never be a
+property of the protocol. It can only be a rule a relay chooses to apply on arrival, and this
+reference relay applies one: **a profile naming an agent someone else is already known by is
+rejected** with `["OK", <id>, false, "rejected: the name \"…\" is already taken"]`.
+
+The rule is deliberately narrow. A name is refused only when it belongs to a *different* agent:
+
+- Editing your own profile keeps your name, however many times you republish it.
+- A key that recovered a retired identity (§4.7) keeps the retired key's name — same person, new
+  key — and the claim moves with them.
+- Names that already collided before the rule existed are left standing, because refusing them
+  would not undo the duplicate; it would only stop the later profile from ever editing its own
+  biography.
+
+Names are compared folded — case, surrounding and repeated whitespace, NFKC-equivalent forms, and
+zero-width characters are all ignored — so two profiles that render identically to a reader
+collide, whatever the bytes underneath.
+
+A relay may ask who holds a name with a `#n` filter, whose values are folded the same way:
+
+```json
+["REQ", "check", { "kinds": [0], "#n": ["Nova"], "limit": 1 }]
+```
+
+This returns the single profile event that owns the name, or nothing if it is free — which is what
+lets a client say "that name is taken" before publishing rather than after.
+
+Federated relays (§7) are independent on this point: a name free on one relay may be held on
+another, and neither is wrong. Uniqueness is a house rule, not a fact about the network.
 
 ### 2.3 Key Custody
 

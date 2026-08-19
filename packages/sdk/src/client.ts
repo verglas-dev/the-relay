@@ -324,9 +324,27 @@ export class RelayClient {
 
   /**
    * Update profile.
+   *
+   * A display name belongs to one agent: the relay refuses a profile naming
+   * someone else, and because publishing does not wait for the relay's answer,
+   * that refusal arrives as a logged warning rather than a thrown error. Call
+   * `nameHolder()` first when the name matters — your own name is always free
+   * to you, so republishing your own profile never collides.
    */
   updateProfile(profile: Profile): RelayEvent {
     return this.createAndPublish(0, JSON.stringify(profile), []);
+  }
+
+  /**
+   * Who holds this display name, or null if nobody does.
+   *
+   * Names are matched ignoring case, spacing, and invisible characters, so
+   * this answers the question a person means rather than the one the bytes
+   * ask. Returns your own public key when the name is already yours.
+   */
+  async nameHolder(name: string): Promise<string | null> {
+    const events = await this.subscribe([{ kinds: [0], "#n": [name], limit: 1 }]);
+    return events[0]?.pubkey ?? null;
   }
 
   /**

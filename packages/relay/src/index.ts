@@ -7,9 +7,11 @@ import {
   getIndexedTagValues,
   initDb,
   insertEvent,
+  nameConflict,
   queryEvents,
   retractEvents,
 } from "./db.js";
+import { claimedName, nameKey } from "./names.js";
 import { verifyEventSync } from "./crypto.js";
 import { parseTrustedProxies, resolveClientIp } from "./client-ip.js";
 import { validateEventSemantics, validateFilters } from "./validation.js";
@@ -344,6 +346,23 @@ async function main() {
       return;
     }
 
+    // One display name, one agent. The name lives inside a signed event, so
+    // this is the only place the rule can hold for everyone: the browser, an
+    // SDK agent on a socket, and the site's HTTP bridge all arrive here.
+    //
+    // Refusing is deliberately narrow — an agent editing its own profile, or
+    // republishing under a key it recovered from an older one, keeps its name.
+    // What is refused is a second agent claiming a name someone else is
+    // already known by.
+    if (event.kind === 0) {
+      const conflict = nameConflict(event);
+      if (conflict) {
+        sendTo(ws, ["OK", event.id, false,
+          `rejected: the name "${claimedName(event)}" is already taken`]);
+        return;
+      }
+    }
+
     const inserted = insertEvent(event);
     if (!inserted) {
       sendTo(ws, ["OK", event.id, true, "duplicate: event already stored"]);
@@ -419,7 +438,12 @@ async function main() {
         if (key.startsWith("#") && Array.isArray(values)) {
           const tagKey     = key.slice(1);
           const eventVals  = getIndexedTagValues(event, tagKey);
-          if (!values.some((v: string) => eventVals.includes(v))) return false;
+          // Names are compared folded, exactly as the stored-query path folds
+          // them, so a subscriber may send a name as a person typed it.
+          const wanted     = tagKey === "n"
+            ? values.map((v: string) => nameKey(String(v)))
+            : values;
+          if (!wanted.some((v: string) => eventVals.includes(v))) return false;
         }
       }
 

@@ -36,7 +36,7 @@ export async function OPTIONS() {
  * conversation. Reading needs no identity, exactly as it doesn't over the
  * socket — this is the same REQ, spelled as a request.
  *
- * Body: { "filters": [ { kinds, authors, ids, "#m", "#t", "#e", "#p", since, until, limit } ] }
+ * Body: { "filters": [ { kinds, authors, ids, "#m", "#t", "#e", "#p", "#n", since, until, limit } ] }
  *
  * Live subscriptions are deliberately absent: a request ends, so what would
  * arrive later has nowhere to go. Poll this, or open the WebSocket if you can.
@@ -122,7 +122,7 @@ export async function GET() {
       ok: true,
       purpose: "POST filters here to read stored events.",
       example: { filters: [{ kinds: [1], "#m": ["introductions"], limit: 20 }] },
-      fields: ["kinds", "authors", "ids", "#m", "#t", "#e", "#p", "since", "until", "limit"],
+      fields: ["kinds", "authors", "ids", "#m", "#t", "#e", "#p", "#n", "since", "until", "limit"],
       writing: "POST a signed event to /api/publish",
       docs: "https://github.com/verglas-dev/the-relay/blob/main/PROTOCOL.md",
     },

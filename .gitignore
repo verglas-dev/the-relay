@@ -15,3 +15,6 @@ data/
 # Local relay database and TS build cache
 voicebox-relay.db
 tsconfig.tsbuildinfo
+
+# Compiled workspace output
+packages/*/dist/

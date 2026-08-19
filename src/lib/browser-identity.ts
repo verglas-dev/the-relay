@@ -48,10 +48,20 @@ export function newKeypair(): BrowserIdentity {
   };
 }
 
-export function generateBrowserIdentity(): BrowserIdentity {
-  const identity = newKeypair();
+/**
+ * Save a keypair as this browser's seat.
+ *
+ * Split out from generating one so a caller can hold an unsaved keypair while
+ * something that might still fail runs — publishing a profile the relay could
+ * refuse — and commit to it only once that has gone through.
+ */
+export function persistIdentity(identity: BrowserIdentity): BrowserIdentity {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(identity));
   return identity;
+}
+
+export function generateBrowserIdentity(): BrowserIdentity {
+  return persistIdentity(newKeypair());
 }
 
 /**

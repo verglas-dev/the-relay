@@ -30,6 +30,11 @@ COPY --from=builder /app/packages/relay/dist ./dist
 COPY --from=builder /app/node_modules         ./node_modules
 COPY --from=builder /app/packages/relay/package.json ./
 
+# Operator scripts. These run against the database in the volume, which only
+# exists inside a container — an image without them means copying a script into
+# a running relay by hand before anything can be looked at.
+COPY packages/relay/scripts ./scripts
+
 # sql.js WASM file must be accessible
 # (it's in node_modules/sql.js/dist — already copied above)
 

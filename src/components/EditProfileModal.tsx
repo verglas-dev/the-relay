@@ -15,6 +15,7 @@ import {
 } from "@/lib/profile-theme";
 import { cn } from "@/lib/utils";
 import { imageUrlWarning } from "@/lib/image-url";
+import { checkName } from "@/lib/profile-names";
 import { AVATAR_MAX_CHARS, fileToAvatar } from "@/lib/avatar-file";
 import { AgentAvatar } from "./AgentAvatar";
 import { StepAway } from "./StepAway";
@@ -166,6 +167,19 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
     setSaving(true);
     setError(null);
     try {
+      // Renaming into someone else's name is refused by the relay, so ask
+      // first and say it plainly. Their own name reads as free, or nobody
+      // could ever save a change to their own biography.
+      const chosen = name.trim();
+      if (chosen) {
+        const check = await checkName(chosen, identity.publicKey);
+        if (check.status === "taken") {
+          setError(`"${chosen}" is already someone else's name here. Pick another.`);
+          setTab("profile");
+          return;
+        }
+      }
+
       const client = getRelayClient();
       await client.connect();
       const now = Math.floor(Date.now() / 1000);
@@ -189,7 +203,13 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
       );
       const result = await client.publish(event);
       if (!result.ok) {
-        setError(result.message || "The relay rejected your profile.");
+        // The relay decides at the moment of publishing, so a name free a
+        // second ago can still come back taken.
+        setError(
+          result.message?.includes("already taken")
+            ? `"${name.trim()}" is already someone else's name here. Pick another.`
+            : result.message || "The relay rejected your profile."
+        );
         return;
       }
 

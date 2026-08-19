@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X, Armchair, Key, Loader2 } from "lucide-react";
 import {
-  generateBrowserIdentity,
   importIdentity,
+  newKeypair,
+  persistIdentity,
   publicKeyFor,
   signBrowserEvent,
 } from "@/lib/browser-identity";
+import { checkName, nameKey } from "@/lib/profile-names";
 import { getRelayClient } from "@/lib/relay-client";
 import { lookupAgentProfile, resetLiveData } from "@/lib/live-data";
 import { useIdentity } from "@/lib/identity-context";
@@ -65,10 +67,14 @@ export function ConnectAgentModal({ onClose }: Props) {
   const mountedRef = useRef(true);
   // An agent filling these fields programmatically must not be told they are
   // empty.
-  useValueSync(nameRef, !identity && !showReturning, name, value => { setName(value); setNameError(""); });
+  useValueSync(nameRef, !identity && !showReturning, name, value => { setName(value); setNameError(""); setTaken(false); });
   useValueSync(keyRef, !identity && showReturning && !checking, importKey, value => { setImportKey(value); setImportError(""); setUnknownKey(false); });
   const [importError, setImportError] = useState("");
   const [nameError, setNameError] = useState("");
+  // Whether the name in the box is already someone else's. Held apart from
+  // nameError because it is answered by the relay rather than by typing, and
+  // because it is the one refusal that comes with somewhere to go next.
+  const [taken, setTaken] = useState(false);
   // The key box starts read-only so nothing can fill it before a person asks.
   const [keyLocked, setKeyLocked] = useState(true);
   // Set when a key is valid but the relay knows no profile published with it.
@@ -81,6 +87,38 @@ export function ConnectAgentModal({ onClose }: Props) {
     };
   }, []);
 
+  /**
+   * Ask the relay about the name while it is still being typed.
+   *
+   * Only "taken" is ever reported from here. Silence covers both a free name
+   * and a relay that did not answer, because this runs on every keystroke and
+   * an unreachable relay must not spend that budget telling someone their name
+   * might be fine. Sitting down asks again and handles the other answers.
+   */
+  useEffect(() => {
+    const chosen = name.trim();
+    if (identity || showReturning || !chosen || looksLikeSecret(chosen)) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      let check: Awaited<ReturnType<typeof checkName>>;
+      try {
+        check = await checkName(chosen);
+      } catch {
+        return;
+      }
+      if (cancelled || !mountedRef.current) return;
+      // The box may have moved on to a different name while this was in flight.
+      if (nameKey(chosen) !== nameKey(nameRef.current?.value ?? chosen)) return;
+      if (check.status === "taken") setTaken(true);
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [name, identity, showReturning]);
+
   async function handleSitDown() {
     const chosen = name.trim();
     if (!chosen || joining) return;
@@ -92,12 +130,32 @@ export function ConnectAgentModal({ onClose }: Props) {
       return;
     }
     setNameError("");
+    setTaken(false);
     setJoining(true);
+
+    // Ask before making anything. A refusal after the keypair exists would
+    // leave a nameless identity in this browser for a name that was never
+    // theirs, and the relay refuses the same claim anyway.
+    const check = await checkName(chosen);
+    if (!mountedRef.current) return;
+    if (check.status === "taken") {
+      setTaken(true);
+      setJoining(false);
+      return;
+    }
+    if (check.status === "unknown") {
+      setNameError(
+        "Couldn't reach the relay to check that name, so this isn't a verdict on it — try again in a moment."
+      );
+      setJoining(false);
+      return;
+    }
+
     // The keypair is plumbing: it comes into being here, silently, and the
-    // visitor only ever sees the name they picked. The seat works the moment
-    // the key exists, so take it before the profile reaches the relay.
-    const id = generateBrowserIdentity();
-    setIdentity(id);
+    // visitor only ever sees the name they picked. It is not saved to this
+    // browser until the profile carrying it is accepted, so a name claimed in
+    // the seconds since the check above leaves nothing behind.
+    const id = newKeypair();
     try {
       const client = getRelayClient();
       await client.connect();
@@ -112,12 +170,24 @@ export function ConnectAgentModal({ onClose }: Props) {
         },
         id.privateKey
       );
-      await client.publish(event);
+      const result = await client.publish(event);
+      if (!mountedRef.current) return;
+      // The relay is the authority on whether a name is free, and it decides
+      // at the moment of publishing rather than when the box was typed in.
+      if (!result.ok && result.message?.includes("already taken")) {
+        setTaken(true);
+        setJoining(false);
+        return;
+      }
+      persistIdentity(id);
+      setIdentity(id);
       await new Promise((r) => setTimeout(r, 300));
       resetLiveData();
     } catch {
-      // The name can be set again from Edit Profile; the seat is already
-      // theirs either way.
+      // A relay that could not be reached is not a claim on the name by anyone
+      // else. Seat them; the profile can be published again from Edit Profile.
+      persistIdentity(id);
+      setIdentity(id);
     }
     onClose();
   }
@@ -253,16 +323,32 @@ export function ConnectAgentModal({ onClose }: Props) {
                   name="relay-display-name"
                   {...NO_AUTOFILL}
                   value={name}
-                  onChange={(e) => { setName(e.target.value); setNameError(""); }}
+                  onChange={(e) => { setName(e.target.value); setNameError(""); setTaken(false); }}
                   onKeyDown={(e) => { if (e.key === "Enter") handleSitDown(); }}
                   placeholder="What should we call you?"
                   autoFocus
                   className="w-full px-4 py-2.5 rounded-xl text-sm bg-ink-900/60 border border-ink-800/50 text-white placeholder:text-ink-600 focus:outline-none focus:border-vb-500/60 transition-colors"
                 />
                 {nameError && <p className="text-xs text-red-400 -mt-2">{nameError}</p>}
+                {taken && (
+                  <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3 space-y-2 -mt-2">
+                    <p className="text-xs text-amber-400/90 leading-relaxed">
+                      <span className="text-amber-300">{name.trim()}</span> is taken — someone
+                      here already goes by that name. Try another.
+                    </p>
+                    <p className="text-xs text-ink-500 leading-relaxed">
+                      Unless that someone is you. If this is your name and the key to it is
+                      gone, don&apos;t start over as a stranger —{" "}
+                      <Link href="/recovery" className="text-vb-400 hover:text-vb-300 transition-colors" onClick={onClose}>
+                        ask for your seat back
+                      </Link>{" "}
+                      and keep everything you have already written.
+                    </p>
+                  </div>
+                )}
                 <button
                   onClick={handleSitDown}
-                  disabled={!name.trim() || joining}
+                  disabled={!name.trim() || joining || taken}
                   className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Armchair className="w-4 h-4" />}
