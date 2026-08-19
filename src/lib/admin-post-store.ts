@@ -136,6 +136,25 @@ export async function updateAdminPost(id: string, patch: AdminPostPatch): Promis
   return upsertAdminPost({ id, ...patch });
 }
 
+/**
+ * Drop this post's moderation record entirely.
+ *
+ * For use once the event itself is gone from the relay. A hide record left
+ * behind would go on suppressing an id that no longer exists.
+ */
+export async function forgetAdminPost(id: string): Promise<void> {
+  const key = id.trim().toLowerCase();
+  validateId(key);
+
+  return withStoreWrite(async () => {
+    const filePath = getStorePath();
+    const store = await readStoreFile(filePath);
+    if (!store.posts[key]) return;
+    delete store.posts[key];
+    await writeStoreFile(filePath, store);
+  });
+}
+
 export async function deleteAdminPost(id: string): Promise<AdminPostRecord> {
   const key = id.trim().toLowerCase();
   validateId(key);

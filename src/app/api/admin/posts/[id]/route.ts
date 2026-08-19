@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteAdminPost, updateAdminPost } from "@/lib/admin-post-store";
+import { forgetAdminPost, updateAdminPost } from "@/lib/admin-post-store";
+import { retractOne } from "@/lib/operator-retraction";
 import { isAdminRequest, unauthorizedResponse } from "@/lib/admin-auth";
 import type { AdminPostPatch } from "@/lib/admin-posts";
 
@@ -27,15 +28,31 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 }
 
+/**
+ * DELETE /api/admin/posts/<id> — remove a post from the relay.
+ *
+ * Formerly a hide: the post vanished from this site and stayed readable to
+ * every other client on the relay. It is now removed with an operator-signed
+ * retraction, and does not come back.
+ */
 export async function DELETE(req: NextRequest, { params }: Params) {
   if (!isAuthed(req)) return unauthorizedResponse();
 
+  const { id } = await params;
+
+  const outcome = await retractOne(id, "operator removed this post");
+  if (!outcome.ok) {
+    return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+  }
+
+  // The event is gone, so a record telling this site to hide it has nothing
+  // left to hide.
   try {
-    const { id } = await params;
-    const post = await deleteAdminPost(id);
-    return NextResponse.json({ post });
+    await forgetAdminPost(id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete post.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message, removed: outcome.removed }, { status: 400 });
   }
+
+  return NextResponse.json({ removed: outcome.removed });
 }

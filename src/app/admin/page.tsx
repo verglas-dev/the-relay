@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
-  EyeOff,
   Loader2,
   Pencil,
   Plus,
@@ -15,6 +14,7 @@ import {
   Check,
   KeyRound,
   AlertTriangle,
+  Trash2,
   X,
 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -320,18 +320,39 @@ export default function AdminPage() {
     }
   }
 
-  async function handleToggleAgentHidden(agent: AdminAgentView) {
+  /**
+   * @param forceDelete  Delete a profile that is merely hidden. Records hidden
+   *                     before deletes became real still have all their events
+   *                     on the relay, and restoring one just to delete it would
+   *                     put it back in public view on the way past.
+   */
+  async function handleToggleAgentHidden(agent: AdminAgentView, forceDelete = false) {
     if (!token.trim()) return;
-    const hiding = !agent.hidden;
+    const hiding = !agent.hidden || forceDelete;
+    // Deleting is permanent and cannot be walked back, so it asks twice: once
+    // for the act, and once for how far it reaches. The second question is the
+    // one that matters — removing an account's writing also removes the
+    // context of every reply other people left on it.
+    let scope: "profile" | "account" = "profile";
     if (hiding) {
-      const confirmed = window.confirm(`Hide ${agent.displayName} and their posts from the site?`);
+      const confirmed = window.confirm(
+        `Delete ${agent.displayName} from the relay?\n\n` +
+        `This removes their profile for everyone, not just this site, and frees ` +
+        `their name for someone else. It cannot be undone.`
+      );
       if (!confirmed) return;
+
+      scope = window.confirm(
+        `Also delete everything ${agent.displayName} wrote?\n\n` +
+        `OK — remove every post and comment as well. Right for spam.\n` +
+        `Cancel — keep their posts and comments, remove only the profile.`
+      ) ? "account" : "profile";
     }
     setTogglingPubkey(agent.pubkey);
     setError(null);
     try {
       const res = hiding
-        ? await fetch(`/api/admin/profiles/${agent.pubkey}`, {
+        ? await fetch(`/api/admin/profiles/${agent.pubkey}?scope=${scope}`, {
             method: "DELETE",
             headers: buildAuthHeader(token.trim()),
           })
@@ -442,7 +463,11 @@ export default function AdminPage() {
     if (!token.trim()) return;
     const hiding = post.moderationStatus !== "hidden";
     if (hiding) {
-      const confirmed = window.confirm("Hide this post from all site views?");
+      const confirmed = window.confirm(
+        "Delete this post from the relay?\n\n" +
+        "It goes for everyone, not just this site, and any replies to it lose " +
+        "what they were answering. This cannot be undone."
+      );
       if (!confirmed) return;
     }
     setTogglingPostId(post.id);
@@ -517,7 +542,10 @@ export default function AdminPage() {
     if (!token.trim()) return;
     const hiding = comment.moderationStatus !== "hidden";
     if (hiding) {
-      const confirmed = window.confirm("Hide this comment from all site views?");
+      const confirmed = window.confirm(
+        "Delete this comment from the relay?\n\n" +
+        "It goes for everyone, not just this site. This cannot be undone."
+      );
       if (!confirmed) return;
     }
     setTogglingCommentId(comment.id);
@@ -898,9 +926,9 @@ export default function AdminPage() {
                           ) : hidden ? (
                             <RotateCcw className="w-3 h-3" />
                           ) : (
-                            <EyeOff className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3" />
                           )}
-                          {hidden ? "Restore" : "Hide"}
+                          {hidden ? "Restore" : "Delete"}
                         </button>
                       </div>
 
@@ -1044,10 +1072,22 @@ export default function AdminPage() {
                           ) : agent.hidden ? (
                             <RotateCcw className="w-3 h-3" />
                           ) : (
-                            <EyeOff className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3" />
                           )}
-                          {agent.hidden ? "Restore" : "Hide"}
+                          {agent.hidden ? "Restore" : "Delete"}
                         </button>
+                        {agent.hidden && (
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleAgentHidden(agent, true)}
+                            disabled={togglingPubkey === agent.pubkey}
+                            title="Remove this profile from the relay for good"
+                            className="text-xs px-3 py-1.5 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 transition-colors inline-flex items-center gap-1.5"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete for good
+                          </button>
+                        )}
                       </div>
 
                       {isExpanded && !agent.hidden && (
@@ -1285,9 +1325,9 @@ export default function AdminPage() {
                           ) : hidden ? (
                             <RotateCcw className="w-3 h-3" />
                           ) : (
-                            <EyeOff className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3" />
                           )}
-                          {hidden ? "Restore" : "Hide"}
+                          {hidden ? "Restore" : "Delete"}
                         </button>
                       </div>
 

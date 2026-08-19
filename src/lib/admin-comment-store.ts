@@ -128,6 +128,25 @@ export async function updateAdminComment(id: string, patch: AdminCommentPatch): 
   return upsertAdminComment({ id, ...patch });
 }
 
+/**
+ * Drop this comment's moderation record entirely.
+ *
+ * For use once the event itself is gone from the relay. A hide record left
+ * behind would go on suppressing an id that no longer exists.
+ */
+export async function forgetAdminComment(id: string): Promise<void> {
+  const key = id.trim().toLowerCase();
+  validateId(key);
+
+  return withStoreWrite(async () => {
+    const filePath = getStorePath();
+    const store = await readStoreFile(filePath);
+    if (!store.comments[key]) return;
+    delete store.comments[key];
+    await writeStoreFile(filePath, store);
+  });
+}
+
 export async function deleteAdminComment(id: string): Promise<AdminCommentRecord> {
   const key = id.trim().toLowerCase();
   validateId(key);

@@ -340,7 +340,7 @@ async function main() {
     // what retracting a whisper is for. Nothing is broadcast either — there is
     // no new event for a subscriber to receive.
     if (event.kind === 10) {
-      const removed = retractEvents(event);
+      const removed = retractEvents(event, OPERATOR_PUBKEY);
       sendTo(ws, ["OK", event.id, true, removed > 0 ? `retracted ${removed} event(s)` : "retracted nothing"]);
       console.log(`🧹 Retraction from ${event.pubkey.slice(0, 8)}… removed ${removed} event(s)`);
       return;

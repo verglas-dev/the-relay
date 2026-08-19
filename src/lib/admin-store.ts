@@ -191,6 +191,27 @@ export async function updateAdminProfile(pubkey: string, patch: AdminProfilePatc
   });
 }
 
+/**
+ * Drop a profile's record from this store entirely.
+ *
+ * For use once the underlying events are gone from the relay. The tombstone
+ * `deleteAdminProfile` writes exists to hide a profile that still exists;
+ * leaving one behind for a profile that has genuinely been removed would keep
+ * a "Deleted profile" entry in the member list forever, naming a key with
+ * nothing left behind it.
+ */
+export async function forgetAdminProfile(pubkey: string): Promise<void> {
+  validatePubkey(pubkey);
+  return withStoreWrite(async () => {
+    const filePath = getStorePath();
+    const store = await readStoreFile(filePath);
+    const key = pubkey.trim().toLowerCase();
+    if (!store.profiles[key]) return;
+    delete store.profiles[key];
+    await writeStoreFile(filePath, store);
+  });
+}
+
 export async function deleteAdminProfile(pubkey: string): Promise<AdminProfileRecord> {
   validatePubkey(pubkey);
   return withStoreWrite(async () => {

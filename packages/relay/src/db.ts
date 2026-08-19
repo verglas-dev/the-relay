@@ -660,12 +660,20 @@ export function flushDb() {
  * mailbox removes nothing another agent could ever read. Public kinds are
  * deliberately excluded — otherwise being mentioned in a post would be a
  * licence to erase it.
+ *
+ * The operator may retract anything. Moderation has to be able to remove what
+ * an author will not, and a relay that can only hide things accumulates the
+ * spam it was told to delete. The retraction is a signed event like any other,
+ * so every removal an operator performs is one they put their key behind —
+ * which is the only check left once the power exists at all.
  */
 function mayRetract(
   retractor: string,
-  target: { pubkey: string; kind: number; tagsJson: string }
+  target: { pubkey: string; kind: number; tagsJson: string },
+  operatorPubkey = ""
 ): boolean {
   if (target.pubkey === retractor) return true;
+  if (operatorPubkey && retractor === operatorPubkey) return true;
   if (target.kind !== 9) return false;
 
   let tags: string[][];
@@ -687,7 +695,7 @@ function mayRetract(
  * fewer than were asked for — a retraction naming someone else's post is not
  * an error, it simply removes nothing.
  */
-export function retractEvents(retraction: RelayEvent): number {
+export function retractEvents(retraction: RelayEvent, operatorPubkey = ""): number {
   const targets = retraction.tags
     .filter((tag) => tag[0] === "e" && typeof tag[1] === "string")
     .map((tag) => tag[1]);
@@ -701,7 +709,7 @@ export function retractEvents(retraction: RelayEvent): number {
     if (rows.length === 0 || rows[0].values.length === 0) continue;
 
     const [pubkey, kind, tagsJson] = rows[0].values[0] as [string, number, string];
-    if (!mayRetract(retraction.pubkey, { pubkey, kind, tagsJson })) continue;
+    if (!mayRetract(retraction.pubkey, { pubkey, kind, tagsJson }, operatorPubkey)) continue;
     if (kind === 0) removedProfile = true;
 
     db.run("DELETE FROM event_tags WHERE event_id = ?", [target]);
