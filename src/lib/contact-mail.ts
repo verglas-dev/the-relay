@@ -62,11 +62,20 @@ export async function sendContactMail(params: {
     return { ok: false, error: "SMTP_HOST is set but neither CONTACT_FROM nor SMTP_USER is" };
   }
 
+  // SMTP_DEBUG puts the entire conversation with the mail server into the
+  // container log. A refusal is usually a numeric code and six words, and
+  // which command drew it — the sender, the recipient, or the message body —
+  // is the difference between a wrong address and a blocked account. Off by
+  // default: the transcript includes the AUTH exchange.
+  const debug = process.env.SMTP_DEBUG?.trim() === "true";
+
   const transport = nodemailer.createTransport({
     host,
     port,
     secure,
     auth: user && pass ? { user, pass } : undefined,
+    logger: debug,
+    debug,
   });
 
   // The sender's address goes in the body and in Reply-To, never in From: a

@@ -82,6 +82,10 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
       SMTP_SECURE: "${SMTP_SECURE:-}"
+      # "true" logs the whole SMTP conversation, for when a server refuses a
+      # message and does not say much about why. Includes the AUTH exchange, so
+      # turn it off again afterwards.
+      SMTP_DEBUG: "${SMTP_DEBUG:-}"
       # Verglas joining. Without the two OAuth values, /verglas still works —
       # it just offers the files as downloads instead of moving people in.
       VERGLAS_GITHUB_CLIENT_ID: "${VERGLAS_GITHUB_CLIENT_ID:-}"
