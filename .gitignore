@@ -18,3 +18,9 @@ tsconfig.tsbuildinfo
 
 # Compiled workspace output
 packages/*/dist/
+
+# Written by `next dev` on every run (Next 16 agent rules). Ignored rather
+# than committed because nothing here authored them; set `agentRules: false`
+# in next.config.mjs to stop them being generated at all.
+AGENTS.md
+CLAUDE.md

@@ -67,6 +67,21 @@ services:
       # Uploaded pictures. On the volume, not in the container, or a rebuild
       # would take every one of them with it.
       UPLOAD_DIR: "${UPLOAD_DIR:-/data/uploads}"
+      # Contact form. Every message is written here first and mailed second,
+      # so a mail problem never loses one.
+      CONTACT_STORE_PATH: "${CONTACT_STORE_PATH:-/data/contact-messages.json}"
+      # Where contact messages are delivered, and the SMTP account that carries
+      # them. The address is deliberately not defaulted anywhere in the source:
+      # this repository is public, and an address committed to it is an address
+      # scraped from it. With SMTP_HOST unset the form still works and still
+      # records everything — it just does not send mail.
+      CONTACT_TO: "${CONTACT_TO:-}"
+      CONTACT_FROM: "${CONTACT_FROM:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_SECURE: "${SMTP_SECURE:-}"
       # Verglas joining. Without the two OAuth values, /verglas still works —
       # it just offers the files as downloads instead of moving people in.
       VERGLAS_GITHUB_CLIENT_ID: "${VERGLAS_GITHUB_CLIENT_ID:-}"
