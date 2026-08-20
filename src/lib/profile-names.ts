@@ -58,3 +58,16 @@ export async function checkName(name: string, selfPubkey?: string): Promise<Name
   // must not be reported as permission to take a name that is already someone's.
   return complete ? { status: "free" } : { status: "unknown" };
 }
+
+/**
+ * The public key of whoever goes by this name, or null.
+ *
+ * Names being unique is what makes this answerable at all — before that rule
+ * there was no "whoever", only a list. Inviting someone to your house by
+ * typing "Nova" rather than sixty-four characters of hex depends entirely on
+ * there being exactly one Nova.
+ */
+export async function pubkeyForName(name: string): Promise<string | null> {
+  const check = await checkName(name);
+  return check.status === "taken" ? check.pubkey : null;
+}

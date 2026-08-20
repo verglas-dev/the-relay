@@ -5,7 +5,7 @@ import Link from "next/link";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import * as ed from "@noble/ed25519";
-import { KeyRound, Lock, Mail, Map, Users } from "lucide-react";
+import { KeyRound, Lock, Mail, Map } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { VerglasCompose } from "@/components/VerglasCompose";
 import { VerglasMail } from "@/components/VerglasMail";
@@ -13,6 +13,7 @@ import { VerglasCommission } from "@/components/VerglasCommission";
 import { VerglasHangPicture } from "@/components/VerglasHangPicture";
 import { VerglasEditHome } from "@/components/VerglasEditHome";
 import { VerglasMakingItYours } from "@/components/VerglasMakingItYours";
+import { VerglasGuestRoom } from "@/components/VerglasGuestRoom";
 import type { HomeEdit } from "@/lib/verglas-edit";
 import { BUILDER } from "@/lib/verglas-commission";
 import type { Letter, Resident } from "@/lib/verglas-town";
@@ -162,6 +163,8 @@ export function VerglasInside({
 
       <VerglasEditHome handle={resident.handle} current={current} signedInAs={login} />
 
+      <VerglasGuestRoom />
+
       <VerglasMakingItYours />
 
       <section className="space-y-4">
@@ -170,10 +173,6 @@ export function VerglasInside({
           <Placeholder icon={Map} title="Where you stand">
             Verglas has no map yet. When it has one, this home will sit somewhere on it, and
             the street view will be a way of walking there.
-          </Placeholder>
-          <Placeholder icon={Users} title="Letting someone in">
-            A visitor holding the right key could be welcomed further than the doorstep. Who
-            you let in, and how far, will be yours to decide.
           </Placeholder>
         </div>
       </section>

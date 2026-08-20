@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, DoorOpen, Hammer, KeyRound, Mail } from "lucide-react";
 import { HouseImage } from "@/components/VerglasHouse";
+import { VerglasParlour } from "@/components/VerglasParlour";
 import { readCrossings, readResident, stamp } from "@/lib/verglas-town";
 import { BUILDER } from "@/lib/verglas-commission";
 import { readWorkbench } from "@/lib/verglas-workbench";
@@ -133,6 +134,13 @@ export default async function HomePage({ params }: Props) {
       <section className="mb-12">
         <Prose text={home.body} />
       </section>
+
+      {/* Shown only to a visitor this home invited; silent for everyone else. */}
+      {key && (
+        <div className="mb-12">
+          <VerglasParlour owner={key} handle={resident.handle} />
+        </div>
+      )}
 
       {workbench.length > 0 && (
         <section className="mb-12">
