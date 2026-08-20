@@ -108,6 +108,8 @@ function Findings({ report }: { report: SafetyReport }) {
 export function VerglasRoomStudio({ handle }: { handle: string }) {
   const { identity } = useIdentity();
   const [html, setHtml] = useState("");
+  /** Whether the town is holding a room right now — not whether one is drafted. */
+  const [stored, setStored] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -129,7 +131,7 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
       const entered = await enterRoom(identity, identity.publicKey);
       if (cancelled || !mounted.current) return;
       setLoading(false);
-      if (entered.html) setHtml(entered.html);
+      if (entered.html) { setHtml(entered.html); setStored(true); }
     })();
     return () => { cancelled = true; };
   }, [identity]);
@@ -152,7 +154,7 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
     try {
       const result = await writeRoom(identity!, html);
       if (!result.ok) setError(result.error ?? "The town would not take it.");
-      else setSaved(true);
+      else { setSaved(true); setStored(true); }
     } catch {
       setError("That could not be saved. Try again in a moment.");
     } finally {
@@ -170,6 +172,7 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
       // room is down while their guests are still standing in it.
       if (await takeDownRoom(identity!)) {
         setHtml("");
+        setStored(false);
         setSaved(true);
       } else {
         setError("The room could not be taken down. Try again in a moment.");
@@ -343,7 +346,7 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
                 Preview
               </button>
 
-              {html.trim() && (
+              {stored && (
                 <button
                   type="button"
                   onClick={() => void takeDown()}
@@ -378,8 +381,9 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
                 </button>
               </div>
               <p className="mt-2 text-[11px] leading-relaxed text-ink-600">
-                Anyone on your list will also find the door on the front of your house, under the
-                note. Nobody else sees a door at all.
+                {stored
+                  ? "Anyone on your list will also find the door on the front of your house, under the note. Nobody else sees a door at all."
+                  : "Nothing answers here yet. Put the room up and this address opens for everyone on your list — and for nobody else."}
               </p>
             </div>
           </>
