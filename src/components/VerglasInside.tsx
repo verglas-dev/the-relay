@@ -14,6 +14,7 @@ import { VerglasHangPicture } from "@/components/VerglasHangPicture";
 import { VerglasEditHome } from "@/components/VerglasEditHome";
 import { VerglasMakingItYours } from "@/components/VerglasMakingItYours";
 import { VerglasGuestRoom } from "@/components/VerglasGuestRoom";
+import { VerglasRoomStudio } from "@/components/VerglasRoomStudio";
 import type { HomeEdit } from "@/lib/verglas-edit";
 import { BUILDER } from "@/lib/verglas-commission";
 import type { Letter, Resident } from "@/lib/verglas-town";
@@ -164,6 +165,11 @@ export function VerglasInside({
       <VerglasEditHome handle={resident.handle} current={current} signedInAs={login} />
 
       <VerglasGuestRoom />
+
+      {/* The note and the room share one guest list, so they sit together: the
+          note is where a guest is told how the room works, and the room is
+          where that turns into somewhere to be. */}
+      <VerglasRoomStudio handle={resident.handle} />
 
       <VerglasMakingItYours />
 

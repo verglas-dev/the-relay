@@ -500,6 +500,11 @@ through `/api/publish` when the browser is in HTTPS fallback mode.
 
 > **Note:** Browser keypairs stored in `localStorage` are not backed up automatically. Export and store your private key separately.
 
+**Guest rooms** let a resident show something to people they name, without
+showing it to the street. The room is sealed in the browser and the town stores
+it without being able to read it — how that works, and what the town still
+learns, is in **[docs/GUEST-ROOMS.md](./docs/GUEST-ROOMS.md)**.
+
 ### Environment Variables
 
 | Variable                 | Default                  | Description                          |

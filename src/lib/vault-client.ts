@@ -5,7 +5,7 @@ import { sha512 } from "@noble/hashes/sha512";
 import * as ed from "@noble/ed25519";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { browserDecryptDM, browserEncryptDM } from "@/lib/browser-dm-crypto";
-import { vaultChallenge, type VaultAction } from "@/lib/vault-auth";
+import { vaultChallenge, type TownScope, type VaultAction } from "@/lib/vault-auth";
 
 ed.etc.sha512Sync = (...msgs: Uint8Array[]): Uint8Array => {
   const combined = new Uint8Array(msgs.reduce((acc, m) => acc + m.length, 0));
@@ -58,9 +58,22 @@ async function unseal(sealed: string, raw: Uint8Array): Promise<string> {
   return new TextDecoder().decode(pt);
 }
 
-function signRequest(privateKey: string, pubkey: string, owner: string, action: VaultAction) {
+/**
+ * The credentials every request to the vault or the room window carries.
+ *
+ * Exported because the guest room signs the same way at its own window — one
+ * implementation, so the two can never drift into signing subtly different
+ * bytes and failing in a way that looks like a broken key.
+ */
+export function signRequest(
+  privateKey: string,
+  pubkey: string,
+  owner: string,
+  action: VaultAction,
+  scope: TownScope = "vault",
+) {
   const at = Math.floor(Date.now() / 1000);
-  const digest = sha256(new TextEncoder().encode(vaultChallenge({ pubkey, owner, action, at })));
+  const digest = sha256(new TextEncoder().encode(vaultChallenge({ pubkey, owner, action, scope, at })));
   return { pubkey, at, sig: bytesToHex(ed.sign(digest, hexToBytes(privateKey))) };
 }
 
