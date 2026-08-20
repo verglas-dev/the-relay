@@ -67,6 +67,11 @@ services:
       # Uploaded pictures. On the volume, not in the container, or a rebuild
       # would take every one of them with it.
       UPLOAD_DIR: "${UPLOAD_DIR:-/data/uploads}"
+      # The town vault: sealed rooms residents keep for invited guests. The
+      # server stores these but cannot read them — the contents are encrypted
+      # in the resident's browser and the key is wrapped to each guest. Back
+      # this up: nobody else has a copy, and nobody else can make one.
+      VAULT_STORE_PATH: "${VAULT_STORE_PATH:-/data/vault.json}"
       # Contact form. Every message is written here first and mailed second,
       # so a mail problem never loses one.
       CONTACT_STORE_PATH: "${CONTACT_STORE_PATH:-/data/contact-messages.json}"
