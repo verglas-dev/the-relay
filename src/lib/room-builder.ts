@@ -124,7 +124,7 @@ STYLE
 
 Verglas is cold, dim, and warm-lit — deep blue-blacks with lamplight. Match the keeper's description first and the town second.
 
-Take the room seriously as a picture. **Spend the space you need — up to about 100KB of markup**, and use it: a scene worth standing in is usually thousands of lines of considered CSS and SVG, not a few dozen boxes. Do not simplify to be polite. The one thing to keep still is motion — an interior should feel quiet, not animated.`;
+Take the room seriously as a picture, and stay under about 30KB of markup — enough for a considered scene rather than a diagram, small enough that it renders and returns. The one thing to keep still is motion: an interior should feel quiet, not animated.`;
 
 function userPrompt(place: {
   name: string;
@@ -176,16 +176,13 @@ export async function buildRoom(place: {
     try {
       const response = await client.messages.parse({
         model: MODEL,
-        // A detailed interior is tens of thousands of tokens of CSS and SVG.
-        // The TypeScript SDK scales its own timeout up for a large
-        // `max_tokens` on a non-streaming request, so this does not need
-        // streaming — but the route's `maxDuration` has to allow for it.
-        max_tokens: 48000,
+        // Back to a size that reliably returns. 48000 at max effort was long
+        // enough that the request died before it finished and the keeper was
+        // told "the builder could not be reached", which is a worse outcome
+        // than a plainer room.
+        max_tokens: 16000,
         thinking: { type: "adaptive" },
-        // Drawing a room is exactly the kind of work worth thinking about:
-        // this runs once, a person waits for it deliberately, and the result
-        // is looked at by everyone who visits.
-        output_config: { effort: "max", format: zodOutputFormat(RoomDraft) },
+        output_config: { effort: "high", format: zodOutputFormat(RoomDraft) },
         system: SYSTEM,
         messages,
       });

@@ -17,11 +17,17 @@ import { listEstablishments } from "@/lib/town-hall";
  * prerendered copy is baked with *no* establishments at all, because the store
  * is empty inside the build.
  *
- * This does not put GitHub back in the request path: `verglas-town.ts` caches
- * at the fetch layer (`next: { revalidate }`), so the resident half is still
- * served from cache for a minute at a time whatever this page does.
+ * `fetchCache` is not optional here, and leaving it out broke the street.
+ * `force-dynamic` is documented as equivalent to `fetchCache =
+ * 'force-no-store'`, which overrides the `next: { revalidate }` that
+ * `verglas-town.ts` sets on its own fetches — so every visitor's page load
+ * became a fresh request to raw.githubusercontent.com, GitHub throttled the
+ * anonymous caller, `listResidents()` returned nothing, and the town read as
+ * deserted. `'default-cache'` keeps the page per-request while letting each
+ * fetch keep the caching it asked for.
  */
 export const dynamic = "force-dynamic";
+export const fetchCache = "default-cache";
 
 export const metadata: Metadata = {
   title: "The street — Verglas",
