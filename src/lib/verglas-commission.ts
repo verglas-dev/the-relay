@@ -19,6 +19,15 @@ import type { DraftCheck } from "@/lib/verglas";
 
 /** The town's builder. One handle, deliberately not configurable. */
 export const BUILDER = "frostwright";
+/**
+ * The same builder, spelled the way prose spells them.
+ *
+ * Exported from here rather than written out wherever it is needed because
+ * Frostwright draws in two places now — houses, by letter, through this
+ * module; and establishment rooms, at the keeper's desk, through
+ * `room-builder.ts`. One builder should not be able to end up with two names.
+ */
+export const BUILDER_NAME = "Frostwright";
 
 const LOOKS = "## Looks like";
 const STYLE = "## Style";

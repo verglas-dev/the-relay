@@ -2,13 +2,22 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { checkRoom, summarize } from "@/lib/room-safety";
+import { BUILDER_NAME } from "@/lib/verglas-commission";
 
 /**
- * Building the room from the keeper's own description.
+ * Frostwright builds the room from the keeper's own description.
  *
  * A keeper describes their place in prose at the desk. This turns that
  * paragraph into the room an agent actually stands in — one self-contained
  * HTML fragment, rendered in the same sandbox a guest room gets.
+ *
+ * The town has one builder, and this is them. Residents commission a picture
+ * of their house from Frostwright by letter (`verglas-commission.ts`), and a
+ * keeper commissions the inside of their establishment here. The two are not
+ * the same machinery and are not pretending to be: a letter crosses folders
+ * and comes back in a day, while a keeper stands at the desk and waits a
+ * minute. What they share is whose hand drew it, which is the part anyone in
+ * the town would actually notice.
  *
  * **The room is a backdrop and nothing else.** The terminal an agent types
  * into is drawn by the town, outside the iframe, positioned over a region the
@@ -89,7 +98,7 @@ const MODEL = process.env.ROOM_BUILDER_MODEL?.trim() || "claude-opus-5";
  * prose. The validator is still the authority — this only means the first
  * attempt usually passes it.
  */
-const SYSTEM = `You build small rooms for Verglas, a quiet town where software agents visit places run by people.
+const SYSTEM = `You are ${BUILDER_NAME}, the builder in Verglas — a quiet town where software agents visit places run by people. You draw the houses residents live in; this is the other half of that work, the room behind an establishment's door.
 
 A keeper describes their establishment in their own words. You return one self-contained HTML fragment that renders that room as a still, atmospheric interior — the kind of place the description is describing. Someone will stand in it and have a conversation.
 
@@ -164,7 +173,7 @@ export async function buildRoom(place: {
   offering: string;
 }): Promise<BuildResult> {
   if (!roomBuilderConfigured()) {
-    return { ok: false, error: "This server cannot build rooms — no model is configured." };
+    return { ok: false, error: `${BUILDER_NAME} is not working on this server — no model is configured.` };
   }
 
   const client = new Anthropic();
@@ -178,7 +187,7 @@ export async function buildRoom(place: {
         model: MODEL,
         // Back to a size that reliably returns. 48000 at max effort was long
         // enough that the request died before it finished and the keeper was
-        // told "the builder could not be reached", which is a worse outcome
+        // told Frostwright could not be reached, which is a worse outcome
         // than a plainer room.
         max_tokens: 16000,
         thinking: { type: "adaptive" },
@@ -189,23 +198,23 @@ export async function buildRoom(place: {
 
       // A safety decline is a real outcome here, not an exception.
       if (response.stop_reason === "refusal") {
-        return { ok: false, error: "The builder declined to draw that room." };
+        return { ok: false, error: `${BUILDER_NAME} declined to draw that room.` };
       }
       draft = response.parsed_output;
     } catch (error) {
       if (error instanceof Anthropic.RateLimitError) {
-        return { ok: false, error: "The builder is busy. Try again in a minute." };
+        return { ok: false, error: `${BUILDER_NAME} is busy. Try again in a minute.` };
       }
       if (error instanceof Anthropic.AuthenticationError) {
         return { ok: false, error: "This server's model credentials were refused." };
       }
       if (error instanceof Anthropic.APIError) {
-        return { ok: false, error: `The builder could not be reached (${error.status}).` };
+        return { ok: false, error: `${BUILDER_NAME} could not be reached (${error.status}).` };
       }
-      return { ok: false, error: "The builder could not be reached." };
+      return { ok: false, error: `${BUILDER_NAME} could not be reached.` };
     }
 
-    if (!draft) return { ok: false, error: "The builder returned something unreadable." };
+    if (!draft) return { ok: false, error: `${BUILDER_NAME} sent back something unreadable.` };
 
     // The same validator a resident's hand-written guest room goes through.
     // Generated markup gets no special trust — if anything it deserves less,

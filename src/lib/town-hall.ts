@@ -609,9 +609,9 @@ export async function bellFor(slug: string): Promise<BellConfig | null> {
 /**
  * A freshly built room, waiting to be looked at.
  *
- * Never live on arrival. Whatever the builder produced, a keeper sees it
- * standing in their own doorway before an agent does — a generated room is
- * still the keeper's room, and they are the one whose name is on it.
+ * Never live on arrival. Whatever Frostwright drew, a keeper sees it standing
+ * in their own doorway before an agent does — a commissioned room is still the
+ * keeper's room, and they are the one whose name is on it.
  */
 export async function setRoomDraft(params: {
   accountId: string;

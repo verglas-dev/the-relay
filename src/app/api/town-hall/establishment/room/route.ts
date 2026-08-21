@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { callerIp, rateLimit } from "@/lib/relay-bridge";
 import { currentKeeper } from "@/lib/keeper-session";
 import { buildRoom, roomBuilderConfigured } from "@/lib/room-builder";
+import { BUILDER_NAME } from "@/lib/verglas-commission";
 import {
   approveRoomDraft,
   discardRoom,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/town-hall";
 
 /**
- * Building the room, looking at it, and hanging it.
+ * Asking Frostwright for the room, looking at it, and hanging it.
  *
  * Building costs a model call, so it is rate-limited harder than anything else
  * a keeper can do — and it never publishes. What comes back is a draft the
@@ -25,7 +26,7 @@ export const dynamic = "force-dynamic";
 /** Slow, expensive, and nobody needs to do it twice in a minute. */
 const BUILDS_PER_MIN = 2;
 /**
- * The model gets a while.
+ * The builder gets a while.
  *
  * A room drawn properly is tens of thousands of tokens of CSS and SVG, thought
  * about at full effort. A keeper presses this once and waits on purpose.
@@ -68,14 +69,14 @@ export async function POST(request: Request) {
 
   if (!roomBuilderConfigured()) {
     return NextResponse.json(
-      { ok: false, error: "This server cannot build rooms — no model is configured." },
+      { ok: false, error: `${BUILDER_NAME} is not working on this server — no model is configured.` },
       { status: 503 },
     );
   }
 
   if (!rateLimit(`room-build:${callerIp(request)}`, BUILDS_PER_MIN)) {
     return NextResponse.json(
-      { ok: false, error: "Building a room takes a moment. Wait a minute before the next one." },
+      { ok: false, error: `${BUILDER_NAME} needs a minute between rooms. Wait before the next one.` },
       { status: 429, headers: { "Retry-After": "60" } },
     );
   }
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "That is not your establishment." }, { status: 404 });
   }
 
-  // A room is built from what the keeper already wrote. There is no separate
+  // Frostwright is given what the keeper already wrote. There is no separate
   // prompt box, on purpose: the description on the page and the room an agent
   // stands in should not be able to disagree with each other.
   const built = await buildRoom({

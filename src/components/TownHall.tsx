@@ -8,11 +8,11 @@ import {
   BellRing,
   Building2,
   Check,
+  Hammer,
   Loader2,
   LogOut,
   Pencil,
   Plus,
-  Sparkles,
   Stamp,
   X,
 } from "lucide-react";
@@ -44,6 +44,7 @@ import { PASSPHRASE_MIN } from "@/lib/keeper-rules";
 import { ROOM_SANDBOX, roomDocument } from "@/lib/room-page";
 import type { BuiltRoom } from "@/lib/room-builder";
 import { normalizePermitCode } from "@/lib/establishment-permit";
+import { BUILDER_NAME } from "@/lib/verglas-commission";
 
 /**
  * The desk at the town hall.
@@ -233,7 +234,11 @@ function PermitDesk() {
 /* ── The room ──────────────────────────────────────────────────────────── */
 
 /**
- * Building the interior, and standing in it before anybody else does.
+ * Commissioning the interior, and standing in it before anybody else does.
+ *
+ * The same builder residents ask for a picture of their house draws this, so
+ * the desk says the name: a keeper is asking Frostwright for something, not
+ * pressing a generate button.
  *
  * The room is built from what the keeper already wrote on their own page —
  * there is no separate prompt box, deliberately, so the description a visitor
@@ -297,7 +302,7 @@ function RoomSettings({ slug, name }: { slug: string; name: string }) {
         onClick={() => setOpen(true)}
         className="text-sm text-ink-500 hover:text-ink-300 transition-colors inline-flex items-center gap-1.5"
       >
-        <Sparkles className="w-3.5 h-3.5" />
+        <Hammer className="w-3.5 h-3.5" />
         the room
       </button>
     );
@@ -308,14 +313,16 @@ function RoomSettings({ slug, name }: { slug: string; name: string }) {
   return (
     <div className="mt-4 pt-4 border-t border-ink-800 space-y-4">
       <p className="text-xs text-ink-500 leading-relaxed">
-        The room agents stand in, built from your description of this place. The terminal they
-        type into is drawn by the town on top of it — your room leaves a space for it, and can
-        never draw one itself.
+        {BUILDER_NAME} draws the room agents stand in, working from your description of this
+        place — the same builder residents ask for a picture of their house. The terminal a
+        visitor types into is drawn by the town on top of it: your room leaves a space for it,
+        and can never draw one itself.
       </p>
 
       {state && !state.configured && (
         <p className="text-xs text-amber-400/80">
-          This server has no model configured, so rooms cannot be built here.
+          {BUILDER_NAME} is not working on this server — no model is configured, so rooms
+          cannot be drawn here.
         </p>
       )}
 
@@ -368,8 +375,8 @@ function RoomSettings({ slug, name }: { slug: string; name: string }) {
           disabled={busy !== null || (state ? !state.configured : false)}
           className="btn-primary px-4 py-2 inline-flex items-center gap-2 text-sm"
         >
-          {busy === "build" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {state?.room || state?.draft ? "Build another" : "Build the room"}
+          {busy === "build" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Hammer className="w-4 h-4" />}
+          {state?.room || state?.draft ? "Ask for another" : `Ask ${BUILDER_NAME} to draw it`}
         </button>
 
         {state?.draft && (
@@ -408,7 +415,8 @@ function RoomSettings({ slug, name }: { slug: string; name: string }) {
 
       {busy === "build" && (
         <p className="text-xs text-ink-600">
-          Drawing your room. This takes a minute — it is reading what you wrote.
+          {BUILDER_NAME} is drawing your room. This takes a minute — they are reading what
+          you wrote.
         </p>
       )}
     </div>

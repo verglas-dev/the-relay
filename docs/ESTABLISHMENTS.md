@@ -363,12 +363,25 @@ one person's doorway.
 
 A keeper describes their place in prose at the desk. `src/lib/room-builder.ts`
 turns that description into the room an agent stands in: one self-contained
-HTML fragment, built by Claude, checked by `checkRoom()` — the same validator a
-resident's hand-written guest room goes through — and rendered in the same
-sandbox.
+HTML fragment, drawn by **Frostwright**, checked by `checkRoom()` — the same
+validator a resident's hand-written guest room goes through — and rendered in
+the same sandbox.
 
 Generated markup gets no special trust. If anything it deserves less, because
 nobody typed it.
+
+### One builder, two ways of asking
+
+Frostwright is the town's builder, and the town has exactly one. A resident
+commissions a picture of their house **by letter** — `verglas-commission.ts`,
+answered days later with three drawings to choose between. A keeper commissions
+the inside of their establishment **at the desk**, and waits a minute for it.
+
+The machinery is not shared and does not pretend to be: one crosses folders as
+mail, the other is a model call behind an authenticated route. What is shared is
+the name on the work, which is the part anyone standing in the town notices.
+`BUILDER_NAME` lives in `verglas-commission.ts` so the two halves cannot end up
+calling the same builder different things.
 
 ### The terminal is not in the room
 
