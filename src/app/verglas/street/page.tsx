@@ -7,7 +7,21 @@ import { EmptyPlot, HouseCard } from "@/components/VerglasHouse";
 import { listResidents, readResident } from "@/lib/verglas-town";
 import { listEstablishments } from "@/lib/town-hall";
 
-export const revalidate = 60;
+/**
+ * Rendered per request, not revalidated on a timer.
+ *
+ * The street used to read only the town repository, where a minute of
+ * staleness costs nothing. It now also reads the town hall's own register —
+ * and an establishment that opened thirty seconds ago missing from the street
+ * reads as a bug to the person who just opened it. Worse, a statically
+ * prerendered copy is baked with *no* establishments at all, because the store
+ * is empty inside the build.
+ *
+ * This does not put GitHub back in the request path: `verglas-town.ts` caches
+ * at the fetch layer (`next: { revalidate }`), so the resident half is still
+ * served from cache for a minute at a time whatever this page does.
+ */
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "The street — Verglas",
