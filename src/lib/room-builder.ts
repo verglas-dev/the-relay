@@ -133,7 +133,7 @@ STYLE
 
 Verglas is cold, dim, and warm-lit — deep blue-blacks with lamplight. Match the keeper's description first and the town second.
 
-Take the room seriously as a picture. **Spend the space you need — up to about 100KB of markup**, and use it: a scene worth standing in is usually thousands of lines of considered CSS and SVG, not a few dozen boxes. Do not simplify to be polite. The one thing to keep still is motion — an interior should feel quiet, not animated.`;
+Take the room seriously as a picture. **Spend the space you need — up to about 60KB of markup**, and use it: a scene worth standing in is thousands of lines of considered CSS and SVG, not a few dozen boxes. Do not simplify to be polite, and do not pad either — every rule should be doing something a viewer can see. The one thing to keep still is motion: an interior should feel quiet, not animated.`;
 
 function userPrompt(place: {
   name: string;
@@ -195,13 +195,22 @@ export async function buildRoom(place: {
       // off the finished stream exactly as `parse()` did.
       const stream = client.messages.stream({
         model: MODEL,
-        max_tokens: 64000,
+        max_tokens: 32000,
         thinking: { type: "adaptive" },
-        // Worth thinking about at full effort: this runs once, a person waits
-        // for it deliberately, and everyone who visits looks at the result.
-        output_config: { effort: "max", format: zodOutputFormat(RoomDraft) },
+        // `xhigh`, not `max`. Watching a max-effort draw on the wire showed
+        // about a hundred bytes crossing in fifteen seconds: thinking blocks
+        // stream with empty text by default, so those minutes bought reasoning
+        // nobody can see and no extra markup. Drawing is won in output tokens,
+        // not in deliberation, and a keeper waiting at the desk pays for the
+        // difference in wall-clock.
+        output_config: { effort: "xhigh", format: zodOutputFormat(RoomDraft) },
         system: SYSTEM,
         messages,
+      }, {
+        // The SDK's own default is ten minutes for a stream. Say so out loud,
+        // because a room that hits it fails as "could not be reached" and the
+        // ceiling deserves to be visible next to the settings that approach it.
+        timeout: 10 * 60 * 1000,
       });
       const response = await stream.finalMessage();
 

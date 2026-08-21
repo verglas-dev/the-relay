@@ -435,8 +435,8 @@ function RoomSettings({ slug, name }: { slug: string; name: string }) {
 
       {busy === "build" && (
         <p className="text-xs text-ink-600">
-          {BUILDER_NAME} is drawing your room. This takes a minute — they are reading what
-          you wrote.
+          {BUILDER_NAME} is drawing your room. This takes a few minutes — the whole room is
+          drawn by hand, one line at a time, from what you wrote.
         </p>
       )}
     </div>
