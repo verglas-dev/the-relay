@@ -35,6 +35,7 @@ interface Door {
   presence: Presence;
   presenceUntil: string | null;
   wired: boolean;
+  occupiedBy: { who: string; arrived: boolean; since: number } | null;
   rings: RingRow[];
 }
 
@@ -88,6 +89,16 @@ export function KeeperDoor({ highlight }: { highlight: string | null }) {
     setBusy(id);
     try {
       await fetch(`/api/town-hall/ring/${id}?answer=${choice}`, { method: "POST" });
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const endVisit = async (slug: string) => {
+    setBusy(slug);
+    try {
+      await fetch(`/api/town-hall/rings?slug=${slug}`, { method: "DELETE" });
       await load();
     } finally {
       setBusy(null);
@@ -183,6 +194,27 @@ export function KeeperDoor({ highlight }: { highlight: string | null }) {
                 <p className="text-xs text-ink-600 mt-3 leading-relaxed">
                   No bell wired up. Rings are still recorded, but your phone stays quiet.
                 </p>
+              )}
+
+              {/* While somebody holds the room, the bell will not ring for
+                  anyone else — so the keeper has to be able to see that and
+                  end it, rather than wonder why their own door is refusing
+                  visitors. */}
+              {door.occupiedBy && (
+                <div className="mt-3 pt-3 border-t border-ink-800 flex items-center justify-between gap-3">
+                  <p className="text-xs text-ink-500">
+                    {door.occupiedBy.arrived
+                      ? `${door.occupiedBy.who} is in the room.`
+                      : `The room is held open for ${door.occupiedBy.who}, who hasn't come in.`}
+                  </p>
+                  <button
+                    onClick={() => void endVisit(door.slug)}
+                    disabled={busy === door.slug}
+                    className="text-xs text-ink-600 hover:text-ink-300 transition-colors shrink-0"
+                  >
+                    end the visit
+                  </button>
+                </div>
               )}
             </div>
 

@@ -23,8 +23,20 @@ import type { Line, SessionTransport, Speaker } from "@/lib/session-transport";
  * and the fix is a shared transport, never a shared transcript.
  */
 
-/** Silence for this long and the room is assumed empty. */
+/** Silence for this long, once somebody is actually in, and the room is empty. */
 export const IDLE_MINUTES = 20;
+
+/**
+ * How long a room waits for a visitor who never turns up.
+ *
+ * A session is created the moment the keeper opens the door, before the
+ * visitor has walked in — and sometimes they never do: the notification was
+ * tapped by accident, the agent's page was closed, the ring was stale. Holding
+ * the room for the full idle timeout in that case locks the keeper out of
+ * their own establishment for twenty minutes over a visit that never happened.
+ * Short, because nothing is lost by being wrong: they can ring again.
+ */
+export const UNVISITED_MINUTES = 3;
 /** Nothing runs longer than this, however chatty. */
 export const MAX_MINUTES = 180;
 /**
@@ -46,6 +58,13 @@ export interface Session {
   /** Where the keeper should tap to find the thread. */
   note: string | null;
   transport: SessionTransport;
+  /**
+   * Whether the visitor ever actually turned up — polled, or said something.
+   *
+   * Until they do, this room is only a door somebody opened, and it steps
+   * aside quickly for the next ring.
+   */
+  arrived: boolean;
   /** Held for collection, then dropped. Never written down. */
   buffer: Line[];
   /** Monotonic, so a poller can ask for "anything after this". */
@@ -74,10 +93,10 @@ export function getSession(id: string): Session | null {
 }
 
 function expired(session: Session, now = Date.now()): boolean {
-  return (
-    now - session.lastAt > IDLE_MINUTES * 60_000 ||
-    now - session.startedAt > MAX_MINUTES * 60_000
-  );
+  if (now - session.startedAt > MAX_MINUTES * 60_000) return true;
+  // Nobody ever came in: let go of the room quickly.
+  if (!session.arrived) return now - session.startedAt > UNVISITED_MINUTES * 60_000;
+  return now - session.lastAt > IDLE_MINUTES * 60_000;
 }
 
 /** Is this establishment already talking to somebody? */
@@ -155,6 +174,7 @@ export async function startSession(params: {
     lastAt: now,
     note: null,
     transport: params.transport,
+    arrived: false,
     buffer: [],
     cursor: 0,
     ending: false,
@@ -189,6 +209,7 @@ export async function saySomething(
   const trimmed = text.trim();
   if (!trimmed) return { ok: false, error: "Nothing to say." };
 
+  session.arrived = true;
   const line = append(session, "agent", trimmed);
   const sent = await session.transport.send(line);
   if (!sent.ok) {
@@ -224,6 +245,14 @@ export function linesSince(
 ): { lines: Line[]; cursor: number; live: boolean } | null {
   const session = getSession(id);
   if (!session) return null;
+
+  // Reading is arriving. A visitor whose client is polling is in the room,
+  // whether or not they have said anything yet — somebody sitting quietly is
+  // still somebody sitting there.
+  if (!session.arrived) {
+    session.arrived = true;
+    session.lastAt = Date.now();
+  }
 
   // The cursor counts every line ever appended; the buffer holds the last
   // few. The difference is how far back a caller may reach.
