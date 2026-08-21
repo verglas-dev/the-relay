@@ -29,9 +29,12 @@ const BUILDS_PER_MIN = 2;
  * The builder gets a while.
  *
  * A room drawn properly is tens of thousands of tokens of CSS and SVG, thought
- * about at full effort. A keeper presses this once and waits on purpose.
+ * about at full effort. A keeper presses this once and waits on purpose. The
+ * model call streams, so the wait is spent receiving rather than sitting on a
+ * silent socket — but it is still a long wait, and anything proxying this route
+ * needs a read timeout to match or it will hang up before Frostwright is done.
  */
-export const maxDuration = 300;
+export const maxDuration = 900;
 
 export async function POST(request: Request) {
   const account = await currentKeeper(await cookies());

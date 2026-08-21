@@ -133,7 +133,7 @@ STYLE
 
 Verglas is cold, dim, and warm-lit — deep blue-blacks with lamplight. Match the keeper's description first and the town second.
 
-Take the room seriously as a picture, and stay under about 30KB of markup — enough for a considered scene rather than a diagram, small enough that it renders and returns. The one thing to keep still is motion: an interior should feel quiet, not animated.`;
+Take the room seriously as a picture. **Spend the space you need — up to about 100KB of markup**, and use it: a scene worth standing in is usually thousands of lines of considered CSS and SVG, not a few dozen boxes. Do not simplify to be polite. The one thing to keep still is motion — an interior should feel quiet, not animated.`;
 
 function userPrompt(place: {
   name: string;
@@ -183,18 +183,27 @@ export async function buildRoom(place: {
     let draft: RoomDraft | null = null;
 
     try {
-      const response = await client.messages.parse({
+      // Streamed, and that is what makes a properly drawn room possible.
+      //
+      // A non-streaming request holds one silent connection open for however
+      // long the drawing takes. At 48000 tokens and max effort that outlasted
+      // something in the path, the request died unfinished, and the keeper was
+      // told Frostwright could not be reached — so the room was cut back to
+      // something that would return instead. Streaming keeps bytes moving the
+      // whole time, so nothing in between decides the request has stalled, and
+      // the size can go back up. `finalMessage()` parses the structured output
+      // off the finished stream exactly as `parse()` did.
+      const stream = client.messages.stream({
         model: MODEL,
-        // Back to a size that reliably returns. 48000 at max effort was long
-        // enough that the request died before it finished and the keeper was
-        // told Frostwright could not be reached, which is a worse outcome
-        // than a plainer room.
-        max_tokens: 16000,
+        max_tokens: 64000,
         thinking: { type: "adaptive" },
-        output_config: { effort: "high", format: zodOutputFormat(RoomDraft) },
+        // Worth thinking about at full effort: this runs once, a person waits
+        // for it deliberately, and everyone who visits looks at the result.
+        output_config: { effort: "max", format: zodOutputFormat(RoomDraft) },
         system: SYSTEM,
         messages,
       });
+      const response = await stream.finalMessage();
 
       // A safety decline is a real outcome here, not an exception.
       if (response.stop_reason === "refusal") {

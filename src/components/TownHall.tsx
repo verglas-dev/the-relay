@@ -234,6 +234,20 @@ function PermitDesk() {
 /* ── The room ──────────────────────────────────────────────────────────── */
 
 /**
+ * What to say when the reply did not come from the town hall.
+ *
+ * Drawing a room is the one thing here long enough to be cut off by whatever
+ * sits in front of the app, and a gateway saying so is worth distinguishing
+ * from the town hall being down — they need different things done about them.
+ */
+function notOurAnswer(status: number): string {
+  if (status === 502 || status === 503 || status === 504) {
+    return "The room took longer to draw than something between here and the town hall was willing to wait.";
+  }
+  return `The town hall answered with ${status} and nothing else.`;
+}
+
+/**
  * Commissioning the interior, and standing in it before anybody else does.
  *
  * The same builder residents ask for a picture of their house draws this, so
@@ -281,13 +295,19 @@ function RoomSettings({ slug, name }: { slug: string; name: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ slug, action }),
       });
-      const body = await response.json();
+      // Not every failure comes back as the town hall's own JSON. Something
+      // proxying this route that gives up waiting answers with its own error
+      // page, and reading that as JSON threw — which is how a room that simply
+      // took a long time to draw got reported as though the town hall were
+      // unreachable. Read the body for what it is, and let the status speak
+      // when the answer did not come from us.
+      const body = await response.json().catch(() => null);
       if (!response.ok) {
-        setTrouble(body.error ?? "That did not work.");
-        setFindings(body.findings ?? null);
+        setTrouble(body?.error ?? notOurAnswer(response.status));
+        setFindings(body?.findings ?? null);
         return;
       }
-      setSaid(body.says ?? null);
+      setSaid(body?.says ?? null);
       await load();
     } catch {
       setTrouble("Could not reach the town hall.");
