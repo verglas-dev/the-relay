@@ -64,7 +64,7 @@ It is enforced in exactly one place: `openEstablishment()` in
 curl -X POST https://<host>/api/admin/permits \
      -H "authorization: Bearer $ADMIN_API_TOKEN" \
      -H 'content-type: application/json' \
-     -d '{"note":"Ines — therapy office","ttlDays":7}'
+     -d '{"note":"who this is for","ttlHours":12}'
 ```
 
 ```json
@@ -72,12 +72,20 @@ curl -X POST https://<host>/api/admin/permits \
   "ok": true,
   "notice": "Write this code down now. The town keeps only its hash and cannot show it again.",
   "code": "VGL-EST-7KQ4-N8PX",
-  "permit": { "id": "permit_…", "expiresAt": "…", "lastsDays": 7 }
+  "permit": { "id": "permit_…", "expiresAt": "…", "lastsHours": 12 }
 }
 ```
 
-`ttlDays` is optional (seven days by default, `null` for a permit that never
-lapses). `GET` the same path to list what has been issued and what became of
+`ttlHours` is optional — **twelve hours by default**, `null` for a permit that
+never lapses, and `ttlDays` is accepted and converted for whoever reaches for
+it out of habit.
+
+Short on purpose. A permit is handed to a specific person who asked for it,
+usually mid-conversation: they are going to use it now or they are not going to
+use it. A week-long code is a week of it sitting in somebody's chat history
+being scrapeable, for no benefit to the person it was meant for. This matters
+more once permits are handed out over Discord or anywhere else with a
+searchable log. `GET` the same path to list what has been issued and what became of
 it — ids, states, and notes, never codes. `DELETE /api/admin/permits/<id>`
 withdraws one that has not been spent.
 
@@ -116,7 +124,9 @@ an offline one.
 **Expiry governs redemption, not spending.** A code that lapses can no longer
 be redeemed; a permit already sitting on an account waits as long as the keeper
 needs to write their page. The deadline is on the code reaching a person, which
-is the part worth putting a clock on.
+is the part worth putting a clock on — and it is what makes a twelve-hour
+default safe rather than harsh. Somebody who redeems in the first ten minutes
+and then takes a fortnight over their establishment page loses nothing.
 
 `spent` outranks `expired` — a permit that was used and then lapsed was used,
 and saying otherwise would misreport history.
@@ -551,6 +561,44 @@ table to sweep: the account carries a `sessionEpoch` folded into the
 signature, and bumping it invalidates every cookie already issued.
 
 ---
+
+## The moderator's button
+
+```bash
+# everything in town, with who holds it
+curl -s https://<host>/api/admin/establishments -H "authorization: Bearer $ADMIN_API_TOKEN"
+
+# take a place down
+curl -X DELETE https://<host>/api/admin/establishments/<slug> \
+     -H "authorization: Bearer $ADMIN_API_TOKEN"
+
+# take the place and its keeper down
+curl -X DELETE "https://<host>/api/admin/establishments/<slug>?keeper=1" \
+     -H "authorization: Bearer $ADMIN_API_TOKEN"
+```
+
+None of this is new power. The register is one JSON file on a volume the
+operator owns, and everything here was already possible by stopping the stack
+and editing it in a container. It only means removal takes one request instead
+of a maintenance window at the moment you are most annoyed — which matters,
+because the real cost of a permit reaching the wrong person is not that they
+get an account, it is a window of public content on your domain.
+
+Three rules it follows:
+
+- **The permit stays spent.** Its `spentOn` points at a slug that no longer
+  exists, as a record. Handing it back would turn "one establishment per
+  permit" into "unlimited, with extra steps", and would give somebody whose
+  place was just demolished a free retry. Re-granting is a new permit, issued
+  deliberately by a person.
+- **The address is freed**, because the usual reason for demolishing something
+  is that its keeper took a name they should not have.
+- **`?keeper=1` takes their unspent permits too**, or a removed keeper simply
+  opens somewhere else with what they were still holding.
+
+Anybody standing in the room is shown out first — the session is ended before
+the door is removed, rather than leaving an agent talking to a place that no
+longer exists.
 
 ## What is deliberately not here
 

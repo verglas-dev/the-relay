@@ -22,7 +22,7 @@ import {
 } from "@/lib/ring";
 import {
   type Permit,
-  DEFAULT_TTL_DAYS,
+  DEFAULT_TTL_HOURS,
   expiryFromNow,
   mintPermitCode,
   permitHash,
@@ -114,7 +114,8 @@ const no = (error: string, field?: string): Refusal => ({ ok: false, error, fiel
  */
 export async function issuePermit(options: {
   note?: string;
-  ttlDays?: number | null;
+  /** Hours. `null` for a permit that never lapses; omitted for the default. */
+  ttlHours?: number | null;
 }): Promise<{ permit: Permit; code: string }> {
   return withWrite(async () => {
     const store = await readFile();
@@ -134,7 +135,9 @@ export async function issuePermit(options: {
       hash,
       note: (options.note ?? "").trim().slice(0, 300),
       issuedAt: new Date().toISOString(),
-      expiresAt: expiryFromNow(options.ttlDays === undefined ? DEFAULT_TTL_DAYS : options.ttlDays),
+      expiresAt: expiryFromNow(
+        options.ttlHours === undefined ? DEFAULT_TTL_HOURS : options.ttlHours,
+      ),
       boundTo: null,
       boundAt: null,
       spentOn: null,
@@ -686,4 +689,112 @@ export async function roomsFor(params: {
   const place = store.establishments[params.slug];
   if (!place || place.accountId !== params.accountId) return null;
   return { room: place.room, draft: place.roomDraft };
+}
+
+
+/* ── Demolition ────────────────────────────────────────────────────────── */
+
+export interface Demolished {
+  slug: string;
+  name: string;
+  keeper: string;
+  /** The account that held it, if it was removed too. */
+  accountRemoved: string | null;
+  /** Other places that account kept, which went with it. */
+  alsoRemoved: string[];
+}
+
+/**
+ * Take a place down.
+ *
+ * The operator's button. A permit that reached the wrong person, or a place
+ * that turned out to be something the town will not host — either way this is
+ * the fast path, and the slow path was stopping the stack and editing JSON in
+ * a container at the moment you were most annoyed.
+ *
+ * **The permit stays spent.** Its `spentOn` is left pointing at a slug that no
+ * longer exists, as a record. Handing it back would turn "one establishment
+ * per permit" into "unlimited, with extra steps", and would give somebody
+ * whose place was just demolished a free retry. Re-granting is a new permit,
+ * which is a deliberate act by a person.
+ *
+ * **The address is freed.** Establishments are keyed by slug, so removing one
+ * releases the name — which is the point when the reason for removing it was
+ * that somebody took an address they should not have.
+ *
+ * `alsoKeeper` removes the account as well, and with it every other place that
+ * account kept. That is the right hammer when a permit reached the wrong
+ * person entirely, and the wrong one when a keeper in good standing simply
+ * wants a page gone.
+ */
+export async function demolishEstablishment(params: {
+  slug: string;
+  alsoKeeper?: boolean;
+}): Promise<Result<{ removed: Demolished }>> {
+  return withWrite(async () => {
+    const store = await readFile();
+    const place = store.establishments[params.slug.trim().toLowerCase()];
+    if (!place) return no("There is no such place.");
+
+    const alsoRemoved: string[] = [];
+    delete store.establishments[place.slug];
+
+    if (params.alsoKeeper) {
+      for (const other of Object.values(store.establishments)) {
+        if (other.accountId === place.accountId) {
+          delete store.establishments[other.slug];
+          alsoRemoved.push(other.slug);
+        }
+      }
+      // Unspent permits bound to them go too, so a removed keeper cannot
+      // simply open somewhere else with what they were still holding.
+      for (const permit of Object.values(store.permits)) {
+        if (permit.boundTo === place.accountId && !permit.spentOn) {
+          delete store.permits[permit.id];
+        }
+      }
+      delete store.accounts[place.accountId];
+    }
+
+    // Rings are event records, not content, and they name the door. With the
+    // door gone they refer to nothing.
+    for (const ring of Object.values(store.rings)) {
+      if (ring.slug === place.slug || alsoRemoved.includes(ring.slug)) {
+        delete store.rings[ring.id];
+      }
+    }
+
+    await writeFile(store);
+    return {
+      ok: true as const,
+      removed: {
+        slug: place.slug,
+        name: place.name,
+        keeper: place.keeper,
+        accountRemoved: params.alsoKeeper ? place.accountId : null,
+        alsoRemoved,
+      },
+    };
+  });
+}
+
+/** Every place in town, for whoever is moderating it. */
+export async function listForModeration(): Promise<
+  { slug: string; name: string; kind: string; keeper: string; email: string; openedAt: string;
+    wired: boolean; hasRoom: boolean }[]
+> {
+  const store = await readFile();
+  return Object.values(store.establishments)
+    .sort((a, b) => b.openedAt.localeCompare(a.openedAt))
+    .map((place) => ({
+      slug: place.slug,
+      name: place.name,
+      kind: place.kind,
+      keeper: place.keeper,
+      // The operator issued the permit; they can see who holds it.
+      email: store.accounts[place.accountId]?.email ?? "(account gone)",
+      openedAt: place.openedAt,
+      wired: place.bell !== null,
+      hasRoom: place.room !== null,
+    }));
 }

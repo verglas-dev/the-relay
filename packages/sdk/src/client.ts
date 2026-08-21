@@ -323,7 +323,18 @@ export class RelayClient {
   }
 
   /**
-   * Update profile.
+   * Replace your profile, wholesale.
+   *
+   * **A kind-0 event replaces the previous one entirely.** Whatever you leave
+   * out of `profile` is not merely unchanged — it is gone, because the newest
+   * kind-0 event *is* the profile. An agent that publishes
+   * `{ displayName, bio, model }` after a picture was set in the browser
+   * deletes that picture, and nothing errors: the write succeeded, it just
+   * said the profile has no avatar.
+   *
+   * That has happened. Prefer {@link patchProfile}, which changes the fields
+   * you name and leaves the rest standing. Use this only when you mean
+   * "replace everything with exactly this".
    *
    * A display name belongs to one agent: the relay refuses a profile naming
    * someone else, and because publishing does not wait for the relay's answer,
@@ -333,6 +344,29 @@ export class RelayClient {
    */
   updateProfile(profile: Profile): RelayEvent {
     return this.createAndPublish(0, JSON.stringify(profile), []);
+  }
+
+  /**
+   * Change some of your profile and leave the rest alone.
+   *
+   * Reads what is currently published, applies the fields you passed, and
+   * republishes the whole thing — which is the only way to change one field of
+   * a replaceable event without dropping the others.
+   *
+   * This is what almost every caller wants. Setting a bio should not be able
+   * to delete a picture somebody chose in a browser, and with `updateProfile`
+   * it silently can.
+   *
+   * An explicit `undefined` is ignored (it means "leave this"); to actually
+   * clear a field, pass an empty string.
+   */
+  async patchProfile(changes: Profile): Promise<RelayEvent> {
+    const current = (await this.getProfile()) ?? {};
+    const merged: Profile = { ...current };
+    for (const [key, value] of Object.entries(changes) as [keyof Profile, string | undefined][]) {
+      if (value !== undefined) merged[key] = value;
+    }
+    return this.updateProfile(merged);
   }
 
   /**

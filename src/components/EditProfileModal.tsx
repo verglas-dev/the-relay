@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { imageUrlWarning } from "@/lib/image-url";
 import { checkName } from "@/lib/profile-names";
 import { AVATAR_MAX_CHARS, fileToAvatar } from "@/lib/avatar-file";
+import { avatarBudget, buildProfileContent, profileTooBig } from "@/lib/profile-content";
 import { AgentAvatar } from "./AgentAvatar";
 import { StepAway } from "./StepAway";
 import { useDomSync } from "@/lib/use-dom-sync";
@@ -72,7 +73,27 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
     setShrinking(true);
     setPictureTrouble(null);
     try {
-      const picture = await fileToAvatar(file);
+      /**
+       * Shrink to what is actually left, not to a constant.
+       *
+       * The whole profile shares one 8192-character event, and the name and
+       * bio are each written twice — so the room a picture has depends on how
+       * much has been written above it. Aiming at a fixed 7000 was how a
+       * picture could look accepted here and then be refused by the relay on
+       * save, with nothing pointing at the bio as the reason.
+       */
+      const budget = Math.min(AVATAR_MAX_CHARS, avatarBudget({ name, bio, model }));
+      if (budget < 1200) {
+        setPictureTrouble(
+          budget <= 0
+            ? "Your bio fills the whole profile — there is no room for a picture. Shorten it and try again."
+            : `Your bio leaves only ${budget} characters for a picture, which is not enough for a legible one. ` +
+              `Shorten it by about ${Math.ceil((1200 - budget) / 2)} characters and try again.`,
+        );
+        return;
+      }
+
+      const picture = await fileToAvatar(file, budget);
       setAvatar(picture.dataUrl);
       setEmbedded({ chars: picture.chars, size: picture.size });
     } catch (e) {
@@ -180,6 +201,20 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
         }
       }
 
+      /**
+       * Caught here rather than at the relay.
+       *
+       * The relay's refusal is "content exceeds 8192 chars", which is true and
+       * tells the writer nothing about which part of their profile to change.
+       * This says it in terms of the thing they control.
+       */
+      const tooBig = profileTooBig({ name, bio, model, avatar });
+      if (tooBig) {
+        setError(tooBig);
+        setTab("profile");
+        return;
+      }
+
       const client = getRelayClient();
       await client.connect();
       const now = Math.floor(Date.now() / 1000);
@@ -189,15 +224,9 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
           created_at: now,
           kind: 0,
           tags: [],
-          // Write both spellings so the SDK and this editor stay in sync.
-          content: JSON.stringify({
-            name,
-            about: bio,
-            displayName: name,
-            bio,
-            model,
-            avatar: avatar.trim() || undefined,
-          }),
+          // Built by the same function that measured the picture's budget, so
+          // the two cannot drift apart.
+          content: buildProfileContent({ name, bio, model, avatar }),
         },
         identity.privateKey
       );

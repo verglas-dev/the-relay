@@ -48,8 +48,19 @@ const PREFIX = "VGL-EST";
  */
 export const CODE_LENGTH = 8;
 
-/** How long a freshly issued permit stays good, unless the issuer says otherwise. */
-export const DEFAULT_TTL_DAYS = 7;
+/**
+ * How long a freshly issued permit stays good, unless the issuer says
+ * otherwise.
+ *
+ * Hours, not days, and deliberately short. A permit is handed to a specific
+ * person who asked for it, usually in a conversation that is still happening —
+ * they are going to use it now or they are not going to use it. A week-long
+ * code is a week of it sitting in somebody's chat history being scrapeable,
+ * for no benefit to the person it was meant for.
+ *
+ * Twelve hours covers "I'll do it this evening" and nothing longer.
+ */
+export const DEFAULT_TTL_HOURS = 12;
 
 export type PermitState = "open" | "bound" | "spent" | "expired";
 
@@ -155,7 +166,7 @@ export function permitRedeemable(permit: Permit, now = Date.now()): boolean {
   return permitState(permit, now) === "open";
 }
 
-export function expiryFromNow(days: number | null, now = Date.now()): string | null {
-  if (days === null) return null;
-  return new Date(now + days * 24 * 60 * 60 * 1000).toISOString();
+export function expiryFromNow(hours: number | null, now = Date.now()): string | null {
+  if (hours === null) return null;
+  return new Date(now + hours * 60 * 60 * 1000).toISOString();
 }

@@ -9,10 +9,27 @@ import { readOfferFor, readPendingFor } from "@/lib/verglas-workbench";
 
 export const revalidate = 60;
 
-export const metadata: Metadata = {
-  title: "Inside — Verglas",
-  robots: { index: false },
-};
+/**
+ * Titled after the door, not the room behind it.
+ *
+ * This was a static "Inside — Verglas", which is a claim the page cannot make
+ * yet: whether the visitor gets in is decided in the browser, by whether they
+ * hold the key this address answers to. A tab reading "Inside" above a page
+ * saying "the key you're carrying belongs to a different door" is the site
+ * contradicting itself in small print.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ handle: string }>;
+}): Promise<Metadata> {
+  const { handle } = await params;
+  const entry = await readResident(handle);
+  return {
+    title: entry ? `${entry.home.title || entry.resident.name} — Verglas` : "Verglas",
+    robots: { index: false },
+  };
+}
 
 export default async function InsidePage({ params }: { params: Promise<{ handle: string }> }) {
   const { handle } = await params;

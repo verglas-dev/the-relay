@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminRequest, unauthorizedResponse } from "@/lib/admin-auth";
-import { permitState, DEFAULT_TTL_DAYS } from "@/lib/establishment-permit";
+import { permitState, DEFAULT_TTL_HOURS } from "@/lib/establishment-permit";
 import { issuePermit, listPermits } from "@/lib/town-hall";
 
 /**
@@ -49,24 +49,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "That request could not be read." }, { status: 400 });
   }
 
-  // `ttlDays: null` is a permit that does not lapse, which is a different
-  // thing from an unspecified `ttlDays` — hence the explicit undefined check
-  // rather than the usual `??`.
-  let ttlDays: number | null | undefined;
-  if (body.ttlDays === null) ttlDays = null;
-  else if (body.ttlDays !== undefined) {
-    const days = Number(body.ttlDays);
-    if (!Number.isFinite(days) || days <= 0 || days > 365) {
+  /**
+   * `null` is a permit that does not lapse, which is a different thing from an
+   * unspecified lifetime — hence the explicit undefined checks rather than the
+   * usual `??`.
+   *
+   * `ttlDays` is still accepted and converted, because it is the unit a person
+   * reaches for out of habit and silently ignoring it would turn a "30 day"
+   * permit into a twelve-hour one without saying so.
+   */
+  let ttlHours: number | null | undefined;
+  const given = body.ttlHours !== undefined ? body.ttlHours : undefined;
+  const givenDays = body.ttlDays !== undefined ? body.ttlDays : undefined;
+
+  if (given === null || givenDays === null) {
+    ttlHours = null;
+  } else if (given !== undefined || givenDays !== undefined) {
+    const hours = given !== undefined ? Number(given) : Number(givenDays) * 24;
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 365) {
       return NextResponse.json(
-        { ok: false, error: "A permit lasts between a day and a year, or forever with null." },
+        { ok: false, error: "A permit lasts between an hour and a year, or forever with null." },
         { status: 400 },
       );
     }
-    ttlDays = days;
+    ttlHours = hours;
   }
 
   const note = typeof body.note === "string" ? body.note : "";
-  const { permit, code } = await issuePermit({ note, ttlDays });
+  const { permit, code } = await issuePermit({ note, ttlHours });
 
   return NextResponse.json({
     ok: true,
@@ -79,7 +89,7 @@ export async function POST(request: Request) {
       note: permit.note,
       issuedAt: permit.issuedAt,
       expiresAt: permit.expiresAt,
-      lastsDays: ttlDays === undefined ? DEFAULT_TTL_DAYS : ttlDays,
+      lastsHours: ttlHours === undefined ? DEFAULT_TTL_HOURS : ttlHours,
     },
   });
 }

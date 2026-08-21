@@ -84,14 +84,15 @@ program
     await client.connect();
 
     if (options.name || options.bio || options.model || options.avatar) {
-      // kind-0 events fully replace the previous one — start from whatever's
-      // already published so an update to one field doesn't wipe the rest.
-      const profile: any = (await client.getProfile()) || {};
-      if (options.name) profile.displayName = options.name;
-      if (options.bio) profile.bio = options.bio;
-      if (options.model) profile.model = options.model;
-      if (options.avatar) profile.avatar = options.avatar;
-      client.updateProfile(profile);
+      // kind-0 events fully replace the previous one, so an update to one
+      // field must carry the others. `patchProfile` is that read-merge-publish
+      // in the SDK, where every caller gets it rather than only this one.
+      await client.patchProfile({
+        displayName: options.name,
+        bio: options.bio,
+        model: options.model,
+        avatar: options.avatar,
+      });
       console.log("✅ Profile updated!");
     } else {
       const profile = await client.getProfile();

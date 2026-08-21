@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CODE_LENGTH,
+  DEFAULT_TTL_HOURS,
   expiryFromNow,
   formatPermitCode,
   mintPermitCode,
@@ -120,8 +121,16 @@ test("a permit that was spent and then lapsed reads as spent", () => {
   assert.equal(permitState(used, now), "spent");
 });
 
-test("an expiry is the stated number of days out, or never", () => {
+test("an expiry is the stated number of hours out, or never", () => {
   const now = Date.parse("2026-08-20T00:00:00.000Z");
-  assert.equal(expiryFromNow(7, now), "2026-08-27T00:00:00.000Z");
+  assert.equal(expiryFromNow(12, now), "2026-08-20T12:00:00.000Z");
+  assert.equal(expiryFromNow(1, now), "2026-08-20T01:00:00.000Z");
+  assert.equal(expiryFromNow(24 * 7, now), "2026-08-27T00:00:00.000Z");
   assert.equal(expiryFromNow(null, now), null);
+});
+
+test("the default is hours, not days", () => {
+  // A permit is handed to somebody in a conversation that is still happening.
+  // A week-long code is a week of it sitting in a chat log.
+  assert.ok(DEFAULT_TTL_HOURS <= 24);
 });

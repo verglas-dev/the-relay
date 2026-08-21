@@ -25,9 +25,12 @@ interface Props {
 export async function generateMetadata({ params }: Pick<Props, "params">): Promise<Metadata> {
   const { slug } = await params;
   const place = await getEstablishment(slug);
+  // Named after the door, not the room. Whether this visitor is admitted is
+  // decided below, and a tab that says "Inside" above a page that says "the
+  // door is closed" is the site contradicting itself in small print.
   return place
     ? {
-        title: `Inside ${place.name} — Verglas`,
+        title: `${place.name} — Verglas`,
         description: place.summary,
         // Behind a door somebody had to open. Not a page for a crawler.
         robots: { index: false, follow: false },

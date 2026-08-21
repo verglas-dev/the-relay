@@ -24,8 +24,13 @@ export const dynamic = "force-dynamic";
 
 /** Slow, expensive, and nobody needs to do it twice in a minute. */
 const BUILDS_PER_MIN = 2;
-/** The model gets a while — a room is a lot of markup to think through. */
-export const maxDuration = 300;
+/**
+ * The model gets a while.
+ *
+ * A room drawn properly is tens of thousands of tokens of CSS and SVG, thought
+ * about at full effort. A keeper presses this once and waits on purpose.
+ */
+export const maxDuration = 900;
 
 export async function POST(request: Request) {
   const account = await currentKeeper(await cookies());

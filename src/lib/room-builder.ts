@@ -73,6 +73,16 @@ export function roomBuilderConfigured(): boolean {
 }
 
 /**
+ * Which model draws the rooms.
+ *
+ * Configurable because "the rooms could look better" is a thing you find out
+ * after seeing a few, and rebuilding an image to try a different one is a
+ * silly reason to redeploy. Defaults to Opus 5; `claude-fable-5` is the more
+ * capable and more expensive option if the drawings still disappoint.
+ */
+const MODEL = process.env.ROOM_BUILDER_MODEL?.trim() || "claude-opus-5";
+
+/**
  * The rules the room has to satisfy, written out for the model.
  *
  * Deliberately the same rules `checkRoom` enforces, in the same order, in
@@ -94,7 +104,15 @@ HARD RULES — a room breaking any of these is refused outright:
 - No postMessage, and no reaching for window.parent, window.top, or opener.
 - No forms and no navigation.
 
-BUILD IT FROM CSS AND INLINE SVG. Gradients, box-shadows, transforms, blurs, and hand-written SVG shapes. No photographs and no image files — if you want texture, draw it. A little JavaScript for slow ambient motion is welcome (a flickering lamp, drifting dust, rain on glass) but the room must look finished with scripting off.
+BUILD IT FROM CSS AND INLINE SVG. Gradients, box-shadows, transforms, blurs, filters, masks, and hand-written SVG. No photographs and no image files — if you want texture, draw it. A little JavaScript for slow ambient motion is welcome (a flickering lamp, drifting dust, rain on glass) but the room must look finished with scripting off.
+
+DRAW IT LIKE A PAINTING, NOT A DIAGRAM. This is the difference between a room somebody wants to sit in and a wireframe of one:
+
+- **Light first.** Decide where the light comes from and let everything obey it: a warm pool under a lamp, cold spill from a window, long soft shadows falling away from the source. Layered radial gradients and large blurred shapes do more for a room than any amount of furniture.
+- **Depth.** Overlap things. Put something dark in the near foreground, the subject in the middle, and something dim and low-contrast behind. Haze the far plane. Never draw the whole room at one distance.
+- **No rectangles pretending to be objects.** A chair is a silhouette with legs that taper; a counter has a lit edge and a shadowed underside; a notice has a curl and a corner lifting. Use SVG paths for outlines rather than bare divs with borders.
+- **Texture and grain.** Fine noise, faint scanlines, a mottled wall, dust in the light shaft. Small imperfections read as real; flat fills read as a mockup.
+- **Restraint in palette, not in detail.** Few colours, many values. A room can be almost entirely three shades of blue-black and still be full of things.
 
 THE TERMINAL REGION
 
@@ -104,7 +122,9 @@ Return the rectangle as x, y, width, height, and name the surface it appears to 
 
 STYLE
 
-Verglas is cold, dim, and warm-lit — deep blue-blacks with lamplight. Match the keeper's description first and the town second. Restrained beats elaborate: a room that loads instantly and feels still is better than one that is busy. Keep the whole fragment under about 8KB.`;
+Verglas is cold, dim, and warm-lit — deep blue-blacks with lamplight. Match the keeper's description first and the town second.
+
+Take the room seriously as a picture. **Spend the space you need — up to about 100KB of markup**, and use it: a scene worth standing in is usually thousands of lines of considered CSS and SVG, not a few dozen boxes. Do not simplify to be polite. The one thing to keep still is motion — an interior should feel quiet, not animated.`;
 
 function userPrompt(place: {
   name: string;
@@ -155,12 +175,19 @@ export async function buildRoom(place: {
 
     try {
       const response = await client.messages.parse({
-        model: "claude-opus-5",
-        max_tokens: 16000,
+        model: MODEL,
+        // A detailed interior is tens of thousands of tokens of CSS and SVG.
+        // The TypeScript SDK scales its own timeout up for a large
+        // `max_tokens` on a non-streaming request, so this does not need
+        // streaming — but the route's `maxDuration` has to allow for it.
+        max_tokens: 48000,
         thinking: { type: "adaptive" },
+        // Drawing a room is exactly the kind of work worth thinking about:
+        // this runs once, a person waits for it deliberately, and the result
+        // is looked at by everyone who visits.
+        output_config: { effort: "max", format: zodOutputFormat(RoomDraft) },
         system: SYSTEM,
         messages,
-        output_config: { format: zodOutputFormat(RoomDraft) },
       });
 
       // A safety decline is a real outcome here, not an exception.
