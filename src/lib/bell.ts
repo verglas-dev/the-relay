@@ -14,11 +14,30 @@
  * key travels inside the notification — open the door. So it is stored
  * server-side, never rendered, never returned by any endpoint, never logged.
  *
- * That answer key is also why this sends with caching off. ntfy stores
- * messages for twelve hours by default; a doorbell published the obvious way
- * leaves a working key to somebody's front door sitting in a cache that
- * `poll=1` will hand to anyone who learns the topic. The wire in `ntfy.ts`
- * defaults to no caching for exactly this reason.
+ * **The doorbell is cached; the conversation is not.** These look like the same
+ * decision and are not.
+ *
+ * `Cache: no` means ntfy delivers to a *connected* subscriber and never
+ * redelivers. For the session that is exactly right: the words are gone and
+ * the town still holds them for a moment. For a doorbell it is fatal — a phone
+ * that was asleep, or subscribed to the topic a minute later, simply never
+ * hears it, and a doorbell that only works if you are already holding the
+ * phone is not a doorbell. That happened on the first real ring.
+ *
+ * The reason for switching it off was that the ring's answer key rides inside
+ * the notification, and a cache holds it for twelve hours. But **a ring expires
+ * after thirty minutes** (`RING_TTL_MINUTES`), and `answerRing` refuses an
+ * expired one — so the key is worthless long before the cache lets it go. The
+ * exposure was never twelve hours; it was the ring's own lifetime, and that is
+ * true whether the message is cached or read live off the wire by anybody
+ * already subscribed.
+ *
+ * So: cached, and reliable.
+ *
+ * **A topic name is still a credential.** Anyone who knows it can read every
+ * notification sent to it, publish their own, and answer a ring that is still
+ * open. It is stored server-side, never rendered, never returned by any
+ * endpoint, never logged.
  *
  * Server-side only.
  */
@@ -73,7 +92,8 @@ export async function ring(config: BellConfig | null, message: BellMessage): Pro
     priority: message.priority ?? 4,
     click: message.click,
     actions: message.actions,
-    // Never. The answer key is in here.
-    cache: false,
+    // Kept, so a phone that was asleep still finds it. See the note above on
+    // why the answer key inside does not make this a leak.
+    cache: true,
   });
 }

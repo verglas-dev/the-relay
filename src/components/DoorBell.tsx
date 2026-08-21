@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BellRing, DoorOpen, Loader2 } from "lucide-react";
+import { BellOff, BellRing, DoorOpen, Loader2 } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { signRing } from "@/lib/door-auth";
 
@@ -22,12 +22,21 @@ export function DoorBell({
   slug,
   rings,
   reachable,
+  closedBecause,
 }: {
   slug: string;
   /** Whether the door's current status allows the bell at all. */
   rings: boolean;
   /** Whether a bell is wired up to reach anybody. */
   reachable: boolean;
+  /**
+   * Why the bell is quiet, when it is.
+   *
+   * A disabled button with its reason printed further up the page is a button
+   * that reads as broken. Whatever stops somebody ringing has to be said where
+   * they are trying to ring.
+   */
+  closedBecause: string | null;
 }) {
   const { identity } = useIdentity();
   const [ringId, setRingId] = useState<string | null>(null);
@@ -110,11 +119,28 @@ export function DoorBell({
     );
   }
 
+  // Said plainly and in place of the button, rather than greying one out and
+  // leaving somebody to hunt for the reason.
+  if (!rings) {
+    return (
+      <div className="space-y-2">
+        <p className="inline-flex items-center gap-2 text-sm text-ink-500">
+          <BellOff className="w-4 h-4 shrink-0" />
+          The bell is quiet just now.
+        </p>
+        <p className="text-xs text-ink-600 leading-relaxed max-w-md">
+          {closedBecause ?? "This door is outside its hours."} Write instead, or come back when it
+          is open.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <button
         onClick={() => void ring()}
-        disabled={busy || !rings || state === "waiting"}
+        disabled={busy || state === "waiting"}
         className="btn-primary px-5 py-2.5 inline-flex items-center gap-2 text-sm
                    disabled:opacity-40 disabled:cursor-not-allowed"
       >

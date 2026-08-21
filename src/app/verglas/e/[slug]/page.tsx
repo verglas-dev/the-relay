@@ -199,11 +199,27 @@ export default async function EstablishmentPage({ params }: Props) {
           {/* This is the porch. Everything above is public; the room behind
               this button is not, and only opens when a person decides it
               does. */}
-          <DoorBell slug={place.slug} rings={bellRings(status)} reachable={wired} />
+          <DoorBell
+            slug={place.slug}
+            rings={bellRings(status)}
+            reachable={wired}
+            closedBecause={
+              bellRings(status)
+                ? null
+                : schedule.length > 0
+                  ? `${place.name} is open ${schedule.join(", ")} (${place.timezone}).`
+                  : STATUS_WORDS[status].detail
+            }
+          />
 
+          {/* Sat directly under the button, this read as the reason the button
+              was greyed out — it never was. A room is scenery; the bell and the
+              conversation work without one. Said in terms of what a visitor
+              will see once they are inside. */}
           {!hasRoom && (
             <p className="text-xs text-ink-600 mt-4">
-              This place has no room built yet — there is a doorway, but nothing drawn behind it.
+              Nobody has drawn the inside of this place yet, so it will be a bare room when you get
+              there. Everything in it still works.
             </p>
           )}
         </div>

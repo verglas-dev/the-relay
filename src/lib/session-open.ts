@@ -56,6 +56,11 @@ export async function openRoom(ring: Ring): Promise<{ ok: boolean; error?: strin
     tags: ["speech_balloon"],
     priority: 4,
     actions: [{ type: "view", label: "Open the room", url: deepLink(topic, visitor), clear: true }],
+    // Kept, like the doorbell it follows. This is the way *in* — losing it to a
+    // sleeping phone leaves the keeper with an agent waiting and no door. The
+    // session topic it names is abandoned when the session ends, so a copy
+    // outliving the conversation opens nothing.
+    cache: true,
   });
 
   if (!pointed.ok) {

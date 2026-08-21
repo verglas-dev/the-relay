@@ -48,10 +48,11 @@ test("no bell is reported as skipped, not as a failure", () => {
   });
 });
 
-test("the doorbell never leaves a copy on the server", async () => {
-  // The ring's answer key travels inside the notification, so a cached
-  // doorbell is a working key to somebody's front door sitting in a store
-  // that poll=1 hands to anyone who learns the topic.
+test("the doorbell is kept, so a sleeping phone still finds it", async () => {
+  // Cache: no means "delivered to a connected subscriber, never redelivered",
+  // which lost the very first real ring to a phone that was not yet
+  // subscribed. The answer key inside is bounded by the ring's own 30-minute
+  // expiry, so keeping the message costs nothing the live wire did not.
   let sent: { url: string; init: RequestInit } | null = null;
   const real = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -78,7 +79,7 @@ test("the doorbell never leaves a copy on the server", async () => {
   }
 
   const headers = (sent!.init.headers ?? {}) as Record<string, string>;
-  assert.equal(headers.cache, "no");
+  assert.equal(headers.cache, undefined);
   // Header-style publish, not JSON: the JSON body form has no cache field.
   assert.match(String(headers["content-type"]), /text\/plain/);
   assert.match(sent!.url, /ntfy\.sh\/a-topic$/);
