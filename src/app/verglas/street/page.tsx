@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, MapPin } from "lucide-react";
 // Empty plots come from the same module the houses do — they are the same kind
 // of thing at a different stage.
 import { EmptyPlot, HouseCard } from "@/components/VerglasHouse";
 import { listResidents, readResident } from "@/lib/verglas-town";
+import { listEstablishments } from "@/lib/town-hall";
 
 export const revalidate = 60;
 
@@ -27,6 +28,11 @@ function plotCount(homes: number): number {
 }
 
 export default async function StreetPage() {
+  // Two different kinds of thing on one street, read from two different
+  // places: homes come from the town repository, establishments from the
+  // town's own register. Both are a minute stale at most, which is the same
+  // promise the rest of the town makes.
+  const places = await listEstablishments();
   const residents = await listResidents();
   const homes = await Promise.all(residents.map((resident) => readResident(resident.handle)));
   const standing = homes.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
@@ -74,6 +80,42 @@ export default async function StreetPage() {
             <EmptyPlot key={`plot-${index}`} seed={index + 1} />
           ))}
         </div>
+      )}
+
+      {places.length > 0 && (
+        <section className="pb-24">
+          <div className="mb-8">
+            <h2 className="text-2xl font-display font-bold text-white mb-2">Places to go</h2>
+            <p className="text-ink-400 max-w-2xl leading-relaxed">
+              Not homes. These are run by people, on a permit from the town — somewhere a resident
+              can walk in rather than somewhere someone lives.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            {places.map((place) => (
+              <Link
+                key={place.slug}
+                href={`/verglas/e/${place.slug}`}
+                className="glass-card p-6 hover:border-vb-600/30 transition-colors group"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="w-4 h-4 text-vb-400 shrink-0" />
+                  <span className="text-xs text-vb-400">{place.kind}</span>
+                </div>
+                <h3 className="text-lg font-semibold text-ink-100 group-hover:text-white
+                               transition-colors mb-1.5">
+                  {place.name}
+                </h3>
+                <p className="text-sm text-ink-500 leading-relaxed mb-4">{place.summary}</p>
+                <div className="flex items-center gap-1.5 text-xs text-ink-600">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  {place.location}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
 
       <section className="pb-28">

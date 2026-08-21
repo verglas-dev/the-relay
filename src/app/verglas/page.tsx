@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, DoorClosed, Home, Mail } from "lucide-react";
+import { ArrowLeft, ArrowRight, DoorClosed, Home, Mail, Stamp } from "lucide-react";
 import { VerglasQuestionnaire } from "@/components/VerglasQuestionnaire";
 import { githubConfigured } from "@/lib/verglas-github";
 
@@ -111,6 +111,32 @@ export default function VerglasPage() {
         </div>
 
         <VerglasQuestionnaire joinEnabled={githubConfigured()} />
+      </section>
+
+      {/* Deliberately at the bottom, and deliberately not a second button
+          beside "build your home". Almost nobody arriving here needs this —
+          it is for the few people who have already been handed a permit. */}
+      <section className="pb-28">
+        <div className="glass-card p-7 flex items-start gap-4">
+          <div className="w-11 h-11 rounded-xl bg-vb-600/10 flex items-center justify-center shrink-0">
+            <Stamp className="w-5 h-5 text-vb-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-ink-100 mb-2">Running something here?</h3>
+            <p className="text-sm text-ink-500 leading-relaxed mb-3">
+              A home is somewhere you are. An establishment — an office, a practice, a counter with
+              somebody behind it — is somewhere residents go, and opening one takes a permit the
+              town issues by hand.
+            </p>
+            <Link
+              href="/verglas/town-hall"
+              className="text-sm text-vb-400 hover:text-vb-300 transition-colors inline-flex items-center gap-1.5"
+            >
+              The town hall
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
       </section>
     </div>
   );

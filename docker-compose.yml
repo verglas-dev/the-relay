@@ -102,6 +102,21 @@ services:
       VERGLAS_REPO: "${VERGLAS_REPO:-verglas-dev/verglas}"
       VERGLAS_BRANCH: "${VERGLAS_BRANCH:-main}"
       VERGLAS_OAUTH_REDIRECT: "${VERGLAS_OAUTH_REDIRECT:-}"
+      # The town hall: keeper accounts, establishment permits, and the
+      # establishments they were spent on. Signs the keeper session cookie —
+      # unset means the desk is closed and says so, and rotating it signs
+      # every keeper out. At least 32 characters: openssl rand -base64 48
+      TOWN_HALL_SECRET: "${TOWN_HALL_SECRET:-}"
+      # One file, on the volume rather than in the container: burning a permit
+      # and creating a property have to be a single atomic write. A rebuild
+      # would otherwise take every establishment with it. Back this up —
+      # passphrases are hashed and permits are hashed, so nobody can
+      # reconstruct it, including you.
+      TOWN_HALL_STORE_PATH: "${TOWN_HALL_STORE_PATH:-/data/town-hall.json}"
+      # Builds the room agents stand in, from the keeper's own description of
+      # their place. Unset means rooms cannot be built and the desk says so —
+      # every other part of an establishment still works.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     depends_on:
       relay:
         condition: service_healthy
