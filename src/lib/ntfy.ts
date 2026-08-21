@@ -205,9 +205,14 @@ export async function publish(
       cache: "no-store",
     });
 
-    // On failure, deliberately not the response body: an ntfy error can echo
-    // the topic back, and the topic is the credential.
-    if (!response.ok) return { ok: false, error: `Refused (${response.status}).` };
+    if (!response.ok) {
+      // The status is safe to log and the body is not — an ntfy error can echo
+      // the topic back, and the topic is the credential. A 429 here is the one
+      // worth recognising: ntfy.sh rate-limits publishing and topic creation
+      // per source address.
+      console.error(`[verglas] ntfy refused a publish: ${response.status}`);
+      return { ok: false, error: `Refused (${response.status}).` };
+    }
 
     try {
       const body = (await response.json()) as { id?: string };

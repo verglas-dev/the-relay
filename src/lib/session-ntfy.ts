@@ -83,6 +83,7 @@ export class NtfySessionTransport implements SessionTransport {
     });
 
     if (!opened.ok) {
+      console.error(`[verglas] session topic would not open: ${opened.error}`);
       await this.close("the thread could not be opened");
       return { ok: false as const, error: opened.error ?? "The thread could not be opened." };
     }

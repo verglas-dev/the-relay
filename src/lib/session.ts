@@ -111,14 +111,38 @@ export async function startSession(params: {
   establishment: string;
   visitorPubkey: string;
   visitorLabel: string;
+  /** When the bell was rung. Decides who wins if the room is occupied. */
+  rungAt: number;
   transport: SessionTransport;
 }): Promise<{ ok: true; session: Session } | { ok: false; error: string }> {
   const existing = registry.get(params.id);
   if (existing && !expired(existing)) return { ok: true, session: existing };
 
+  /**
+   * A room admits one visitor at a time — a keeper has one pair of ears.
+   *
+   * Who wins when it is occupied depends on *when the newcomer rang*, and that
+   * subtlety is not academic. Doorbell notifications are cached so a sleeping
+   * phone still finds them, which means a keeper's lock screen accumulates
+   * every unanswered ring and each one stays tappable. Letting any of them
+   * take the room turns an old notification tapped by accident into somebody
+   * being thrown out of a conversation mid-sentence — which is exactly what
+   * happened: a visitor got in and was evicted seconds later by a ring from
+   * ten minutes earlier.
+   *
+   * So only a ring made *after* the current session began may take over. That
+   * is a keeper deliberately admitting somebody new, and it wins. A ring from
+   * before it is stale, and the room says so instead.
+   */
   const busy = sessionAt(params.establishment);
   if (busy && busy.id !== params.id) {
-    return { ok: false, error: "Somebody else is in there just now." };
+    if (params.rungAt < busy.startedAt) {
+      return {
+        ok: false,
+        error: "Somebody else is in there, and that ring is older than their visit.",
+      };
+    }
+    await endSession(busy.id, "the keeper let somebody else in");
   }
 
   const now = Date.now();

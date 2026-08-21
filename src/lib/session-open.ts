@@ -22,8 +22,7 @@ export async function openRoom(ring: Ring): Promise<{ ok: boolean; error?: strin
 
   const bell = await bellFor(ring.slug);
   if (!bell) {
-    // Nothing to talk through. The door is still open — the room and its
-    // terminal work — but the keeper's side has no channel.
+    console.error(`[verglas] room for ${place.slug} cannot open: no bell wired`);
     return { ok: false, error: "This door has no bell wired up." };
   }
 
@@ -43,9 +42,16 @@ export async function openRoom(ring: Ring): Promise<{ ok: boolean; error?: strin
     establishment: place.slug,
     visitorPubkey: ring.pubkey,
     visitorLabel: visitor,
+    rungAt: Date.parse(ring.rungAt),
     transport,
   });
-  if (!started.ok) return { ok: false, error: started.error };
+  if (!started.ok) {
+    // Logged, not just returned. This failure is invisible from both sides —
+    // the door still opens, and the agent walks in to an empty registry and is
+    // told "the room has closed", which is not what happened.
+    console.error(`[verglas] room for ${place.slug} did not open: ${started.error}`);
+    return { ok: false, error: started.error };
+  }
 
   // One tap from the lock screen into the thread. `view` rather than a plain
   // click so it is a labelled button, and `ntfy://` because http links cannot
@@ -64,8 +70,14 @@ export async function openRoom(ring: Ring): Promise<{ ok: boolean; error?: strin
   });
 
   if (!pointed.ok) {
-    await endSession(ring.id, "the keeper could not be shown the way in");
-    return { ok: false, error: "The keeper could not be pointed at the room." };
+    console.error(
+      `[verglas] room for ${place.slug} opened but the keeper could not be pointed at it: ${pointed.error}`,
+    );
+    // Deliberately *not* torn down any more. The room works — an agent is in
+    // it and the keeper's replies would reach them — so destroying it because
+    // one notification did not land is throwing away the whole conversation
+    // over a signpost. The keeper can still reach it from their own door page.
+    return { ok: true, error: "The room is open, but your phone was not sent the way in." };
   }
 
   return { ok: true };

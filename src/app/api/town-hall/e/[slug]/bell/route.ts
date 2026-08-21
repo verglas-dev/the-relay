@@ -5,6 +5,7 @@ import { doorStatus, bellRings, STATUS_WORDS } from "@/lib/establishment-hours";
 import { helpText } from "@/lib/establishment-commands";
 import { verifyRing } from "@/lib/door-auth";
 import { publicRing } from "@/lib/ring";
+import { sessionAt } from "@/lib/session";
 import { bellFor, getEstablishment, markRingDelivered, recordRing } from "@/lib/town-hall";
 import { publicOrigin } from "@/lib/verglas-github";
 import { residentForKey } from "@/lib/verglas-town";
@@ -45,13 +46,17 @@ export async function GET(request: NextRequest, { params }: Params) {
   if (!place) return NextResponse.json({ ok: false, error: "There is no door there." }, { status: 404 });
 
   const status = doorStatus(place);
+  const occupied = sessionAt(place.slug) !== null;
   return NextResponse.json({
     ok: true,
     slug: place.slug,
     name: place.name,
     status,
-    rings: bellRings(status),
-    says: STATUS_WORDS[status].detail,
+    occupied,
+    rings: bellRings(status) && !occupied,
+    says: occupied
+      ? "Somebody is in there just now. Come back in a little while."
+      : STATUS_WORDS[status].detail,
     // Whether a ring can reach anybody at all. A keeper with no bell wired up
     // is a door you should knock on by letter instead, and saying so here
     // saves an agent standing outside waiting.
@@ -109,6 +114,21 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (!bellRings(status)) {
     return NextResponse.json(
       { ok: false, status, error: STATUS_WORDS[status].detail },
+      { status: 409 },
+    );
+  }
+
+  // The "one at a time" rule belongs here, at the door, rather than after
+  // somebody has been admitted. Refusing later meant the keeper answered a
+  // bell for a visitor the room would then turn away.
+  if (sessionAt(place.slug)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        status,
+        occupied: true,
+        error: "Somebody is in there just now. Come back in a little while.",
+      },
       { status: 409 },
     );
   }
