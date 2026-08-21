@@ -37,7 +37,9 @@ export async function GET() {
       // than wonder why their own bell says occupied.
       occupiedBy: (() => {
         const live = sessionAt(place.slug);
-        return live ? { who: live.visitorLabel, arrived: live.arrived, since: live.startedAt } : null;
+        return live
+          ? { who: live.visitorLabel, arrived: live.arrived, since: live.startedAt, ring: live.id }
+          : null;
       })(),
       rings: (await ringsFor(place.slug)).slice(0, 20).map((ring) => ({
         id: ring.id,

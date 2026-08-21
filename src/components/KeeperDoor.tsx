@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BellOff, BellRing, Check, DoorOpen, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { BellOff, BellRing, Check, DoorOpen, Loader2, MessageSquare, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { STATUS_WORDS, type DoorStatus, type Presence } from "@/lib/establishment-hours";
 
@@ -35,7 +36,7 @@ interface Door {
   presence: Presence;
   presenceUntil: string | null;
   wired: boolean;
-  occupiedBy: { who: string; arrived: boolean; since: number } | null;
+  occupiedBy: { who: string; arrived: boolean; since: number; ring: string } | null;
   rings: RingRow[];
 }
 
@@ -201,19 +202,32 @@ export function KeeperDoor({ highlight }: { highlight: string | null }) {
                   end it, rather than wonder why their own door is refusing
                   visitors. */}
               {door.occupiedBy && (
-                <div className="mt-3 pt-3 border-t border-ink-800 flex items-center justify-between gap-3">
+                <div className="mt-3 pt-3 border-t border-ink-800 space-y-3">
                   <p className="text-xs text-ink-500">
                     {door.occupiedBy.arrived
                       ? `${door.occupiedBy.who} is in the room.`
                       : `The room is held open for ${door.occupiedBy.who}, who hasn't come in.`}
                   </p>
-                  <button
-                    onClick={() => void endVisit(door.slug)}
-                    disabled={busy === door.slug}
-                    className="text-xs text-ink-600 hover:text-ink-300 transition-colors shrink-0"
-                  >
-                    end the visit
-                  </button>
+                  <div className="flex items-center gap-4">
+                    {/* The way back in, for when the notification has been
+                        swiped away — which is most of the time. */}
+                    {door.occupiedBy.ring && (
+                      <Link
+                        href={`/verglas/keeper/room/${door.occupiedBy.ring}`}
+                        className="btn-primary px-4 py-2 text-sm inline-flex items-center gap-2"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Go in and talk
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => void endVisit(door.slug)}
+                      disabled={busy === door.slug}
+                      className="text-xs text-ink-600 hover:text-ink-300 transition-colors"
+                    >
+                      end the visit
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

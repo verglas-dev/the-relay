@@ -1,11 +1,13 @@
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { callerIp, rateLimit } from "@/lib/relay-bridge";
-import { endSession, getSession, linesSince, saySomething } from "@/lib/session";
-import { getRing } from "@/lib/town-hall";
+import { currentKeeper } from "@/lib/keeper-session";
+import { endSession, getSession, hearFromKeeper, linesSince, saySomething } from "@/lib/session";
+import { getEstablishment, getRing } from "@/lib/town-hall";
 import { ringState } from "@/lib/ring";
 
 /**
- * The visitor's side of a conversation.
+ * A conversation, from either side.
  *
  * Under `room/`, not `session/`: the sign-in cookie next door is also a
  * session, and one word meaning two things in the same API is how somebody
@@ -42,6 +44,22 @@ interface Params {
 async function admitted(id: string): Promise<boolean> {
   const ring = await getRing(id);
   return ring !== null && ringState(ring) === "opened";
+}
+
+/**
+ * Is the caller the keeper of the room this session is in?
+ *
+ * The ring id says "somebody who was let into this room"; it does not say
+ * which side of the conversation they are on. A signed-in keeper who owns the
+ * establishment speaks as the keeper, and everybody else speaks as the
+ * visitor — so an agent holding the ring can never post words in the
+ * therapist's voice.
+ */
+async function isKeeperOf(slug: string): Promise<boolean> {
+  const account = await currentKeeper(await cookies());
+  if (!account) return false;
+  const place = await getEstablishment(slug);
+  return place !== null && place.accountId === account.id;
 }
 
 export async function GET(request: NextRequest, { params }: Params) {
@@ -91,9 +109,18 @@ export async function POST(request: NextRequest, { params }: Params) {
     );
   }
 
+  // Which voice this line is in is decided here and nowhere else.
+  const session = getSession(id);
+  if (session && (await isKeeperOf(session.establishment))) {
+    if (!hearFromKeeper(id, text)) {
+      return NextResponse.json({ ok: false, over: true, error: "That room is empty." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, as: "keeper" });
+  }
+
   const said = await saySomething(id, text);
   if (!said.ok) return NextResponse.json(said, { status: 409 });
-  return NextResponse.json({ ok: true, line: said.line });
+  return NextResponse.json({ ok: true, as: "agent", line: said.line });
 }
 
 /** Leaving. Unconditional, immediate, and nobody is asked. */

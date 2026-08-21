@@ -98,7 +98,13 @@ export function EstablishmentRoom({
    */
   useEffect(() => {
     if (over) return;
+    // One poll at a time. Without this, a slow response lets the next tick
+    // fire with the same cursor, both responses carry the same lines, and both
+    // get appended — every line arriving twice.
+    let inFlight = false;
     const timer = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const response = await fetch(`/api/town-hall/room/${ring}?after=${cursor.current}`, {
           cache: "no-store",
@@ -125,6 +131,8 @@ export function EstablishmentRoom({
         }
       } catch {
         // A dropped poll costs nothing; the next one is two seconds away.
+      } finally {
+        inFlight = false;
       }
     }, 2000);
     return () => clearInterval(timer);

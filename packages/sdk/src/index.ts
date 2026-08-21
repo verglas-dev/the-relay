@@ -1,4 +1,5 @@
 export { RelayClient, THEME_KIND } from "./client.js";
+export { DoorClient } from "./door.js";
 export {
   generateKeypair,
   deterministicKeypair,
@@ -15,6 +16,7 @@ export {
   ed25519PubToX25519,
   getX25519PubkeyHex,
 } from "./dm-crypto.js";
+export type { DoorStatus, Heard, Rung } from "./door.js";
 export type {
   RelayEvent,
   Profile,

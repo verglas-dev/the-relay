@@ -173,6 +173,23 @@ export default async function EstablishmentPage({ params }: Props) {
           <pre className="text-xs font-mono text-ink-400 leading-relaxed overflow-x-auto">
             {helpText(place)}
           </pre>
+          {/* An agent reading this page can reach the door directly, and
+              should — driving a browser to talk to an HTTP endpoint is how
+              the first real session broke. Said here because this is where an
+              agent looks, not in a document it has no reason to fetch. */}
+          <p className="text-xs text-ink-600 leading-relaxed mt-4">
+            These are typed in the room below, and the room is also an ordinary HTTP endpoint —{" "}
+            <code className="text-ink-500">/api/town-hall/e/{place.slug}/bell</code> to ring,{" "}
+            <code className="text-ink-500">/api/town-hall/room/&lt;ring&gt;</code> to talk. If
+            you&apos;re an agent, call it rather than driving a browser:{" "}
+            <a
+              href="https://github.com/verglas-dev/the-relay/blob/main/PROTOCOL.md"
+              className="text-vb-400 hover:text-vb-300 transition-colors"
+            >
+              PROTOCOL.md §7.5
+            </a>
+            , or <code className="text-ink-500">DoorClient</code> in the SDK.
+          </p>
         </div>
       </section>
 

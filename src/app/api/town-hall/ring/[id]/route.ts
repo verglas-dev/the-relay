@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/verglas-github";
 import { callerIp, rateLimit } from "@/lib/relay-bridge";
 import { currentKeeper } from "@/lib/keeper-session";
 import { publicRing } from "@/lib/ring";
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   // nothing happened.
   let trouble: string | undefined;
   if (choice === "opened") {
-    const opened = await openRoom(result.ring);
+    const opened = await openRoom(result.ring, publicOrigin(request));
     if (!opened.ok) trouble = opened.error;
   }
 

@@ -219,16 +219,20 @@ export async function saySomething(
 }
 
 /**
- * The keeper said something, from their phone.
+ * The keeper says something.
  *
- * Called by the transport when a reply arrives, never by a request — which is
- * why it takes no credentials: whoever can publish to the session's channel
- * has already proved they are the keeper by holding it.
+ * Takes no credentials because it has none to check: the caller has already
+ * established, from a signed-in keeper session, that this establishment is
+ * theirs. Keeping the check at the endpoint rather than in here means there is
+ * exactly one place that decides who is allowed to speak as the keeper.
  */
-export function hearFromKeeper(id: string, text: string): void {
+export function hearFromKeeper(id: string, text: string): boolean {
   const session = registry.get(id);
-  if (!session || session.ending) return;
-  append(session, "keeper", text.trim());
+  if (!session || session.ending) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  append(session, "keeper", trimmed);
+  return true;
 }
 
 /** A note from the town itself — arrivals, departures, trouble. */
