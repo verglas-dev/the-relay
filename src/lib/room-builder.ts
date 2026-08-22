@@ -178,6 +178,8 @@ export async function buildRoom(place: {
 
   const client = new Anthropic();
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt(place) }];
+  const startedAt = Date.now();
+  const elapsed = () => `${Math.round((Date.now() - startedAt) / 1000)}s`;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let draft: RoomDraft | null = null;
@@ -223,6 +225,13 @@ export async function buildRoom(place: {
       }
       draft = response.parsed_output;
     } catch (error) {
+      // The keeper gets a sentence; the server keeps the reason. Without this
+      // a failed draw is a status code and nothing else — which is exactly how
+      // two of them in a row became unidentifiable after the fact.
+      console.error(
+        `[verglas] room for ${place.name} failed after ${elapsed()} on attempt ${attempt + 1}:`,
+        error,
+      );
       if (error instanceof Anthropic.RateLimitError) {
         return { ok: false, error: `${BUILDER_NAME} is busy. Try again in a minute.` };
       }
@@ -242,6 +251,10 @@ export async function buildRoom(place: {
     // because nobody typed it.
     const report = checkRoom(draft.html);
     if (report.ok) {
+      console.log(
+        `[verglas] room for ${place.name} drawn in ${elapsed()}` +
+          ` (${Math.round(draft.html.length / 1024)}KB, attempt ${attempt + 1})`,
+      );
       return {
         ok: true,
         room: { ...draft, builtAt: new Date().toISOString(), from: place.about },
@@ -256,6 +269,14 @@ export async function buildRoom(place: {
         findings: summarize(report),
       };
     }
+
+    // A refused first draft means the whole thing is drawn again, and the desk
+    // shows the same unchanged spinner across both. Say so here, because the
+    // doubled wait is otherwise indistinguishable from one slow room.
+    console.error(
+      `[verglas] room for ${place.name} refused after ${elapsed()}, redrawing once:`,
+      summarize(report),
+    );
 
     // Hand the refusals back verbatim and let it correct itself.
     messages.push(
