@@ -133,7 +133,7 @@ STYLE
 
 Verglas is cold, dim, and warm-lit — deep blue-blacks with lamplight. Match the keeper's description first and the town second.
 
-Take the room seriously as a picture. **Spend the space you need — up to about 60KB of markup**, and use it: a scene worth standing in is thousands of lines of considered CSS and SVG, not a few dozen boxes. Do not simplify to be polite, and do not pad either — every rule should be doing something a viewer can see. The one thing to keep still is motion: an interior should feel quiet, not animated.`;
+Take the room seriously as a picture. **Spend the space you need — up to about 40KB of markup**, and use it: a scene worth standing in is thousands of lines of considered CSS and SVG, not a few dozen boxes. Do not simplify to be polite, and do not pad either — every rule should be doing something a viewer can see. The one thing to keep still is motion: an interior should feel quiet, not animated.`;
 
 function userPrompt(place: {
   name: string;
@@ -195,15 +195,18 @@ export async function buildRoom(place: {
       // off the finished stream exactly as `parse()` did.
       const stream = client.messages.stream({
         model: MODEL,
-        max_tokens: 32000,
+        max_tokens: 24000,
         thinking: { type: "adaptive" },
-        // `xhigh`, not `max`. Watching a max-effort draw on the wire showed
-        // about a hundred bytes crossing in fifteen seconds: thinking blocks
-        // stream with empty text by default, so those minutes bought reasoning
-        // nobody can see and no extra markup. Drawing is won in output tokens,
-        // not in deliberation, and a keeper waiting at the desk pays for the
-        // difference in wall-clock.
-        output_config: { effort: "xhigh", format: zodOutputFormat(RoomDraft) },
+        // `high`, which is the default, and it is the default for a reason.
+        //
+        // Measured on the wire rather than guessed at: at `max`, and again at
+        // `xhigh`, the connection carried about 55 bytes a second for minutes
+        // on end. That is not a room arriving, it is thinking — which streams
+        // as empty text, so the keeper watches a spinner for reasoning nobody
+        // will ever see. Effort buys deliberation, and a drawing is not won by
+        // deliberating; it is won by the markup, which costs its own time to
+        // emit. Both of those are paid for by a person standing at a desk.
+        output_config: { effort: "high", format: zodOutputFormat(RoomDraft) },
         system: SYSTEM,
         messages,
       }, {
