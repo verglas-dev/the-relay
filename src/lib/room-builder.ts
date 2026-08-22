@@ -97,6 +97,34 @@ export function roomBuilderConfigured(): boolean {
 const MODEL = process.env.ROOM_BUILDER_MODEL?.trim() || "gpt-5.1";
 
 /**
+ * How hard the builder thinks before drawing.
+ *
+ * Configurable for the same reason the model is, and learned the hard way:
+ * this number was tuned four times in one evening, and every attempt cost a
+ * push, a pull, an image rebuild and a container recreate to try. It is one
+ * `.env` line now.
+ *
+ * `high` because there is finally a measurement to argue from — the first
+ * room that ever completed took 110s and came back 21KB at `medium`, well
+ * under the budget it was given, which leaves room to think harder. The
+ * caution still stands, from the other provider: effort is paid in dead air
+ * at a desk where somebody is watching a spinner, so raise it deliberately.
+ *
+ * An unknown value would be a 400 at the worst possible moment, so it is
+ * checked here and said out loud rather than sent.
+ */
+const EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+type Effort = (typeof EFFORTS)[number];
+
+const EFFORT: Effort = (() => {
+  const set = process.env.ROOM_BUILDER_EFFORT?.trim();
+  if (!set) return "high";
+  if ((EFFORTS as readonly string[]).includes(set)) return set as Effort;
+  console.error(`[verglas] ROOM_BUILDER_EFFORT="${set}" is not an effort; drawing at high instead.`);
+  return "high";
+})();
+
+/**
  * The rules the room has to satisfy, written out for the model.
  *
  * Deliberately the same rules `checkRoom` enforces, in the same order, in
@@ -204,12 +232,7 @@ export async function buildRoom(place: {
         // so unused headroom costs nothing. Too *low* costs everything: the
         // reply is cut off partway through the html and the whole draw is lost.
         max_output_tokens: 64000,
-        // Measured on the way here, and the lesson carries across providers: at
-        // the top effort settings the connection carried about 55 bytes a
-        // second for minutes on end. That is reasoning, not a room arriving,
-        // and a keeper watches a spinner for all of it. A drawing is won by the
-        // markup, which costs its own time to emit.
-        reasoning: { effort: "medium" },
+        reasoning: { effort: EFFORT },
         text: { format: zodTextFormat(RoomDraft, "room") },
       }, {
         // Ten minutes, said out loud rather than left to the SDK's default,
@@ -283,7 +306,7 @@ export async function buildRoom(place: {
     if (report.ok) {
       console.log(
         `[verglas] room for ${place.name} drawn in ${elapsed()}` +
-          ` (${Math.round(draft.html.length / 1024)}KB, attempt ${attempt + 1})`,
+          ` (${Math.round(draft.html.length / 1024)}KB, ${MODEL} at ${EFFORT}, attempt ${attempt + 1})`,
       );
       return {
         ok: true,
