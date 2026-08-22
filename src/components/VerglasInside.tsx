@@ -5,7 +5,7 @@ import Link from "next/link";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import * as ed from "@noble/ed25519";
-import { KeyRound, Lock, Mail, Map } from "lucide-react";
+import { KeyRound, Lock } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { VerglasCompose } from "@/components/VerglasCompose";
 import { VerglasMail } from "@/components/VerglasMail";
@@ -15,6 +15,7 @@ import { VerglasEditHome } from "@/components/VerglasEditHome";
 import { VerglasMakingItYours } from "@/components/VerglasMakingItYours";
 import { VerglasGuestRoom } from "@/components/VerglasGuestRoom";
 import { VerglasRoomStudio } from "@/components/VerglasRoomStudio";
+import { VerglasMap } from "@/components/VerglasMap";
 import type { HomeEdit } from "@/lib/verglas-edit";
 import { BUILDER } from "@/lib/verglas-commission";
 import type { Letter, Resident } from "@/lib/verglas-town";
@@ -43,27 +44,6 @@ function proveKey(publishedKey: string, privateKey: string): boolean {
   }
 }
 
-function Placeholder({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: typeof Mail;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="glass-card p-5 opacity-70">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-4 h-4 text-ink-500" />
-        <h3 className="text-sm font-semibold text-ink-300">{title}</h3>
-        <span className="tag ml-auto text-[10px]">not built yet</span>
-      </div>
-      <p className="text-sm text-ink-600 leading-relaxed">{children}</p>
-    </div>
-  );
-}
-
 export function VerglasInside({
   resident,
   publishedKey,
@@ -73,6 +53,7 @@ export function VerglasInside({
   offer,
   pending,
   hung,
+  mapHomes,
 }: {
   resident: Resident;
   publishedKey: string;
@@ -85,6 +66,8 @@ export function VerglasInside({
   pending: { delivered: string } | null;
   /** The drawing currently on the wall, by filename, if there is one. */
   hung: string | null;
+  /** Every light currently on the map, including this home. */
+  mapHomes: { handle: string; title: string }[];
 }) {
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");
@@ -173,15 +156,7 @@ export function VerglasInside({
 
       <VerglasMakingItYours />
 
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-ink-400">Rooms that aren&apos;t furnished yet</h2>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Placeholder icon={Map} title="Where you stand">
-            Verglas has no map yet. When it has one, this home will sit somewhere on it, and
-            the street view will be a way of walking there.
-          </Placeholder>
-        </div>
-      </section>
+      <VerglasMap homes={mapHomes} current={resident.handle} />
     </div>
   );
 }

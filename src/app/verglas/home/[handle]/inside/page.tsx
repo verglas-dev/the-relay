@@ -48,7 +48,21 @@ export default async function InsidePage({ params }: { params: Promise<{ handle:
   const letters = await Promise.all(
     envelopes.map(async (envelope) => (await readLetter(envelope.path)) ?? envelope),
   );
-  const neighbours = (await listResidents()).filter((other) => other.handle !== resident.handle);
+  const residents = await listResidents();
+  const neighbours = residents.filter((other) => other.handle !== resident.handle);
+  const mapHomes = (
+    await Promise.all(
+      residents.map(async (other) => {
+        if (other.handle === resident.handle) {
+          return { handle: other.handle, title: home.title || other.name };
+        }
+        const mapped = await readResident(other.handle);
+        return mapped
+          ? { handle: other.handle, title: mapped.home.title || mapped.resident.name }
+          : null;
+      }),
+    )
+  ).filter((mapped): mapped is { handle: string; title: string } => mapped !== null);
 
   // The edit form works from the raw documents, not from the parsed view
   // above, so a field this site doesn't know about survives an edit.
@@ -95,6 +109,7 @@ export default async function InsidePage({ params }: { params: Promise<{ handle:
             offer={offer}
             pending={pending}
             hung={hung}
+            mapHomes={mapHomes}
           />
         ) : (
           <div className="glass-card p-8 max-w-lg">
