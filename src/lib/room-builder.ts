@@ -104,11 +104,17 @@ const MODEL = process.env.ROOM_BUILDER_MODEL?.trim() || "gpt-5.1";
  * push, a pull, an image rebuild and a container recreate to try. It is one
  * `.env` line now.
  *
- * `high` because there is finally a measurement to argue from — the first
- * room that ever completed took 110s and came back 21KB at `medium`, well
- * under the budget it was given, which leaves room to think harder. The
- * caution still stands, from the other provider: effort is paid in dead air
- * at a desk where somebody is watching a spinner, so raise it deliberately.
+ * `medium`, and this one was tried both ways rather than reasoned about.
+ * The first room that ever completed took 110s and came back 21KB at
+ * `medium`. `high` was drawn next, on the same establishment: a little
+ * better to look at, and about twice the wait. That trade was refused by the
+ * person who had to sit through it, which is the only vote that counts here.
+ *
+ * The room stopped at 21KB against a 40KB budget, so it finished rather than
+ * ran out of space — which is why more thinking buys deliberation rather than
+ * a bigger room, and why the extra minutes had so little to show. Raise this
+ * only with something to compare against; the log line below records what
+ * each room was drawn at.
  *
  * An unknown value would be a 400 at the worst possible moment, so it is
  * checked here and said out loud rather than sent.
@@ -118,10 +124,10 @@ type Effort = (typeof EFFORTS)[number];
 
 const EFFORT: Effort = (() => {
   const set = process.env.ROOM_BUILDER_EFFORT?.trim();
-  if (!set) return "high";
+  if (!set) return "medium";
   if ((EFFORTS as readonly string[]).includes(set)) return set as Effort;
-  console.error(`[verglas] ROOM_BUILDER_EFFORT="${set}" is not an effort; drawing at high instead.`);
-  return "high";
+  console.error(`[verglas] ROOM_BUILDER_EFFORT="${set}" is not an effort; drawing at medium instead.`);
+  return "medium";
 })();
 
 /**
