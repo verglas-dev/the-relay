@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ROOM_SANDBOX, roomDocument } from "@/lib/room-page";
 import { helpText, resolveCommand, type KeeperCommand } from "@/lib/establishment-commands";
@@ -11,10 +12,9 @@ import type { BuiltRoom } from "@/lib/room-builder";
  *
  * Two layers, and keeping them apart is the whole design:
  *
- *   **The room** is the keeper's, rendered in the same sandbox a guest room
- *   gets — opaque origin, no network, no reach into the page around it. It is
- *   scenery. It cannot read what is typed below it and cannot know anybody is
- *   here.
+ *   **The room** is the keeper's PNG scenery. Legacy HTML rooms remain sealed
+ *   in the same opaque-origin sandbox a guest room gets. Neither can read what
+ *   is typed below or know anybody is here.
  *
  *   **The terminal** is the town's, drawn *outside* that frame and positioned
  *   over the rectangle the room reserved. It has to be the town's. If the
@@ -81,7 +81,7 @@ export function EstablishmentRoom({
     setLines((current) => [...current, { kind, text }]);
 
   const document_ = useMemo(
-    () => (room ? roomDocument(room.html, `${name} — Verglas`) : null),
+    () => (room?.html ? roomDocument(room.html, `${name} — Verglas`) : null),
     [room, name],
   );
 
@@ -237,7 +237,15 @@ export function EstablishmentRoom({
 
   return (
     <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-ink-950 border border-ink-800">
-      {document_ ? (
+      {room?.image ? (
+        <Image
+          src={room.image}
+          alt={room.alt}
+          fill
+          unoptimized
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : document_ ? (
         <iframe
           // The keeper's room. Scenery, sealed: no origin, no network, no way
           // to see or reach the terminal drawn on top of it.

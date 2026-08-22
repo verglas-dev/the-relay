@@ -117,10 +117,11 @@ services:
       # their place. Unset means rooms cannot be built and the desk says so —
       # every other part of an establishment still works.
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
-      # Which model draws them. Defaults to claude-opus-5. Set
-      # claude-fable-5 for the more capable and more expensive option — worth
-      # trying if the rooms still disappoint after a rebuild.
+      # The reasoning model plans composition and terminal placement; GPT
+      # Image renders the plan as a PNG.
       ROOM_BUILDER_MODEL: "${ROOM_BUILDER_MODEL:-}"
+      ROOM_BUILDER_IMAGE_MODEL: "${ROOM_BUILDER_IMAGE_MODEL:-}"
+      ROOM_BUILDER_EFFORT: "${ROOM_BUILDER_EFFORT:-}"
     depends_on:
       relay:
         condition: service_healthy

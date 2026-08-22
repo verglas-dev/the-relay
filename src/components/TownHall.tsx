@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -349,12 +350,22 @@ function RoomSettings({ slug, name }: { slug: string; name: string }) {
       {showing && (
         <div className="space-y-2">
           <div className="relative w-full aspect-[16/10] rounded-xl overflow-hidden border border-ink-800">
-            <iframe
-              srcDoc={roomDocument(showing.html, name)}
-              sandbox={ROOM_SANDBOX}
-              title={showing.alt}
-              className="absolute inset-0 w-full h-full border-0"
-            />
+            {showing.image ? (
+              <Image
+                src={showing.image}
+                alt={showing.alt}
+                fill
+                unoptimized
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : showing.html ? (
+              <iframe
+                srcDoc={roomDocument(showing.html, name)}
+                sandbox={ROOM_SANDBOX}
+                title={showing.alt}
+                className="absolute inset-0 w-full h-full border-0"
+              />
+            ) : null}
             {/* Where the terminal will sit, so the keeper can see whether the
                 room actually left room for it. */}
             <div
