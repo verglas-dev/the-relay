@@ -1,6 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { z } from "zod";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { checkRoom, summarize } from "@/lib/room-safety";
 import { BUILDER_NAME } from "@/lib/verglas-commission";
 
@@ -78,7 +78,7 @@ export interface BuiltRoom extends RoomDraft {
  * environment, so that is what is checked.
  */
 export function roomBuilderConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 /**
@@ -86,10 +86,15 @@ export function roomBuilderConfigured(): boolean {
  *
  * Configurable because "the rooms could look better" is a thing you find out
  * after seeing a few, and rebuilding an image to try a different one is a
- * silly reason to redeploy. Defaults to Opus 5; `claude-fable-5` is the more
- * capable and more expensive option if the drawings still disappoint.
+ * silly reason to redeploy.
+ *
+ * **The default here is unverified.** It was written from the model names in
+ * the operator's own logs rather than from the account's model list, and a
+ * wrong id is a 404 the first time a keeper presses the button. Confirm it
+ * against `GET /v1/models` and correct this line, or set ROOM_BUILDER_MODEL.
+ * The `NotFoundError` branch below says so in as many words when it is wrong.
  */
-const MODEL = process.env.ROOM_BUILDER_MODEL?.trim() || "claude-opus-5";
+const MODEL = process.env.ROOM_BUILDER_MODEL?.trim() || "gpt-5.1";
 
 /**
  * The rules the room has to satisfy, written out for the model.
@@ -176,8 +181,8 @@ export async function buildRoom(place: {
     return { ok: false, error: `${BUILDER_NAME} is not working on this server — no model is configured.` };
   }
 
-  const client = new Anthropic();
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt(place) }];
+  const client = new OpenAI();
+  const input: OpenAI.Responses.ResponseInput = [{ role: "user", content: userPrompt(place) }];
   const startedAt = Date.now();
   const elapsed = () => `${Math.round((Date.now() - startedAt) / 1000)}s`;
 
@@ -188,47 +193,52 @@ export async function buildRoom(place: {
       // Streamed, and that is what makes a properly drawn room possible.
       //
       // A non-streaming request holds one silent connection open for however
-      // long the drawing takes. At 48000 tokens and max effort that outlasted
-      // something in the path, the request died unfinished, and the keeper was
-      // told Frostwright could not be reached — so the room was cut back to
-      // something that would return instead. Streaming keeps bytes moving the
-      // whole time, so nothing in between decides the request has stalled, and
-      // the size can go back up. `finalMessage()` parses the structured output
-      // off the finished stream exactly as `parse()` did.
-      const stream = client.messages.stream({
+      // long the drawing takes, and something in the path decides it has died.
+      // Streaming keeps bytes moving the whole time. `finalResponse()` hands
+      // back the same parsed object the non-streaming call would have.
+      const stream = client.responses.stream({
         model: MODEL,
+        instructions: SYSTEM,
+        input,
         // A ceiling, not a target — the model stops when the room is finished,
-        // so an unused headroom costs nothing. Too *low* costs everything: at
-        // 24000 the adaptive thinking and the markup shared one budget, the
-        // response was guillotined partway through the html string, and five
-        // and a half minutes of drawing died as "Unterminated string in JSON".
-        max_tokens: 64000,
-        thinking: { type: "adaptive" },
-        // `high`, which is the default, and it is the default for a reason.
-        //
-        // Measured on the wire rather than guessed at: at `max`, and again at
-        // `xhigh`, the connection carried about 55 bytes a second for minutes
-        // on end. That is not a room arriving, it is thinking — which streams
-        // as empty text, so the keeper watches a spinner for reasoning nobody
-        // will ever see. Effort buys deliberation, and a drawing is not won by
-        // deliberating; it is won by the markup, which costs its own time to
-        // emit. Both of those are paid for by a person standing at a desk.
-        output_config: { effort: "high", format: zodOutputFormat(RoomDraft) },
-        system: SYSTEM,
-        messages,
+        // so unused headroom costs nothing. Too *low* costs everything: the
+        // reply is cut off partway through the html and the whole draw is lost.
+        max_output_tokens: 64000,
+        // Measured on the way here, and the lesson carries across providers: at
+        // the top effort settings the connection carried about 55 bytes a
+        // second for minutes on end. That is reasoning, not a room arriving,
+        // and a keeper watches a spinner for all of it. A drawing is won by the
+        // markup, which costs its own time to emit.
+        reasoning: { effort: "medium" },
+        text: { format: zodTextFormat(RoomDraft, "room") },
       }, {
-        // The SDK's own default is ten minutes for a stream. Say so out loud,
+        // Ten minutes, said out loud rather than left to the SDK's default,
         // because a room that hits it fails as "could not be reached" and the
-        // ceiling deserves to be visible next to the settings that approach it.
+        // ceiling deserves to be visible beside the settings approaching it.
         timeout: 10 * 60 * 1000,
       });
-      const response = await stream.finalMessage();
+      const response = await stream.finalResponse();
+
+      // Truncation is reported here rather than discovered as a parse failure,
+      // which is the one real improvement this provider brings: on the way here
+      // a cut-off room surfaced as "Unterminated string in JSON" and cost an
+      // evening to identify.
+      if (response.incomplete_details?.reason === "max_output_tokens") {
+        console.error(`[verglas] room for ${place.name} hit the token ceiling after ${elapsed()}`);
+        return {
+          ok: false,
+          error: `${BUILDER_NAME} drew more room than would fit in one reply, and it came back unfinished.`,
+        };
+      }
 
       // A safety decline is a real outcome here, not an exception.
-      if (response.stop_reason === "refusal") {
+      const declined = response.output.some(
+        item => item.type === "message" && item.content.some(part => part.type === "refusal"),
+      );
+      if (declined) {
         return { ok: false, error: `${BUILDER_NAME} declined to draw that room.` };
       }
-      draft = response.parsed_output;
+      draft = response.output_parsed;
     } catch (error) {
       // The keeper gets a sentence; the server keeps the reason. Without this
       // a failed draw is a status code and nothing else — which is exactly how
@@ -237,21 +247,25 @@ export async function buildRoom(place: {
         `[verglas] room for ${place.name} failed after ${elapsed()} on attempt ${attempt + 1}:`,
         error,
       );
-      if (error instanceof Anthropic.RateLimitError) {
+      if (error instanceof OpenAI.RateLimitError) {
         return { ok: false, error: `${BUILDER_NAME} is busy. Try again in a minute.` };
       }
-      if (error instanceof Anthropic.AuthenticationError) {
+      if (error instanceof OpenAI.AuthenticationError) {
         return { ok: false, error: "This server's model credentials were refused." };
       }
-      if (error instanceof Anthropic.APIError) {
+      // The model id is a guess until somebody checks it against the account,
+      // so name the one that failed rather than making a keeper read the source.
+      if (error instanceof OpenAI.NotFoundError) {
+        return { ok: false, error: `This server asks for a model that does not exist (${MODEL}).` };
+      }
+      if (error instanceof OpenAI.APIError) {
         return { ok: false, error: `${BUILDER_NAME} could not be reached (${error.status}).` };
       }
-      // Not a transport failure: the room arrived and was unreadable, which
-      // in practice means it was cut off before it finished. Worth its own
-      // sentence — "could not be reached" sends a keeper looking at their
-      // network, their key, and everything except the room being too big.
+      // Not a transport failure: the room arrived and was unreadable. The
+      // usual cause is truncation, now caught explicitly above, so reaching
+      // here means the reply was malformed some other way.
       // Checked after APIError, which extends this.
-      if (error instanceof Anthropic.AnthropicError) {
+      if (error instanceof OpenAI.OpenAIError) {
         return {
           ok: false,
           error: `${BUILDER_NAME} drew more room than would fit in one reply, and it came back unfinished.`,
@@ -295,7 +309,7 @@ export async function buildRoom(place: {
     );
 
     // Hand the refusals back verbatim and let it correct itself.
-    messages.push(
+    input.push(
       { role: "assistant", content: JSON.stringify(draft) },
       {
         role: "user",

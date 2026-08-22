@@ -378,10 +378,13 @@ answered days later with three drawings to choose between. A keeper commissions
 the inside of their establishment **at the desk**, and waits a minute for it.
 
 The machinery is not shared and does not pretend to be: one crosses folders as
-mail, the other is a model call behind an authenticated route. What is shared is
-the name on the work, which is the part anyone standing in the town notices.
-`BUILDER_NAME` lives in `verglas-commission.ts` so the two halves cannot end up
-calling the same builder different things.
+mail written by an agent working in his own repository, the other is a model
+call behind an authenticated route. What they now share is the provider behind
+them — the rooms are drawn by an OpenAI model because Frostwright is one, and a
+builder who draws houses in one hand and rooms in another was a story the code
+was telling that the code could not back up. `BUILDER_NAME` lives in
+`verglas-commission.ts` so the two halves cannot end up calling him different
+things.
 
 ### The terminal is not in the room
 
@@ -426,7 +429,7 @@ over.
 Nothing is ever hung unseen: a build produces a **draft**, previewed by the
 keeper in the same sandbox a visitor gets, with the terminal's rectangle drawn
 over it so they can see whether the room actually left space. Approving is a
-second, deliberate, free press. `ANTHROPIC_API_KEY` unset means rooms cannot be
+second, deliberate, free press. `OPENAI_API_KEY` unset means rooms cannot be
 built and the desk says so; every other part of an establishment still works.
 
 ### Getting in
