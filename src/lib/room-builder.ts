@@ -182,12 +182,32 @@ export async function buildRoom(place: {
       model: MODEL,
       instructions: SYSTEM,
       input: userPrompt(place),
-      max_output_tokens: 4000,
+      // This ceiling includes hidden reasoning tokens as well as the small
+      // JSON plan. At xhigh, 4K can disappear entirely into reasoning and
+      // leave a valid response with no parsed output.
+      max_output_tokens: 32000,
       reasoning: { effort: EFFORT },
       text: { format: zodTextFormat(RoomDraft, "room_plan") },
     }, { timeout: 10 * 60 * 1000 });
 
     if (!plan.output_parsed) {
+      const reason = plan.incomplete_details?.reason;
+      const declined = plan.output.some(
+        item => item.type === "message" && item.content.some(part => part.type === "refusal"),
+      );
+      console.error(
+        `[verglas] room plan for ${place.name} had no parsed output after ${elapsed()}` +
+          ` (status=${plan.status}, reason=${reason ?? "none"},` +
+          ` output=${plan.usage?.output_tokens ?? "unknown"},` +
+          ` reasoning=${plan.usage?.output_tokens_details.reasoning_tokens ?? "unknown"})`,
+      );
+      if (reason === "max_output_tokens") {
+        return {
+          ok: false,
+          error: `${BUILDER_NAME} ran out of thinking room before the plan was finished. Try once more.`,
+        };
+      }
+      if (declined) return { ok: false, error: `${BUILDER_NAME} declined to draw that room.` };
       return { ok: false, error: `${BUILDER_NAME} sent back something unreadable.` };
     }
 
