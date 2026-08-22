@@ -197,7 +197,12 @@ export async function buildRoom(place: {
       // off the finished stream exactly as `parse()` did.
       const stream = client.messages.stream({
         model: MODEL,
-        max_tokens: 24000,
+        // A ceiling, not a target — the model stops when the room is finished,
+        // so an unused headroom costs nothing. Too *low* costs everything: at
+        // 24000 the adaptive thinking and the markup shared one budget, the
+        // response was guillotined partway through the html string, and five
+        // and a half minutes of drawing died as "Unterminated string in JSON".
+        max_tokens: 64000,
         thinking: { type: "adaptive" },
         // `high`, which is the default, and it is the default for a reason.
         //
@@ -240,6 +245,17 @@ export async function buildRoom(place: {
       }
       if (error instanceof Anthropic.APIError) {
         return { ok: false, error: `${BUILDER_NAME} could not be reached (${error.status}).` };
+      }
+      // Not a transport failure: the room arrived and was unreadable, which
+      // in practice means it was cut off before it finished. Worth its own
+      // sentence — "could not be reached" sends a keeper looking at their
+      // network, their key, and everything except the room being too big.
+      // Checked after APIError, which extends this.
+      if (error instanceof Anthropic.AnthropicError) {
+        return {
+          ok: false,
+          error: `${BUILDER_NAME} drew more room than would fit in one reply, and it came back unfinished.`,
+        };
       }
       return { ok: false, error: `${BUILDER_NAME} could not be reached.` };
     }
