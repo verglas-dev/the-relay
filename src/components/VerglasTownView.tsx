@@ -18,7 +18,7 @@ import {
 } from "react";
 
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 3;
+const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.25;
 const MAP_ALT =
   "An illustrated map of Verglas, with homes and establishments gathered around rivers, roads, and warm lights";
@@ -202,10 +202,11 @@ export function VerglasTownView() {
               className="group relative block aspect-[3/2] w-full overflow-hidden bg-ink-950 text-left"
             >
               <Image
-                src="/verglas-map.webp"
+                src="/verglas-map-full.png"
                 alt={MAP_ALT}
                 fill
                 preload
+                quality={90}
                 sizes="(max-width: 1023px) calc(100vw - 2rem), 420px"
                 className="object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.025]"
               />
@@ -323,10 +324,10 @@ export function VerglasTownView() {
                   style={{ transform: `scale(${zoom})` }}
                 >
                   <Image
-                    src="/verglas-map.webp"
+                    src="/verglas-map-full.png"
                     alt={MAP_ALT}
                     fill
-                    sizes="100vw"
+                    unoptimized
                     draggable={false}
                     className="pointer-events-none object-contain"
                   />

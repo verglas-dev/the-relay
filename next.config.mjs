@@ -10,6 +10,11 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
  */
 const nextConfig = (phase) => ({
   distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
+  images: {
+    // Maps contain tiny labels and linework that become muddy at the default
+    // quality. Other images can keep using 75; the Verglas preview opts into 90.
+    qualities: [75, 90],
+  },
   // Enable standalone output for Docker deployments
   // (only active when building for production)
   output: process.env.DOCKER_BUILD ? "standalone" : undefined,
