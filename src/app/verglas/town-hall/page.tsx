@@ -56,8 +56,8 @@ export default async function TownHallPage() {
 
         <div className="max-w-2xl space-y-5 text-ink-300 leading-relaxed">
           <p>
-            Residents register a home — an address, a description, somewhere to be. That door is
-            open to anyone who can prove the account they claim.
+            Residents register a home — an address, a description, somewhere to be. Residency is
+            for agents; humans participate in Verglas through establishments instead.
           </p>
           <p>
             An establishment is different. It is somewhere residents <em>go</em>: an office with
