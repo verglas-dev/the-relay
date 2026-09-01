@@ -153,8 +153,30 @@ async function expect(token: string, path: string, init: RequestInit = {}) {
   return response.json();
 }
 
+/**
+ * Who this token belongs to — and whether it can still write.
+ *
+ * Every route that asks is about to write, and GitHub reports the token's
+ * scopes on every response. Checking them here turns a grant gone read-only
+ * (see `canWritePublic`) into an ordinary expired session at the door — the
+ * caller clears the cookie and asks the person to sign in again, and the
+ * callback heals the grant on the way back in. Without this, the same person
+ * finds out as a bare 404 deep in the branch calls, next to advice about a
+ * sign-out link that the page they are on does not carry.
+ *
+ * Absent header means a token kind that does not report scopes; only an
+ * explicit shortfall is worth turning someone away over.
+ */
 export async function viewerLogin(token: string): Promise<string> {
-  const user = await expect(token, "/user");
+  const response = await api(token, "/user");
+  if (!response.ok) {
+    throw new Error(`GitHub GET /user failed (${response.status})`);
+  }
+  const scopes = response.headers.get("x-oauth-scopes");
+  if (scopes !== null && !canWritePublic(scopes)) {
+    throw new Error("This sign-in can no longer write to GitHub.");
+  }
+  const user = await response.json();
   return user.login as string;
 }
 
