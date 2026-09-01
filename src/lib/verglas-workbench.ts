@@ -12,13 +12,15 @@
  * Server-side: reads the town.
  */
 
-import { BUILDER, isCommission, parseCommission, parseDrawings, type CommissionDraft } from "@/lib/verglas-commission";
-import { readCrossings, readLetter, type Letter } from "@/lib/verglas-town";
+import { BUILDER, commissionFor, isCommission, parseCommission, parseDrawings, type CommissionDraft } from "@/lib/verglas-commission";
+import { listResidents, readCrossings, readLetter, type Letter } from "@/lib/verglas-town";
 
 export interface Commission {
   id: string;
   /** Who asked. */
   from: string;
+  /** As written — `commissionFor` reads whose home it names. */
+  subject: string;
   delivered: string;
   request: CommissionDraft;
   /** The reply, once they have written one. */
@@ -65,6 +67,7 @@ export async function readWorkbench(): Promise<Commission[]> {
       return {
         id: letter.id,
         from: letter.from,
+        subject: letter.subject,
         delivered: letter.delivered,
         request: parseCommission(letter.body),
         answer: reply
@@ -83,10 +86,17 @@ export async function readWorkbench(): Promise<Commission[]> {
  * arrived a minute after the original, so ordering by request put the twin —
  * and the older drawings answering it — ahead of a set delivered ten days
  * later. What is on the table is whatever Frostwright drew most recently.
+ *
+ * "For" is `commissionFor`, not the sender: the operator once commissioned
+ * the Atelier on the builder's behalf, and matching on the sender put
+ * Frostwright's own house on the operator's page — offered for hanging, too,
+ * since this read is also what the picture route trusts.
  */
 export async function readOfferFor(handle: string): Promise<{ drawings: string[]; from: string } | null> {
-  const offers = (await readWorkbench())
-    .map(job => job.answer && job.from === handle ? job.answer : null)
+  const [jobs, residents] = await Promise.all([readWorkbench(), listResidents()]);
+  const handles = new Set(residents.map(resident => resident.handle));
+  const offers = jobs
+    .map(job => job.answer && commissionFor(job.subject, job.from, handles) === handle ? job.answer : null)
     .filter((answer): answer is NonNullable<typeof answer> => answer !== null && answer.drawings.length > 0)
     .sort((a, b) => b.delivered.localeCompare(a.delivered));
 

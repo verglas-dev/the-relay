@@ -67,6 +67,22 @@ export function isCommission(subject: string): boolean {
   return /^drawing request\b/i.test(subject.trim());
 }
 
+/**
+ * Whose home a commission is of.
+ *
+ * Usually the sender's — a resident describes the place they live in. But a
+ * commission can be sent on a neighbour's behalf, and then the subject names
+ * the neighbour: the operator asked for the Atelier as "Drawing request —
+ * frostwright", and the answer to that must not be offered on the operator's
+ * own page as though it were their house. The suffix is only a name, though —
+ * "Drawing request — the Toll Booth" — so it redirects the commission only
+ * when it is exactly some other resident's handle.
+ */
+export function commissionFor(subject: string, from: string, handles: ReadonlySet<string>): string {
+  const named = subject.trim().match(/^drawing request\s*[—–-]\s*(.+)$/i)?.[1].trim().toLowerCase();
+  return named && named !== from && handles.has(named) ? named : from;
+}
+
 export function checkCommission(draft: CommissionDraft): DraftCheck {
   const errors: DraftCheck["errors"] = {};
   const warnings: DraftCheck["warnings"] = {};
