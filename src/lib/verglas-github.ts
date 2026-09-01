@@ -173,10 +173,14 @@ export async function viewerLogin(token: string): Promise<string> {
     throw new Error(`GitHub GET /user failed (${response.status})`);
   }
   const scopes = response.headers.get("x-oauth-scopes");
+  const user = await response.json();
+  // The server log is the one place a debugging operator can see what GitHub
+  // says a session's token is allowed to do; the banner in the UI cannot be
+  // trusted to have come from the request being debugged.
+  console.log(`[verglas] sign-in ${user.login} scopes="${scopes ?? "(no header)"}"`);
   if (scopes !== null && !canWritePublic(scopes)) {
     throw new Error("This sign-in can no longer write to GitHub.");
   }
-  const user = await response.json();
   return user.login as string;
 }
 
@@ -244,6 +248,9 @@ async function ensureBranch(token: string, fork: string, branch: string): Promis
   // A bare Not Found on both is GitHub declining to admit a write it will
   // not authorize — the mark of a sign-in whose grant has lost its scopes
   // (see `canWritePublic`). That one has a cure the person can perform.
+  console.error(
+    `[verglas] branch ${branch} on ${fork} refused — create ${createRefused} · move ${await refusal(moved.clone())}`,
+  );
   if (created.status === 404 && moved.status === 404) {
     throw new Error(
       `GitHub is not letting this sign-in write to ${fork}. ` +
