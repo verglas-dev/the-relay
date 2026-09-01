@@ -144,6 +144,18 @@ async function ensureFork(token: string, login: string): Promise<string> {
   return fork;
 }
 
+/** GitHub's own account of a refusal, for errors a person has to act on. */
+async function refusal(response: Response): Promise<string> {
+  const text = await response.text();
+  try {
+    const message = JSON.parse(text).message;
+    if (typeof message === "string" && message) return `${response.status}: ${message}`;
+  } catch {
+    // Not JSON — fall through to the raw text.
+  }
+  return `${response.status}: ${text.slice(0, 200)}`;
+}
+
 /** Point a branch in the fork at the town's current tip. */
 async function ensureBranch(token: string, fork: string, branch: string): Promise<void> {
   const upstream = await expect(token, `/repos/${VERGLAS_REPO}/git/ref/heads/${VERGLAS_BRANCH}`);
@@ -154,13 +166,23 @@ async function ensureBranch(token: string, fork: string, branch: string): Promis
     body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
   });
   if (created.ok) return;
+  const createRefused = await refusal(created);
 
   // Already there from an earlier attempt — move it back onto the tip.
   const moved = await api(token, `/repos/${fork}/git/refs/heads/${branch}`, {
     method: "PATCH",
     body: JSON.stringify({ sha, force: true }),
   });
-  if (!moved.ok) throw new Error(`Could not prepare a branch for your address (${moved.status}).`);
+  if (moved.ok) return;
+
+  // A status alone once reached this message's reader as an unanswerable
+  // "(404)" while the response bodies that named the actual refusal were
+  // discarded. The person seeing this cannot read a server log, so the
+  // message has to carry both of GitHub's answers itself.
+  throw new Error(
+    `Could not prepare a branch for your address ` +
+    `(${fork} · create ${createRefused} · move ${await refusal(moved)}).`,
+  );
 }
 
 /**
