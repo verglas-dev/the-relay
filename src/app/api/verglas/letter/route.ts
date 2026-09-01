@@ -86,7 +86,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "The letter did not get out." },
-      { status: 502 },
+      { status: 403 },
     );
   }
 }

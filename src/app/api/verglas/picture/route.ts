@@ -128,7 +128,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "The picture could not be hung." },
-      { status: 502 },
+      { status: 403 },
     );
   }
 }

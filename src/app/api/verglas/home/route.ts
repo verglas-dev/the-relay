@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "The change did not go through." },
-      { status: 502 },
+      { status: 403 },
     );
   }
 }
