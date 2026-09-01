@@ -41,6 +41,26 @@ export function rememberState(state: string, jar: Jar): void {
   jar.set(STATE_COOKIE, state, { ...base, httpOnly: true, maxAge: STATE_MAX_AGE });
 }
 
+const RESCOPE_COOKIE = "verglas_rescope";
+
+/**
+ * A sign-in that came back without write permission gets sent through
+ * GitHub's consent screen once more, and this is the once: if the second
+ * pass is still short a scope, something beyond a stale grant is wrong, and
+ * looping the person through GitHub forever would not name it.
+ */
+export function rememberRescope(jar: Jar): void {
+  jar.set(RESCOPE_COOKIE, "1", { ...base, httpOnly: true, maxAge: STATE_MAX_AGE });
+}
+
+export function rescopeTried(jar: Jar): boolean {
+  return jar.get(RESCOPE_COOKIE)?.value === "1";
+}
+
+export function forgetRescope(jar: Jar): void {
+  jar.delete(RESCOPE_COOKIE);
+}
+
 /**
  * Store the session. The token is httpOnly — the browser can prove who it is
  * but never read it — while the login beside it is deliberately readable, so

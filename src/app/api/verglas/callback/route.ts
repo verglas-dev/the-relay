@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
-import { callbackUrl, exchangeCode, publicOrigin, viewerLogin } from "@/lib/verglas-github";
-import { rememberSession, STATE_COOKIE } from "@/lib/verglas-session";
+import { callbackUrl, canWritePublic, exchangeCode, publicOrigin, revokeGrant, viewerLogin } from "@/lib/verglas-github";
+import { forgetRescope, rememberRescope, rememberSession, rescopeTried, STATE_COOKIE } from "@/lib/verglas-session";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,21 @@ export async function GET(request: NextRequest) {
   if (!code || !state || !expected || state !== expected) return back(request, { error: "state" });
 
   try {
-    const token = await exchangeCode(code, callbackUrl(publicOrigin(request)));
+    const { token, scope } = await exchangeCode(code, callbackUrl(publicOrigin(request)));
+
+    // GitHub issues tokens with the scopes of the standing grant, not the
+    // ones the sign-in asked for — a grant gone scope-less quietly re-issues
+    // read-only tokens forever. Tear that grant down and send the person
+    // through consent once more; the second time through, GitHub asks
+    // properly and the grant comes back whole.
+    if (!canWritePublic(scope)) {
+      if (rescopeTried(jar)) return back(request, { error: "scopes" });
+      await revokeGrant(token);
+      rememberRescope(jar);
+      return NextResponse.redirect(new URL("/api/verglas/auth", publicOrigin(request)));
+    }
+    forgetRescope(jar);
+
     const login = await viewerLogin(token);
 
     rememberSession(token, login, jar);

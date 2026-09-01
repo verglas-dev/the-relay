@@ -72,7 +72,10 @@ export function authorizeUrl(state: string, redirectUri: string): string {
   return `https://github.com/login/oauth/authorize?${params}`;
 }
 
-export async function exchangeCode(code: string, redirectUri: string): Promise<string> {
+export async function exchangeCode(
+  code: string,
+  redirectUri: string,
+): Promise<{ token: string; scope: string }> {
   const response = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json" },
@@ -88,7 +91,43 @@ export async function exchangeCode(code: string, redirectUri: string): Promise<s
   if (!response.ok || body.error || !body.access_token) {
     throw new Error(body.error_description ?? "GitHub declined the sign-in.");
   }
-  return body.access_token as string;
+  return { token: body.access_token as string, scope: (body.scope as string | undefined) ?? "" };
+}
+
+/**
+ * Whether a token with these granted scopes can push to a public repository.
+ *
+ * Not the same question as what the sign-in asked for: GitHub issues tokens
+ * with the scopes of the standing grant, and a grant downgrades to whatever
+ * the *latest* consent requested. One pass through a scope-less authorize URL
+ * and every token after it can read the town but not write to the person's
+ * own fork — which surfaces far away from sign-in, as bare 404s on the
+ * branch calls. This is how akihu's picture stopped changing.
+ */
+export function canWritePublic(scope: string): boolean {
+  const granted = scope.split(",").map(entry => entry.trim());
+  return granted.includes("public_repo") || granted.includes("repo");
+}
+
+/**
+ * Withdraw the app's authorization for this person entirely, so the next
+ * sign-in goes back through GitHub's consent screen and mints a fresh grant
+ * with the scopes actually asked for. Revoking only the token would not do
+ * it — the broken grant would quietly re-issue.
+ */
+export async function revokeGrant(token: string): Promise<void> {
+  const id = process.env.VERGLAS_GITHUB_CLIENT_ID ?? "";
+  const secret = process.env.VERGLAS_GITHUB_CLIENT_SECRET ?? "";
+  await fetch(`${GITHUB_API}/applications/${id}/grant`, {
+    method: "DELETE",
+    headers: {
+      authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
+      accept: "application/vnd.github+json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ access_token: token }),
+    cache: "no-store",
+  });
 }
 
 async function api(token: string, path: string, init: RequestInit = {}) {
@@ -179,6 +218,16 @@ async function ensureBranch(token: string, fork: string, branch: string): Promis
   // "(404)" while the response bodies that named the actual refusal were
   // discarded. The person seeing this cannot read a server log, so the
   // message has to carry both of GitHub's answers itself.
+  //
+  // A bare Not Found on both is GitHub declining to admit a write it will
+  // not authorize — the mark of a sign-in whose grant has lost its scopes
+  // (see `canWritePublic`). That one has a cure the person can perform.
+  if (created.status === 404 && moved.status === 404) {
+    throw new Error(
+      `GitHub is not letting this sign-in write to ${fork}. ` +
+      `Sign out, then sign in again — the site will refresh what your sign-in is allowed to do.`,
+    );
+  }
   throw new Error(
     `Could not prepare a branch for your address ` +
     `(${fork} · create ${createRefused} · move ${await refusal(moved)}).`,

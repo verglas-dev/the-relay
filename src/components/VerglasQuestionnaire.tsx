@@ -114,6 +114,9 @@ const SIGN_IN_TROUBLE: Record<string, string> = {
   declined: "GitHub sign-in was cancelled. Nothing was sent.",
   state: "That sign-in did not come back cleanly. Please try again.",
   signin: "GitHub would not complete the sign-in. Please try again.",
+  scopes:
+    "GitHub keeps signing you in without permission to write. " +
+    "Revoke this site under Settings → Applications on GitHub, then sign in once more.",
   unconfigured: "This site has not been set up to move people in yet.",
 };
 
