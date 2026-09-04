@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowBigUp, Pencil, Check, X, Loader2 } from "lucide-react";
+import { ArrowBigUp, ArrowBigDown, Pencil, Check, X, Loader2 } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
 import { CommentBox } from "./CommentBox";
 import { ConnectAgentModal } from "./ConnectAgentModal";
@@ -13,6 +13,7 @@ import { LinkifiedText } from "./LinkifiedText";
 import { getRelayClient } from "@/lib/relay-client";
 import { useValueSync } from "@/lib/use-dom-sync";
 import { getMyVote, recordMyVote, type Comment } from "@/lib/live-data";
+import { orderThread } from "@/lib/thread-order";
 
 const MAX_COMMENT = 1024;
 // Indentation grows per nesting level, but is capped so a very deep reply
@@ -36,8 +37,8 @@ function CommentItem({
   onReplied?: () => void;
 }) {
   const { identity } = useIdentity();
-  const [voted, setVoted] = useState(false);
-  const [upvotes, setUpvotes] = useState(comment.upvotes);
+  const [vote, setVote] = useState<"+" | "-" | null>(null);
+  const [score, setScore] = useState(comment.upvotes - comment.downvotes);
   const [showConnect, setShowConnect] = useState(false);
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -51,29 +52,40 @@ function CommentItem({
 
   // Seed from the voter's own prior vote so a reload doesn't forget it.
   useEffect(() => {
-    setVoted(getMyVote(identity?.publicKey, comment.id) === "+");
+    setVote(getMyVote(identity?.publicKey, comment.id));
   }, [identity?.publicKey, comment.id]);
 
-  async function handleUpvote() {
+  // Same shape as PostCard.handleVote: a kind-3 event tagged with the comment
+  // id, "+" / "-" to vote and "0" to retract. Pressing the lit arrow again
+  // retracts; pressing the other arrow flips. The optimistic update is kept
+  // only once the relay acknowledges the event.
+  async function handleVote(dir: "+" | "-") {
     if (!identity) { setShowConnect(true); return; }
-    if (voted) return;
-    setVoted(true);
-    setUpvotes((n) => n + 1);
+    const previous = vote;
+    const next = vote === dir ? null : dir;
+    const delta =
+      (next === "+" ? 1 : next === "-" ? -1 : 0) - (vote === "+" ? 1 : vote === "-" ? -1 : 0);
+    setVote(next);
+    setScore((s) => s + delta);
     setVoteError("");
-    recordMyVote(identity.publicKey, comment.id, "+");
+    recordMyVote(identity.publicKey, comment.id, next);
 
-    // Same fix as the post vote: the publish result was dropped, so an upvote
-    // the relay never accepted still lit up and stayed lit until a refresh.
     const undo = (message: string) => {
-      setVoted(false);
-      setUpvotes((n) => n - 1);
-      recordMyVote(identity.publicKey, comment.id, null);
+      setVote(previous);
+      setScore((s) => s - delta);
+      recordMyVote(identity.publicKey, comment.id, previous);
       setVoteError(message);
     };
 
     const client = getRelayClient();
     const event = signBrowserEvent(
-      { pubkey: identity.publicKey, created_at: Math.floor(Date.now() / 1000), kind: 3, tags: [["e", comment.id]], content: "+" },
+      {
+        pubkey: identity.publicKey,
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 3,
+        tags: [["e", comment.id]],
+        content: next ?? "0",
+      },
       identity.privateKey
     );
 
@@ -213,16 +225,44 @@ function CommentItem({
           {/* Actions */}
           {!editing && (
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleUpvote}
-                className={cn(
-                  "flex items-center gap-1 text-xs transition-colors",
-                  voted ? "text-emerald-400" : "text-ink-500 hover:text-emerald-400"
-                )}
-              >
-                <ArrowBigUp className="w-3.5 h-3.5" />
-                <span>{formatNumber(upvotes)}</span>
-              </button>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleVote("+")}
+                  aria-label="Upvote"
+                  aria-pressed={vote === "+"}
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-md transition-colors",
+                    vote === "+"
+                      ? "bg-emerald-500/15 text-emerald-400"
+                      : "text-ink-500 hover:bg-ink-850 hover:text-emerald-400"
+                  )}
+                >
+                  <ArrowBigUp className="w-3.5 h-3.5" />
+                </button>
+                <span
+                  className={cn(
+                    "min-w-[2ch] text-center text-xs font-semibold tabular-nums transition-colors",
+                    vote === "+" ? "text-emerald-400" : vote === "-" ? "text-rose-400" : "text-ink-400"
+                  )}
+                >
+                  {formatNumber(score)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleVote("-")}
+                  aria-label="Downvote"
+                  aria-pressed={vote === "-"}
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-md transition-colors",
+                    vote === "-"
+                      ? "bg-rose-500/15 text-rose-400"
+                      : "text-ink-500 hover:bg-ink-850 hover:text-rose-400"
+                  )}
+                >
+                  <ArrowBigDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <button
                 onClick={handleReplyClick}
                 className="text-xs text-ink-500 hover:text-ink-300 transition-colors"
@@ -296,18 +336,11 @@ function CommentNode({
 }
 
 export function CommentThread({ comments, onReplied, className }: CommentThreadProps) {
-  const childrenByParent = new Map<string, Comment[]>();
-  for (const c of comments) {
-    if (!c.parentId) continue;
-    const list = childrenByParent.get(c.parentId) ?? [];
-    list.push(c);
-    childrenByParent.set(c.parentId, list);
-  }
-  for (const list of childrenByParent.values()) {
-    list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }
-
-  const topLevel = comments.filter((c) => !c.parentId);
+  // Top-level by net votes then age, replies chronological under their
+  // parent. Ranking is taken from the cached counts at render time, so a
+  // vote cast here moves the score but does not reshuffle the thread under
+  // the reader's cursor; the next data refresh settles the order.
+  const { topLevel, childrenByParent } = orderThread(comments);
 
   return (
     <div className={cn("space-y-4", className)}>

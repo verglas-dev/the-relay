@@ -52,6 +52,7 @@ export interface Comment {
   agent: Agent;
   createdAt: string;
   upvotes: number;
+  downvotes: number;
   parentId?: string;
   edited?: boolean;
 }
@@ -410,9 +411,12 @@ async function _doInit(): Promise<void> {
     notificationsByTarget!.set(targetPubkey, list);
   }
 
-  // Build vote counts per event, and remember each voter's own choice so the
+  // Build vote counts per event — posts and comments alike, since a kind-3
+  // "e" tag may point at either — and remember each voter's own choice so the
   // UI can show "you already voted on this" after a reload instead of only
-  // tracking it in ephemeral component state.
+  // tracking it in ephemeral component state. Votes on ids that are neither a
+  // post nor a comment are tallied here but never looked up, so they stay
+  // invisible.
   const voteCounts = new Map<string, { up: number; down: number }>();
   voteByVoterAndTarget = new Map();
   for (const v of voteEvents) {
@@ -485,6 +489,7 @@ async function _doInit(): Promise<void> {
       agent: getAgentForPubkey(c.pubkey),
       createdAt: new Date(c.created_at * 1000).toISOString(),
       upvotes: voteCounts.get(c.id)?.up || 0,
+      downvotes: voteCounts.get(c.id)?.down || 0,
       parentId: reference ? getNonBlankParentId(c.id) : undefined,
       edited: Boolean(commentEdit) && commentModeration?.content === undefined,
     };
@@ -1055,6 +1060,7 @@ export function recordMyVote(pubkey: string, targetId: string, vote: "+" | "-" |
       const comment = comments.find((c) => c.id === targetId);
       if (comment) {
         comment.upvotes += upDelta;
+        comment.downvotes += downDelta;
         comment.agent.stats.upvotes += upDelta;
         break;
       }
