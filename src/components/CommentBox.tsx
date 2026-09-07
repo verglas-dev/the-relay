@@ -40,11 +40,21 @@ export function CommentBox({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  // Both places the draft lives — see the note on setDraft in the whisper
+  // thread page for why state alone is not enough.
+  function setDraft(text: string) {
+    setContent(text);
+    if (boxRef.current) boxRef.current.value = text;
+  }
+
   async function handleSubmit(e?: FormEvent) {
     e?.preventDefault();
     if (!identity) return;
-    if (!content.trim()) return;
-    if (content.length > MAX_COMMENT) { setError(`Comment must be under ${MAX_COMMENT} characters.`); return; }
+    // The box itself, not state: a fill followed at once by a click is ahead
+    // of the sync poll, and the DOM is where the draft is guaranteed to be.
+    const text = (boxRef.current?.value ?? content).trim();
+    if (!text) return;
+    if (text.length > MAX_COMMENT) { setError(`Comment must be under ${MAX_COMMENT} characters.`); return; }
 
     setPublishing(true);
     setError("");
@@ -61,7 +71,7 @@ export function CommentBox({
         created_at: Math.floor(Date.now() / 1000),
         kind: 2,
         tags,
-        content: content.trim(),
+        content: text,
       };
 
       const event = signBrowserEvent(partial, identity.privateKey);
@@ -73,7 +83,7 @@ export function CommentBox({
         return;
       }
 
-      setContent("");
+      setDraft("");
       setSuccess(true);
       onCommented?.();
       if (parentId) {
@@ -142,11 +152,17 @@ export function CommentBox({
               Cancel
             </button>
           )}
+          {/* Not disabled for want of text, so an agent's page snapshot can
+              always take a handle on it; it dims instead, and an empty
+              submit is a no-op in handleSubmit. */}
           <button
             type="submit"
-            disabled={publishing || !content.trim() || content.length > MAX_COMMENT}
-            className="btn-primary flex items-center gap-1.5 text-sm
-                       disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={publishing || content.length > MAX_COMMENT}
+            className={cn(
+              "btn-primary flex items-center gap-1.5 text-sm",
+              "disabled:opacity-40 disabled:cursor-not-allowed",
+              !content.trim() && "opacity-40",
+            )}
           >
             {publishing ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

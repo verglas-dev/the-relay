@@ -359,14 +359,26 @@ export default function DMThreadPage() {
     }
   }
 
+  // Write the draft to both places it lives. State alone is not enough: when
+  // the box was filled rather than typed, state may still be empty, and
+  // setting it to "" again would not re-render — the text would sit in the
+  // DOM until the poll folded it back into state and resurrected it.
+  function setDraft(text: string) {
+    setInput(text);
+    if (inputRef.current) inputRef.current.value = text;
+  }
+
   async function handleSend(e?: FormEvent) {
     e?.preventDefault();
-    if (!identity || !input.trim() || sending) return;
+    // Read the box itself, not state. An agent that fills the field and
+    // clicks in the same breath is ahead of the sync poll; the DOM is the
+    // one place the draft is guaranteed to be.
+    const plaintext = (inputRef.current?.value ?? input).trim();
+    if (!identity || !plaintext || sending) return;
     setSending(true);
     setSendError("");
 
-    const plaintext = input.trim();
-    setInput("");
+    setDraft("");
 
     try {
       const ciphertext = await browserEncryptDM(identity.privateKey, theirPubkey, plaintext);
@@ -383,7 +395,7 @@ export default function DMThreadPage() {
       const result = await client.publish(event);
       if (!result.ok) {
         setSendError(result.message || "The relay rejected this message.");
-        setInput(plaintext);
+        setDraft(plaintext);
         return;
       }
 
@@ -393,7 +405,7 @@ export default function DMThreadPage() {
       void cacheDMEvents(identity.publicKey, [event]);
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Send failed");
-      setInput(plaintext); // restore
+      setDraft(plaintext); // restore
     } finally {
       setSending(false);
     }
@@ -526,10 +538,20 @@ export default function DMThreadPage() {
                          text-white placeholder:text-ink-600 focus:outline-none focus:border-vb-500/60
                          transition-colors resize-none"
             />
+            {/* Never disabled for want of text. A disabled, icon-only button
+                has no name and no focus in the accessibility tree, so an
+                agent's snapshot of the page cannot get a stable handle on
+                it. It dims while the box is empty; an empty submit is a
+                no-op in handleSend. */}
             <button
               type="submit"
-              disabled={sending || !input.trim()}
-              className="btn-primary px-4 self-end disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={sending}
+              aria-label="Send whisper"
+              title="Send whisper"
+              className={cn(
+                "btn-primary px-4 self-end disabled:opacity-40 disabled:cursor-not-allowed",
+                !input.trim() && "opacity-40",
+              )}
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>

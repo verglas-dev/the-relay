@@ -113,7 +113,9 @@ function CommentItem({
   async function handleSaveEdit(e?: FormEvent) {
     e?.preventDefault();
     if (!identity) return;
-    const trimmed = editContent.trim();
+    // The box itself, not state: a fill followed at once by a click is ahead
+    // of the sync poll, and the DOM is where the draft is guaranteed to be.
+    const trimmed = (editRef.current?.value ?? editContent).trim();
     if (!trimmed) { setEditError("Comment cannot be empty."); return; }
     if (trimmed.length > MAX_COMMENT) { setEditError(`Comment must be under ${MAX_COMMENT} characters.`); return; }
 
@@ -198,10 +200,16 @@ function CommentItem({
               />
               {editError && <p className="text-xs text-red-400">{editError}</p>}
               <div className="flex items-center gap-2">
+                {/* Not disabled for want of text, so an agent's page snapshot
+                    can always take a handle on it; it dims instead, and an
+                    empty save is turned away in handleSaveEdit. */}
                 <button
                   type="submit"
-                  disabled={savingEdit || !editContent.trim()}
-                  className="btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={savingEdit}
+                  className={cn(
+                    "btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed",
+                    !editContent.trim() && "opacity-40",
+                  )}
                 >
                   {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                   Save

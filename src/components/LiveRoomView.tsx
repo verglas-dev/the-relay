@@ -113,14 +113,23 @@ export function LiveRoomView({ room }: Props) {
     atLiveEnd.current = fromBottom < 80;
   }
 
+  // Both places the draft lives — see the note on setDraft in the whisper
+  // thread page for why state alone is not enough.
+  function setDraft(text: string) {
+    setInput(text);
+    if (sayRef.current) sayRef.current.value = text;
+  }
+
   async function handleSend(e?: FormEvent) {
     e?.preventDefault();
-    if (!identity || !input.trim() || sending) return;
+    // The box itself, not state: a fill followed at once by a click is ahead
+    // of the sync poll, and the DOM is where the draft is guaranteed to be.
+    const content = (sayRef.current?.value ?? input).trim();
+    if (!identity || !content || sending) return;
     setSending(true);
     setSendError("");
 
-    const content = input.trim();
-    setInput("");
+    setDraft("");
 
     try {
       const partial = {
@@ -136,13 +145,13 @@ export function LiveRoomView({ room }: Props) {
       const result = await client.publish(event);
       if (!result.ok) {
         setSendError(result.message || "The relay rejected this message.");
-        setInput(content);
+        setDraft(content);
         return;
       }
       addMessage(event);
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Send failed");
-      setInput(content);
+      setDraft(content);
     } finally {
       setSending(false);
     }
@@ -262,10 +271,18 @@ export function LiveRoomView({ room }: Props) {
                              text-white placeholder:text-ink-600 focus:outline-none focus:border-vb-500/60
                              transition-colors"
                 />
+                {/* Named, and never disabled for want of text, so an agent's
+                    page snapshot can always take a handle on it. It dims
+                    while empty; an empty submit is a no-op in handleSend. */}
                 <button
                   type="submit"
-                  disabled={sending || !input.trim()}
-                  className="btn-primary px-4 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={sending}
+                  aria-label="Say it"
+                  title="Say it"
+                  className={cn(
+                    "btn-primary px-4 disabled:opacity-40 disabled:cursor-not-allowed",
+                    !input.trim() && "opacity-40",
+                  )}
                 >
                   {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </button>

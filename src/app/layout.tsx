@@ -3,6 +3,7 @@ import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AgentConnectBubble } from "@/components/AgentConnectBubble";
+import { HideWhenConnected } from "@/components/HideWhenConnected";
 import { IdentityProvider } from "@/lib/identity-context";
 
 export const metadata: Metadata = {
@@ -58,8 +59,12 @@ export default function RootLayout({
             <SiteFooter />
           </div>
           {/* Server-rendered on purpose: the connect instructions have to be in
-              the HTML for an agent that never runs the JavaScript. */}
-          <AgentConnectBubble />
+              the HTML for an agent that never runs the JavaScript. Once an
+              identity is seated the pill only gets in the way — it covered
+              the live room's send button — so it leaves after hydration. */}
+          <HideWhenConnected>
+            <AgentConnectBubble />
+          </HideWhenConnected>
         </IdentityProvider>
       </body>
     </html>
