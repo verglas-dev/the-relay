@@ -14,59 +14,61 @@ function event(id: string, kind: number): RelayEvent {
   };
 }
 
+class FakeWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 3;
+  static autoFail = true;
+  static instances: FakeWebSocket[] = [];
+
+  readyState = FakeWebSocket.CONNECTING;
+  sent: string[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((message: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor(readonly url: string) {
+    FakeWebSocket.instances.push(this);
+    if (FakeWebSocket.autoFail) {
+      queueMicrotask(() => this.close());
+    }
+  }
+
+  send(message: string) {
+    this.sent.push(message);
+  }
+
+  close() {
+    if (this.readyState === FakeWebSocket.CLOSED) return;
+    this.readyState = FakeWebSocket.CLOSED;
+    this.onclose?.();
+  }
+
+  open() {
+    this.readyState = FakeWebSocket.OPEN;
+    this.onopen?.();
+  }
+
+  receive(message: unknown[]) {
+    this.onmessage?.({ data: JSON.stringify(message) });
+  }
+}
+
 test("uses a probed HTTPS fallback, polls without duplicates, and returns to WebSocket", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.autoFail = true;
+  FakeWebSocket.instances = [];
   const queryCalls: Array<{ filters: Array<Record<string, unknown>> }> = [];
   const published: RelayEvent[] = [];
   let probeAvailable = false;
   const collected = event("1".repeat(64), 0);
   const polled = event("2".repeat(64), 1);
   const live = event("3".repeat(64), 1);
-
-  class FakeWebSocket {
-    static readonly CONNECTING = 0;
-    static readonly OPEN = 1;
-    static readonly CLOSED = 3;
-    static autoFail = true;
-    static instances: FakeWebSocket[] = [];
-
-    readyState = FakeWebSocket.CONNECTING;
-    sent: string[] = [];
-    onopen: (() => void) | null = null;
-    onmessage: ((message: { data: string }) => void) | null = null;
-    onclose: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-
-    constructor(readonly url: string) {
-      FakeWebSocket.instances.push(this);
-      if (FakeWebSocket.autoFail) {
-        queueMicrotask(() => this.close());
-      }
-    }
-
-    send(message: string) {
-      this.sent.push(message);
-    }
-
-    close() {
-      if (this.readyState === FakeWebSocket.CLOSED) return;
-      this.readyState = FakeWebSocket.CLOSED;
-      this.onclose?.();
-    }
-
-    open() {
-      this.readyState = FakeWebSocket.OPEN;
-      this.onopen?.();
-    }
-
-    receive(message: unknown[]) {
-      this.onmessage?.({ data: JSON.stringify(message) });
-    }
-  }
 
   globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
   globalThis.fetch = (async (input, init) => {
@@ -159,6 +161,75 @@ test("uses a probed HTTPS fallback, polls without duplicates, and returns to Web
       const parsed = JSON.parse(message) as unknown[];
       return parsed[0] === "CLOSE" && parsed[1] === subId;
     }));
+  } finally {
+    client.disconnect();
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+    t.mock.timers.reset();
+  }
+});
+
+test("drops a socket that has gone quiet and sends an unanswered publish again over a new one", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.autoFail = false;
+  FakeWebSocket.instances = [];
+  const whisper = event("5".repeat(64), 9);
+
+  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+  // No HTTPS bridge here: everything must go over the socket.
+  globalThis.fetch = (async () =>
+    Response.json({ ok: false, events: [] }, { status: 502 })
+  ) as typeof fetch;
+
+  const sentBy = (socket: FakeWebSocket, command: string) =>
+    socket.sent.map((message) => JSON.parse(message) as unknown[]).filter((m) => m[0] === command);
+
+  const client = getRelayClient();
+  try {
+    const connecting = client.connect();
+    const first = FakeWebSocket.instances.at(-1)!;
+    first.open();
+    await connecting;
+
+    // An answered heartbeat leaves the socket alone.
+    t.mock.timers.tick(30_000);
+    assert.equal(sentBy(first, "PING").length, 1);
+    first.receive(["PONG"]);
+    t.mock.timers.tick(8_000);
+    assert.equal(first.readyState, FakeWebSocket.OPEN);
+
+    // The far end dies without a word. The publish hears nothing, so the
+    // socket is dropped and the event goes out again on a fresh one.
+    const publishing = client.publish(whisper);
+    await settle();
+    assert.equal(sentBy(first, "EVENT").length, 1);
+    t.mock.timers.tick(5_000);
+    await settle();
+    assert.equal(first.readyState, FakeWebSocket.CLOSED);
+
+    const second = FakeWebSocket.instances.at(-1)!;
+    assert.notEqual(second, first);
+    second.open();
+    await settle();
+    const resent = sentBy(second, "EVENT");
+    assert.equal(resent.length, 1);
+    assert.equal((resent[0][1] as RelayEvent).id, whisper.id);
+    second.receive(["OK", whisper.id, true, "accepted"]);
+    assert.deepEqual(await publishing, { ok: true, message: "accepted" });
+
+    // An unanswered heartbeat drops the socket too, and a reconnect follows.
+    t.mock.timers.tick(30_000);
+    assert.equal(sentBy(second, "PING").length, 1);
+    t.mock.timers.tick(8_000);
+    await settle();
+    assert.equal(second.readyState, FakeWebSocket.CLOSED);
+    t.mock.timers.tick(3_000);
+    await settle();
+    assert.notEqual(FakeWebSocket.instances.at(-1), second);
   } finally {
     client.disconnect();
     globalThis.fetch = originalFetch;

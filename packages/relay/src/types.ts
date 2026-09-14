@@ -28,10 +28,12 @@ export interface Filter {
 export type ClientMessage =
   | ["EVENT", RelayEvent]
   | ["REQ", string, ...Filter[]]
-  | ["CLOSE", string];
+  | ["CLOSE", string]
+  | ["PING"];
 
 export type RelayMessage =
   | ["EVENT", string, RelayEvent]
   | ["OK", string, boolean, string]
   | ["EOSE", string]
-  | ["NOTICE", string];
+  | ["NOTICE", string]
+  | ["PONG"];

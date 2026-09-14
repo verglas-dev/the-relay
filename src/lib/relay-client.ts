@@ -11,6 +11,15 @@ const PUBLISH_TIMEOUT_MS = 5000;
 // room for page loads and one-shot collects without making live views go dark.
 const HTTP_POLL_INTERVAL_MS = 15000;
 const HTTP_PROBE_ID = "0".repeat(64);
+// Neither end of an idle WebSocket is told when the other goes away: a phone's
+// radio sleeping, a carrier NAT forgetting the flow, a laptop lid closing.
+// The browser reports the socket open right up until something is sent into
+// it and nothing comes back. So while a socket is open the client asks the
+// relay for a sign of life at this interval, and drops the socket if none
+// arrives in time — any message at all counts, since what is being checked is
+// the link, not the answer.
+const HEARTBEAT_INTERVAL_MS = 30000;
+const HEARTBEAT_TIMEOUT_MS = 8000;
 
 type EventCallback = (event: RelayEvent) => void;
 
@@ -60,14 +69,46 @@ class RelayClient {
   private httpProbePromise: Promise<boolean> | null = null;
   private httpPollGeneration = 0;
   private lifecycleGeneration = 0;
+  // Counts every message the relay has sent over the current socket. A probe
+  // remembers the count when it goes out; an unchanged count when its timer
+  // fires means the link is dead, whatever the browser says about it.
+  private heard = 0;
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private probeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(url = RELAY_URL) {
     this.url = url;
+
+    // The moments a socket is most likely to have died quietly are the
+    // moments a page comes back: a tab foregrounded, a phone unlocked, a
+    // network restored. Check straight away rather than waiting for the
+    // next scheduled heartbeat, so a send made in the first seconds back
+    // lands on a link known to carry.
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+      window.addEventListener("online", () => this.wake());
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") this.wake();
+      });
+    }
+  }
+
+  /** Whether the current socket is one the browser still reports as open. */
+  private socketOpen(): boolean {
+    return this.connected && this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  private wake() {
+    if (this.disconnecting) return;
+    if (this.socketOpen()) {
+      this.probe();
+    } else if (!this.httpFallback) {
+      void this.connect().catch(() => { /* reconnect timer keeps trying */ });
+    }
   }
 
   connect(): Promise<void> {
     this.disconnecting = false;
-    if (this.connected || this.httpFallback) return Promise.resolve();
+    if (this.socketOpen() || this.httpFallback) return Promise.resolve();
     if (this.connectPromise) return this.connectPromise;
 
     const attempt = this.connectWithFallback();
@@ -90,7 +131,7 @@ class RelayClient {
   }
 
   private tryWebSocket(): Promise<boolean> {
-    if (this.connected) return Promise.resolve(true);
+    if (this.socketOpen()) return Promise.resolve(true);
     if (this.webSocketAttempt) return this.webSocketAttempt;
 
     const attempt = this.openWebSocketAttempt();
@@ -139,6 +180,9 @@ class RelayClient {
     let didOpen = false;
     try {
       const socket = new WebSocket(this.url);
+      // Whatever socket this replaces is no longer the one we speak through.
+      this.stopHeartbeat();
+      this.connected = false;
       this.ws = socket;
 
       socket.onopen = () => {
@@ -161,10 +205,13 @@ class RelayClient {
             socket.send(JSON.stringify(["REQ", subId, ...sub.filters]));
           }
         }
+
+        this.scheduleHeartbeat(socket);
       };
 
       socket.onmessage = (msg) => {
         if (this.ws !== socket) return;
+        this.heard += 1;
         try {
           const data = JSON.parse(msg.data);
           if (!Array.isArray(data)) return;
@@ -193,6 +240,7 @@ class RelayClient {
         const wasCurrent = this.ws === socket;
         if (wasCurrent) this.ws = null;
         if (wasCurrent) this.connected = false;
+        if (wasCurrent) this.stopHeartbeat();
         if (!didOpen) onFail?.();
         if (!wasCurrent || this.disconnecting) return;
         if (didOpen) void this.enableHttpFallback();
@@ -211,11 +259,78 @@ class RelayClient {
     }
   }
 
+  // ── Liveness ──────────────────────────────────────────────────────────
+
+  private scheduleHeartbeat(socket: WebSocket) {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setTimeout(() => {
+      this.heartbeatTimer = null;
+      this.probe(socket);
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) clearTimeout(this.heartbeatTimer);
+    if (this.probeTimer) clearTimeout(this.probeTimer);
+    this.heartbeatTimer = null;
+    this.probeTimer = null;
+  }
+
+  /**
+   * Ask the relay for a sign of life over the current socket, and drop the
+   * socket if none comes. The relay answers PING with PONG; an older relay
+   * answers with a NOTICE about an unknown command, which proves the link
+   * just as well.
+   */
+  private probe(socket: WebSocket | null = this.ws) {
+    if (!socket || this.ws !== socket || socket.readyState !== WebSocket.OPEN) return;
+    if (this.probeTimer) return; // one already in flight
+    if (this.heartbeatTimer) {
+      clearTimeout(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+
+    const heard = this.heard;
+    try {
+      socket.send(JSON.stringify(["PING"]));
+    } catch {
+      this.dropSocket(socket);
+      return;
+    }
+
+    this.probeTimer = setTimeout(() => {
+      this.probeTimer = null;
+      if (this.ws !== socket) return;
+      if (this.heard === heard) {
+        this.dropSocket(socket);
+        return;
+      }
+      this.scheduleHeartbeat(socket);
+    }, HEARTBEAT_TIMEOUT_MS);
+  }
+
+  /**
+   * Give up on a socket the browser still believes in. Closing a half-open
+   * socket does not make the browser fire onclose promptly — the closing
+   * handshake goes to the same nowhere the data did — so the client detaches
+   * on its own and starts over, exactly as it would after a clean close.
+   */
+  private dropSocket(socket: WebSocket) {
+    if (this.ws !== socket) return;
+    this.ws = null;
+    this.connected = false;
+    this.stopHeartbeat();
+    try { socket.close(); } catch { /* already closed */ }
+    if (this.disconnecting) return;
+    void this.enableHttpFallback();
+    this.scheduleReconnect();
+  }
+
   private scheduleReconnect() {
-    if (this.reconnectTimer || this.disconnecting || this.connected) return;
+    if (this.reconnectTimer || this.disconnecting || this.socketOpen()) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      if (this.disconnecting || this.connected) return;
+      if (this.disconnecting || this.socketOpen()) return;
       void this.tryWebSocket().then((opened) => {
         if (!opened && !this.disconnecting) this.scheduleReconnect();
       });
@@ -439,14 +554,49 @@ class RelayClient {
    * or timeout, so callers can surface a real error instead of assuming
    * success — a rate-limited or invalid publish previously looked identical
    * to a successful one from the caller's side.
+   *
+   * The link is checked before the event goes out, not after. A socket that
+   * has quietly died is reconnected first; one that dies without telling us
+   * — nothing at all heard back in the wait — is dropped and the event is
+   * sent once more over a fresh connection. That second send is safe: the
+   * relay answers OK to an event it already holds.
    */
-  publish(event: RelayEvent): Promise<PublishResult> {
+  async publish(event: RelayEvent): Promise<PublishResult> {
+    if (!this.httpFallback && !this.socketOpen()) {
+      try {
+        await this.connect();
+      } catch {
+        return { ok: false, message: "Could not reach the relay. Check your connection and try again." };
+      }
+    }
     if (this.httpFallback) return this.publishOverHttp(event);
+    return this.publishOverSocket(event, true);
+  }
 
+  private publishOverSocket(event: RelayEvent, retryOnSilence: boolean): Promise<PublishResult> {
+    const socket = this.ws;
     return new Promise((resolve) => {
+      const heard = this.heard;
       const timer = setTimeout(() => {
         this.pendingPublishes.delete(event.id);
-        resolve({ ok: false, message: "No response from relay (may be rate-limited or disconnected)." });
+
+        // Silence is a dead link, not a refusal: a relay that is there and
+        // declining says so. Start over and say it once more.
+        if (retryOnSilence && socket && this.ws === socket && this.heard === heard) {
+          this.dropSocket(socket);
+          resolve(this.publish(event).then(
+            (result) => result,
+            () => ({ ok: false, message: "Lost the relay mid-send and could not get it back." }),
+          ));
+          return;
+        }
+
+        resolve({
+          ok: false,
+          message: this.heard === heard
+            ? "No response from relay. Check your connection and try again."
+            : "The relay did not accept this message (it may be rate-limiting you).",
+        });
       }, PUBLISH_TIMEOUT_MS);
 
       this.pendingPublishes.set(event.id, (result) => {
@@ -495,6 +645,7 @@ class RelayClient {
   disconnect() {
     this.disconnecting = true;
     this.lifecycleGeneration += 1;
+    this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

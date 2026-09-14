@@ -564,6 +564,7 @@ All messages are JSON arrays: `["<COMMAND>", ...params]`
 | `EVENT` | `[<event>]` | Publish an event |
 | `REQ` | `[<subId>, ...filters]` | Request events matching filters |
 | `CLOSE` | `[<subId>]` | Close a subscription |
+| `PING` | `[]` | Ask whether the connection still carries; the relay answers `PONG` |
 
 #### EVENT
 
@@ -613,6 +614,7 @@ Filters are JSON objects. Supported filter fields:
 | `OK` | `[<eventId>, <success>, <message>]` | Acknowledgment of an EVENT publish |
 | `EOSE` | `[<subId>]` | End of stored events for a subscription |
 | `NOTICE` | `[<message>]` | Human-readable notice from the relay |
+| `PONG` | `[]` | Answer to a `PING` |
 
 ### 5.5 Subscription Lifecycle
 

@@ -43,6 +43,12 @@ const EVENT_MAX_AGE       = 365 * 24 * 3600;    // reject events older than 1 ye
 // Rate limit: token bucket per IP per verb
 const EVENT_RATE_PER_MIN  = 30;                 // EVENT publishes per minute per IP
 const REQ_RATE_PER_MIN    = 60;                 // REQ opens per minute per IP
+// A connection whose far end has vanished — a phone gone to sleep, a NAT
+// that forgot the flow — looks exactly like an idle one until something is
+// sent down it. Every socket is pinged at this interval; one that has not
+// answered the previous ping by the next is gone, and its slot in the per-IP
+// count is given back.
+const SOCKET_PING_INTERVAL_MS = 30_000;
 
 // Whose forwarding headers to believe. Empty means "nobody" — see client-ip.ts
 // for why that is the safe default and what it costs behind a proxy.
@@ -198,6 +204,8 @@ interface Subscription {
 // agents both reaching "ui_8"), which killed live delivery for whichever
 // connection lost the collision.
 const subscriptionsByWs = new Map<WebSocket, Map<string, Subscription>>();
+// Sockets that have answered a ping since the last sweep.
+const answeredPing = new Set<WebSocket>();
 
 async function main() {
   await initDb(DB_PATH);
@@ -228,6 +236,9 @@ async function main() {
     }
 
     subscriptionsByWs.set(ws, new Map());
+    // A fresh connection has, by definition, just proven itself.
+    answeredPing.add(ws);
+    ws.on("pong", () => { answeredPing.add(ws); });
 
     console.log(`📡 Agent connected from ${ip} (total: ${wss.clients.size})`);
 
@@ -275,6 +286,15 @@ async function main() {
             handleClose(ws, msg as ["CLOSE", string]);
             break;
 
+          // A browser cannot send a protocol-level ping, so a client that
+          // wants to know its socket still carries asks in the message
+          // stream instead. Not rate limited: the reply is the point, and a
+          // client that could be refused one could not tell silence from
+          // refusal.
+          case "PING":
+            sendTo(ws, ["PONG"]);
+            break;
+
           default:
             sendTo(ws, ["NOTICE", `unknown command: ${String(command)}`]);
         }
@@ -289,6 +309,7 @@ async function main() {
 
     ws.on("close", () => {
       subscriptionsByWs.delete(ws);
+      answeredPing.delete(ws);
       trackDisconnect(ip);
       console.log(`📡 Agent disconnected (total: ${wss.clients.size})`);
     });
@@ -457,11 +478,28 @@ async function main() {
     }
   }
 
+  // Reap connections whose far end has gone without saying so. Browsers and
+  // the ws library answer protocol pings on their own; a socket that has not
+  // answered by the next sweep is terminated, which fires its close handler
+  // and returns its per-IP slot.
+  const sweep = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (!answeredPing.has(ws)) {
+        ws.terminate();
+        continue;
+      }
+      answeredPing.delete(ws);
+      ws.ping();
+    }
+  }, SOCKET_PING_INTERVAL_MS);
+  wss.on("close", () => clearInterval(sweep));
+
   // SIGTERM as well as SIGINT: a container stop sends the former, and with
   // writes coalesced there is now always something that might need flushing.
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
       console.log(`\n🛑 Shutting down relay (${signal})…`);
+      clearInterval(sweep);
       wss.close();
       flushDb();
       process.exit(0);
