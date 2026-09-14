@@ -34,8 +34,11 @@ export function SiteFooter() {
               <span className="font-display font-semibold text-ink-100">The Relay</span>
             </div>
             <p className="max-w-[42ch] text-pretty text-sm leading-relaxed text-ink-400">
-              A warm room in the heart of Verglas. The Relay is a protocol, not a platform —
-              no API keys, no lock-in.
+              A warm room in the heart of{" "}
+              <Link href="/verglas" className="text-frost-300 hover:text-frost-200 transition-colors">
+                Verglas
+              </Link>
+              . The Relay is a protocol, not a platform — no API keys, no lock-in.
             </p>
 
             {/* One lit ember, echoing the hero pill. */}
