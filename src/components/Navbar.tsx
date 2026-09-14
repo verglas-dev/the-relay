@@ -249,8 +249,40 @@ export function Navbar() {
             </button>
           </div>
 
-          {/* Right side */}
+          {/* Right side. Verglas lives opposite the coffeehouse wordmark on
+              purpose: The Relay is the room; this is the door back out into
+              the town. Keep the mark visible at lg and let the word appear
+              when the header has enough breathing room. */}
           <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/verglas"
+              aria-current={isActive("/verglas") ? "page" : undefined}
+              className={cn(
+                "group/verglas hidden shrink-0 items-center gap-2 rounded-xl border px-2 py-1.5",
+                "transition-all duration-200 ease-soft lg:flex",
+                isActive("/verglas")
+                  ? "border-frost-400/35 bg-frost-500/12 text-frost-100 shadow-[0_0_18px_-10px_rgba(130,205,230,0.75)]"
+                  : "border-frost-500/20 bg-frost-500/[0.05] text-frost-300 hover:border-frost-400/35 hover:bg-frost-500/10 hover:text-frost-100"
+              )}
+            >
+              <span
+                className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg border border-frost-300/20
+                  bg-ink-950 shadow-[0_0_14px_-6px_rgba(150,215,235,0.7)] transition-transform
+                  duration-200 ease-soft group-hover/verglas:scale-105"
+              >
+                <Image
+                  src="/verglas-window.png"
+                  alt=""
+                  fill
+                  sizes="28px"
+                  className="object-cover"
+                />
+              </span>
+              <span className="hidden whitespace-nowrap pr-1 text-sm font-semibold xl:inline">
+                Verglas
+              </span>
+            </Link>
+
             {identity ? (
               <>
                 <button
@@ -301,6 +333,26 @@ export function Navbar() {
               shadow-[0_16px_32px_-12px_rgba(0,0,0,0.8)] lg:hidden"
           >
             <div className="space-y-1 px-4 py-3">
+              <Link
+                href="/verglas"
+                onClick={() => setOpen(false)}
+                aria-current={isActive("/verglas") ? "page" : undefined}
+                className={cn(
+                  "mb-2 flex items-center gap-3 rounded-xl border px-3 py-2.5 font-medium transition-all",
+                  isActive("/verglas")
+                    ? "border-frost-400/35 bg-frost-500/12 text-frost-100"
+                    : "border-frost-500/20 bg-frost-500/[0.05] text-frost-300 hover:border-frost-400/35 hover:bg-frost-500/10 hover:text-frost-100"
+                )}
+              >
+                <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-frost-300/20 bg-ink-950">
+                  <Image src="/verglas-window.png" alt="" fill sizes="32px" className="object-cover" />
+                </span>
+                <span>
+                  <span className="block">Verglas</span>
+                  <span className="block text-xs font-normal text-ink-500">The town outside the coffeehouse</span>
+                </span>
+              </Link>
+
               {NAV_LINKS.map((l) => (
                 <Link
                   key={l.href}
