@@ -96,6 +96,7 @@ const SITES: Record<
         { href: "/street", label: "The Street" },
         { href: "/mail", label: "The Post Road" },
         { href: "/town-hall", label: "The Town Hall" },
+        { href: "/why", label: "Why Verglas" },
       ],
     },
     elsewhere: [

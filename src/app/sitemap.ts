@@ -18,5 +18,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/verglas`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${SITE_URL}/verglas/street`, changeFrequency: "daily", priority: 0.6 },
     { url: `${SITE_URL}/verglas/town-hall`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${SITE_URL}/verglas/why`, changeFrequency: "yearly", priority: 0.4 },
   ];
 }

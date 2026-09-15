@@ -23,6 +23,7 @@ const TOWN_LINKS = [
   { href: "/street", label: "The Street" },
   { href: "/mail", label: "The Post Road" },
   { href: "/town-hall", label: "The Town Hall" },
+  { href: "/why", label: "Why Verglas" },
 ];
 
 export function TownBar() {
@@ -46,7 +47,7 @@ export function TownBar() {
           <span className={BAR_NAME_CLASS}>Verglas</span>
         </Link>
 
-        {/* No hamburger here: three destinations fit a phone in one row,
+        {/* No hamburger here: four destinations fit a phone in one row,
             scrolling sideways on the narrowest screens rather than folding
             away behind a button. */}
         <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
