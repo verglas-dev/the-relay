@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
+import { generateBrowserIdentity } from "@/lib/browser-identity";
+import { IdentityKeyCard } from "@/components/IdentityKeyCard";
 import { useDomSync } from "@/lib/use-dom-sync";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
 import {
@@ -153,8 +155,17 @@ function loadDraft(): ResidentDraft | null {
 }
 
 export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) {
-  const { identity } = useIdentity();
+  const { identity, setIdentity } = useIdentity();
   const [draft, setDraft] = useState<ResidentDraft>(EMPTY_DRAFT);
+  // A key cut at this desk is shown once, here, with the words that explain
+  // it. A key the browser already carried is not re-shown: it was theirs
+  // before they arrived and they have seen it.
+  const [justCut, setJustCut] = useState(false);
+
+  function cutKey() {
+    setIdentity(generateBrowserIdentity());
+    setJustCut(true);
+  }
   // Once someone edits the address by hand, stop rewriting it under them.
   const [handleTouched, setHandleTouched] = useState(false);
 
@@ -439,9 +450,25 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             {identity ? (
               <div className="glass-card px-4 py-3 flex items-start gap-3">
                 <KeyRound className="w-4 h-4 text-vb-400 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-sm text-ink-200">This browser is carrying a key.</p>
-                  <p className="font-mono text-[11px] text-ink-600 break-all mt-1">{draft.key}</p>
+                <div className="min-w-0 flex-1">
+                  {justCut ? (
+                    <>
+                      <p className="text-sm text-ink-200">This is the key to your house.</p>
+                      <p className="text-xs text-ink-500 leading-relaxed mt-1 mb-3">
+                        Copy it somewhere safe now. It was made in this browser and lives only
+                        here; the town keeps the public half in your address and cannot make
+                        you another. Whoever holds it can open your door. The same key seats
+                        you at the coffeehouse, if you ever visit: paste it there under
+                        &ldquo;pull up a chair&rdquo;.
+                      </p>
+                      <IdentityKeyCard privateKey={identity.privateKey} />
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-ink-200">This browser is carrying a key.</p>
+                      <p className="font-mono text-[11px] text-ink-600 break-all mt-1">{draft.key}</p>
+                    </>
+                  )}
                   <p className="text-xs text-ink-500 leading-relaxed mt-2">
                     The public half goes into your address, and it is what gives your home an
                     inside that only you can open. The private half stays in this browser and
@@ -452,15 +479,23 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
             ) : (
               <div className="glass-card px-4 py-3 flex items-start gap-3">
                 <DoorOpen className="w-4 h-4 text-ink-600 shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1">
                   <p className="text-sm text-ink-300">
-                    No key yet — your home will have no inside.
+                    No key yet — your home would have no inside.
                   </p>
-                  <p className="text-xs text-ink-500 leading-relaxed mt-1">
-                    Connect an agent from the top of the site and its public key appears here
-                    on its own. You can move in without one; the house stands either way, it
-                    just has no door of its own.
+                  <p className="text-xs text-ink-500 leading-relaxed mt-1 mb-3">
+                    The town cuts one here, in your browser, and shows it to you once. Nothing
+                    is sent anywhere and nothing happens until you press the button. Already
+                    hold a key? Bring it in from the bar at the top instead. You can also move
+                    in without one; the house stands either way, it just has no door of its own.
                   </p>
+                  {/* A plain button, deliberately outside any data-field: cutting
+                      a key is a person's decision and never something a form
+                      filler does on their behalf. */}
+                  <button type="button" name="cut-key" onClick={cutKey} className="btn-ghost text-sm inline-flex items-center gap-2">
+                    <KeyRound className="w-4 h-4" />
+                    Cut the key to your house
+                  </button>
                 </div>
               </div>
             )}

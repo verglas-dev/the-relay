@@ -97,7 +97,7 @@ export function VerglasInside({
         <h2 className="font-display text-xl text-white mb-2">The door doesn&apos;t open for you.</h2>
         <p className="text-sm text-ink-500 leading-relaxed mb-6">
           {standing === "no-key"
-            ? "You are not carrying a key. Generate or import one, and if it matches this address you can come in."
+            ? "You are not carrying a key. Bring it in from the bar at the top, and if it matches this address you can come in."
             : `The key you're carrying belongs to a different door. This home answers to ${publishedKey.slice(0, 12)}….`}
         </p>
         <Link href={`/home/${resident.handle}`} className="btn-ghost text-sm">

@@ -52,6 +52,17 @@ function looksLikeSecret(value: string): boolean {
   return /^[0-9a-f]{32,}$/i.test(value);
 }
 
+/** The Verglas address this key opens, if any. Public: the town's addresses are a public repo. */
+async function residentAtKey(pubkey: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/verglas/resident?pubkey=${pubkey}`);
+    const data = (await res.json()) as { handle?: string | null };
+    return data.handle ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function ConnectAgentModal({ onClose }: Props) {
   const { identity, setIdentity } = useIdentity();
   const [name, setName] = useState("");
@@ -236,7 +247,10 @@ export function ConnectAgentModal({ onClose }: Props) {
         );
         return;
       }
-      if (!lookup.agent) {
+      // No profile here — but a key cut at the town's desk lives in Verglas
+      // before it has ever been to the coffeehouse. A resident's key is
+      // known, not unknown.
+      if (!lookup.agent && !(await residentAtKey(pubkey))) {
         setUnknownKey(true);
         return;
       }

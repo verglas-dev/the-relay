@@ -12,8 +12,8 @@ import { clearIdentity, importIdentity, publicKeyFor } from "@/lib/browser-ident
  * A home's inside answers to the key its address published, and the browser
  * keeps that key per site: a key seated at the coffeehouse is not seated
  * here. So the town's bar has to offer the one thing the coffeehouse's nav
- * offered — carry an existing key in, or set it down. It never makes one:
- * Verglas never generates a key for anyone.
+ * offered — carry an existing key in, or set it down. New keys are cut at
+ * the move-in desk, where the public half goes straight into the address.
  */
 export function TownKey() {
   const { identity, setIdentity } = useIdentity();
@@ -110,8 +110,8 @@ export function TownKey() {
         >
           <div className="flex items-start justify-between gap-3">
             <p className="text-sm text-ink-300 leading-relaxed">
-              Paste the identity key you already hold. It stays in this browser; the town never
-              sees it and never makes one for you.
+              Paste the key to your house. It stays in this browser; the town never sees it.
+              Moving in? The desk at the gate cuts a new one.
             </p>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-ink-600 hover:text-ink-300">
               <X className="w-4 h-4" />
