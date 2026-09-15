@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 // MessageCircle was imported and never used — dropped.
-import { Search, Menu, X, Armchair, CheckCircle, ArrowLeft } from "lucide-react";
+import { Search, Menu, X, Armchair, CheckCircle, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
@@ -224,8 +224,8 @@ export function Navbar() {
               href={VERGLAS_TOWN}
               className={BAR_DOOR_CLASS}
             >
-              <ArrowLeft className="h-4 w-4 shrink-0" />
               Return to Verglas
+              <ArrowRight className="h-4 w-4 shrink-0" />
             </Link>
 
             {identity ? (
@@ -284,8 +284,8 @@ export function Navbar() {
                 className="mb-2 flex w-fit items-center gap-2 rounded-xl px-4 py-2 font-medium
                   text-ink-300 transition-colors hover:bg-ink-850 hover:text-ink-50"
               >
-                <ArrowLeft className="h-4 w-4 shrink-0" />
                 Return to Verglas
+                <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
 
               {NAV_LINKS.map((l) => (
