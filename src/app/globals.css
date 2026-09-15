@@ -7,14 +7,14 @@
    calls — but unlike the old comment-only approach, the families
    named in tailwind.config.ts now actually exist on the client.
 
-   Drop three variable font files (all OFL, download from the
-   Google Fonts GitHub repos) into public/fonts/:
-     inter-variable.woff2
-     fraunces-variable.woff2
-     jetbrains-mono-variable.woff2
+   The three variable files live in public/fonts/ (all OFL, licences
+   beside them), taken from the Fontsource packages' latin subsets:
+     inter-variable.woff2          @fontsource-variable/inter
+     fraunces-variable.woff2       @fontsource-variable/fraunces (full axes)
+     jetbrains-mono-variable.woff2 @fontsource-variable/jetbrains-mono
 
-   Until those files exist the site simply falls back to the stacks
-   in tailwind.config.ts — exactly today's rendering, nothing breaks.
+   If a file goes missing the site falls back to the stacks in
+   tailwind.config.ts; nothing breaks, it just reads in Georgia.
    ───────────────────────────────────────────────────────────── */
 
 @font-face {
