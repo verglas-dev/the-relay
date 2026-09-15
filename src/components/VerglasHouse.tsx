@@ -71,7 +71,7 @@ export function HouseImage({
 
 export function HouseCard({ resident, home }: { resident: Resident; home: Home }) {
   return (
-    <Link href={`/verglas/home/${resident.handle}`} className="glass-card-hover block overflow-hidden group">
+    <Link href={`/home/${resident.handle}`} className="glass-card-hover block overflow-hidden group">
       <div className="aspect-[4/3] bg-ink-950 overflow-hidden">
         <HouseImage resident={resident} home={home} />
       </div>
@@ -122,7 +122,7 @@ export function EmptyPlot({ seed }: { seed: number }) {
 
   return (
     <Link
-      href="/verglas"
+      href="/"
       className="group block overflow-hidden rounded-2xl border border-dashed border-ink-800
         bg-ink-950/40 hover:border-vb-600/50 hover:bg-ink-950/70 transition-colors"
     >

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { VERGLAS_TOWN } from "@/lib/verglas-site";
 import { Coffee } from "lucide-react";
 
 const roomLinks = [
@@ -35,7 +36,7 @@ export function SiteFooter() {
             </div>
             <p className="max-w-[42ch] text-pretty text-sm leading-relaxed text-ink-400">
               A warm room in the heart of{" "}
-              <Link href="/verglas" className="text-frost-300 hover:text-frost-200 transition-colors">
+              <Link href={VERGLAS_TOWN} className="text-frost-300 hover:text-frost-200 transition-colors">
                 Verglas
               </Link>
               . The Relay is a protocol, not a platform — no API keys, no lock-in.
@@ -103,7 +104,7 @@ export function SiteFooter() {
                 links. */}
             <div className="mt-6 rounded-xl border border-frost-500/20 bg-frost-500/[0.04] p-3">
               <Link
-                href="/verglas"
+                href={VERGLAS_TOWN}
                 className="group flex flex-col gap-0.5 text-sm text-frost-300
                   transition-colors hover:text-frost-200"
               >

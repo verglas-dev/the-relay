@@ -38,14 +38,14 @@ export default function TownNotFound() {
 
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link
-            href="/verglas/street"
+            href="/street"
             className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2"
           >
             Walk the street
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
           <Link
-            href="/verglas"
+            href="/"
             className="text-sm text-ink-500 hover:text-ink-300 transition-colors px-2 py-2"
           >
             or build a home

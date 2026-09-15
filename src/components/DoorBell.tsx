@@ -109,7 +109,7 @@ export function DoorBell({
       <div className="space-y-3">
         <p className="text-sm text-emerald-300/90">{said}</p>
         <Link
-          href={`/verglas/e/${slug}/room?ring=${ringId}`}
+          href={`/e/${slug}/room?ring=${ringId}`}
           className="btn-primary px-5 py-2.5 inline-flex items-center gap-2 text-sm"
         >
           <DoorOpen className="w-4 h-4" />

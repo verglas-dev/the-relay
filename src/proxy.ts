@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { townUrl } from "@/lib/verglas-site";
+import { isTownHost, requestHost, townHost, townUrl } from "@/lib/verglas-site";
 
 const encoder = new TextEncoder();
 
@@ -34,29 +34,7 @@ function basicCredentials(header: string | null): { username: string; password: 
   }
 }
 
-/**
- * The town's public reading — a home from the street, the post road — lives
- * at verglas.town now, built from the repository itself. These two shapes of
- * path are exactly that reading and nothing more, so they go there. Every
- * other /verglas path (the desk, the street with its establishments, a home's
- * inside and guest room, the town hall, the keeper's desk) is the coffeehouse
- * and stays here.
- */
-function townRedirect(pathname: string): string | null {
-  if (pathname === "/verglas/mail") return townUrl("/mail");
-  const home = pathname.match(/^\/verglas\/home\/([a-z0-9][a-z0-9-]*)\/?$/);
-  if (home) return townUrl(`/home/${home[1]}`);
-  return null;
-}
-
-export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  if (pathname.startsWith("/verglas")) {
-    const target = townRedirect(pathname);
-    return target ? NextResponse.redirect(target, 307) : NextResponse.next();
-  }
-
+async function adminGate(request: NextRequest) {
   const password = (process.env.ADMIN_PAGE_PASSWORD || process.env.ADMIN_API_TOKEN)?.trim();
   const username = process.env.ADMIN_PAGE_USERNAME?.trim() || "operatorconf";
 
@@ -91,6 +69,71 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+/** Paths that mean the same thing on either host and are never the town's. */
+function sharedPath(pathname: string): boolean {
+  if (pathname.startsWith("/api/")) return true;
+  if (pathname.startsWith("/_next/")) return true;
+  // Files in public/ and the metadata routes: /llms.txt, /robots.txt,
+  // /sitemap.xml, /favicon.ico, /verglas-window.png, …
+  const last = pathname.slice(pathname.lastIndexOf("/") + 1);
+  return last.includes(".");
+}
+
+/**
+ * The town's front door. Everything under verglas.town is the town, served by
+ * the routes that live under /verglas in this app: `/` is the gate,
+ * `/street` the street, `/home/akihu` a home. The address bar never shows
+ * the /verglas prefix, and the www. twin folds into the apex.
+ */
+function townRequest(request: NextRequest, host: string) {
+  const { pathname, search } = request.nextUrl;
+  const apex = townHost();
+
+  if (host !== apex) {
+    return NextResponse.redirect(`${schemeFor(request)}://${apex}${pathname}${search}`, 308);
+  }
+
+  // An old link with the prefix on it: fold it away rather than serve twice.
+  if (pathname === "/verglas" || pathname.startsWith("/verglas/")) {
+    const bare = pathname.slice("/verglas".length) || "/";
+    return NextResponse.redirect(`${schemeFor(request)}://${apex}${bare}${search}`, 308);
+  }
+
+  if (sharedPath(pathname)) return NextResponse.next();
+
+  const url = request.nextUrl.clone();
+  url.pathname = pathname === "/" ? "/verglas" : `/verglas${pathname}`;
+  return NextResponse.rewrite(url);
+}
+
+function schemeFor(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-proto");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return request.nextUrl.protocol.replace(":", "");
+}
+
+export async function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+  const host = requestHost(request.headers).toLowerCase();
+
+  if (isTownHost(host)) return townRequest(request, host);
+
+  if (pathname.startsWith("/admin")) return adminGate(request);
+
+  // The coffeehouse used to render the town under /verglas. Those links are
+  // out in the world; they now lead to the town's own address.
+  if (pathname === "/verglas" || pathname.startsWith("/verglas/")) {
+    const bare = pathname.slice("/verglas".length) || "/";
+    return NextResponse.redirect(`${townUrl(bare)}${search}`, 308);
+  }
+  // Key recovery signs in through the town's GitHub app, so it lives there.
+  if (pathname === "/recovery") return NextResponse.redirect(`${townUrl("/recovery")}${search}`, 308);
+
+  return NextResponse.next();
+}
+
 export const config = {
-  matcher: ["/admin/:path*", "/verglas/mail", "/verglas/home/:handle"],
+  // Everything but Next's own static chunks, so the town host can rewrite
+  // any path. Static files are let through by sharedPath() above.
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };

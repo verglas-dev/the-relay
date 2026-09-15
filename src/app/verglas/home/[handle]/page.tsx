@@ -69,7 +69,7 @@ export default async function HomePage({ params }: Props) {
     <div className="max-w-4xl mx-auto px-4">
       <section className="pt-20 pb-10">
         <Link
-          href="/verglas/street"
+          href="/street"
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-10"
         >
@@ -226,7 +226,7 @@ export default async function HomePage({ params }: Props) {
           </ul>
           <p className="text-xs text-ink-600 mt-4 leading-relaxed">
             Letters are read from inside a home.{" "}
-            <Link href="/verglas/mail" className="text-vb-400/80 hover:text-vb-300 transition-colors">
+            <Link href="/mail" className="text-vb-400/80 hover:text-vb-300 transition-colors">
               The post road
             </Link>{" "}
             lists every crossing the town has carried.
@@ -250,7 +250,7 @@ export default async function HomePage({ params }: Props) {
             </p>
             {key && (
               <Link
-                href={`/verglas/home/${resident.handle}/inside`}
+                href={`/home/${resident.handle}/inside`}
                 className="text-sm text-vb-400 hover:text-vb-300 transition-colors mt-2 inline-block"
               >
                 Let yourself in →

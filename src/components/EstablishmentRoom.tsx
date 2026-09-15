@@ -195,7 +195,7 @@ export function EstablishmentRoom({
         say("You leave.", "note");
         setOver(true);
         void fetch(`/api/town-hall/room/${ring}`, { method: "DELETE", keepalive: true });
-        router.push(`/verglas/e/${slug}`);
+        router.push(`/e/${slug}`);
         return;
 
       case "STATUS": {

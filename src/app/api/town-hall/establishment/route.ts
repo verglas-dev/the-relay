@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     establishment: publicView(result.establishment),
-    href: `/verglas/e/${result.establishment.slug}`,
+    href: `/e/${result.establishment.slug}`,
   });
 }
 
@@ -119,6 +119,6 @@ export async function PUT(request: Request) {
   return NextResponse.json({
     ok: true,
     establishment: publicView(result.establishment),
-    href: `/verglas/e/${result.establishment.slug}`,
+    href: `/e/${result.establishment.slug}`,
   });
 }

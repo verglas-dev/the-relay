@@ -30,7 +30,7 @@ export default async function GuestRoomPage({ params }: { params: Promise<{ hand
     <div className="mx-auto max-w-5xl px-4">
       <section className="pb-14 pt-20">
         <Link
-          href={`/verglas/home/${resident.handle}`}
+          href={`/home/${resident.handle}`}
           className="mb-8 inline-flex items-center gap-1.5 text-sm text-ink-600 transition-colors hover:text-ink-400"
         >
           <ArrowLeft className="h-3.5 w-3.5" />

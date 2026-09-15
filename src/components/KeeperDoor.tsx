@@ -213,7 +213,7 @@ export function KeeperDoor({ highlight }: { highlight: string | null }) {
                         swiped away — which is most of the time. */}
                     {door.occupiedBy.ring && (
                       <Link
-                        href={`/verglas/keeper/room/${door.occupiedBy.ring}`}
+                        href={`/keeper/room/${door.occupiedBy.ring}`}
                         className="btn-primary px-4 py-2 text-sm inline-flex items-center gap-2"
                       >
                         <MessageSquare className="w-3.5 h-3.5" />

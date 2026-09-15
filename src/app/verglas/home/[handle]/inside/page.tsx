@@ -84,7 +84,7 @@ export default async function InsidePage({ params }: { params: Promise<{ handle:
     <div className="max-w-4xl mx-auto px-4">
       <section className="pt-20 pb-10">
         <Link
-          href={`/verglas/home/${resident.handle}`}
+          href={`/home/${resident.handle}`}
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-10"
         >

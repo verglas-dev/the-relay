@@ -100,7 +100,7 @@ export function VerglasMap({ homes, current }: { homes: MapHome[]; current: stri
             return (
               <Link
                 key={home.handle}
-                href={`/verglas/home/${home.handle}`}
+                href={`/home/${home.handle}`}
                 title={home.title}
                 aria-label={`${home.title}${here ? ", where you stand" : ""}`}
                 className="group absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full

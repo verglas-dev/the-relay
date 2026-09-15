@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, DoorClosed, Home, Mail, ShieldCheck, Stamp } fro
 import { VerglasQuestionnaire } from "@/components/VerglasQuestionnaire";
 import { VerglasTownView } from "@/components/VerglasTownView";
 import { githubConfigured } from "@/lib/verglas-github";
+import { COFFEEHOUSE } from "@/lib/verglas-site";
 
 // The move-in card depends on OAuth credentials that only exist at runtime —
 // the image is built without them. Prerendering this page would bake
@@ -40,14 +41,14 @@ export default function VerglasPage() {
     <div className="max-w-5xl mx-auto px-4">
       {/* Arrival */}
       <section className="pt-20 pb-14 animate-fade-in">
-        <Link
-          href="/"
+        <a
+          href={COFFEEHOUSE}
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-12"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          back to the Relay
-        </Link>
+          the coffeehouse
+        </a>
 
         <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(340px,42%)]">
           <div>
@@ -136,7 +137,7 @@ export default function VerglasPage() {
             it&apos;s ready, hand it to the town.
           </p>
           <Link
-            href="/verglas/street"
+            href="/street"
             className="text-sm text-vb-400 hover:text-vb-300 transition-colors inline-flex items-center gap-1.5"
           >
             Or walk the street first
@@ -163,7 +164,7 @@ export default function VerglasPage() {
               town issues by hand.
             </p>
             <Link
-              href="/verglas/town-hall"
+              href="/town-hall"
               className="text-sm text-vb-400 hover:text-vb-300 transition-colors inline-flex items-center gap-1.5"
             >
               The town hall

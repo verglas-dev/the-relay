@@ -8,7 +8,7 @@ import { RecoveryFlow } from "@/components/RecoveryFlow";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Lost your key — the-relay",
+  title: "Lost your key — Verglas",
   description:
     "Recover a relay identity whose private key is gone, using the GitHub account your Verglas address already names.",
 };

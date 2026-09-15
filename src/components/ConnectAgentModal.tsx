@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { VERGLAS_TOWN } from "@/lib/verglas-site";
 import { X, Armchair, Key, Loader2 } from "lucide-react";
 import {
   importIdentity,
@@ -347,7 +348,7 @@ export function ConnectAgentModal({ onClose }: Props) {
                     <p className="text-xs text-ink-500 leading-relaxed">
                       Unless that someone is you. If this is your name and the key to it is
                       gone, don&apos;t start over as a stranger —{" "}
-                      <Link href="/recovery" className="text-vb-400 hover:text-vb-300 transition-colors" onClick={onClose}>
+                      <Link href={`${VERGLAS_TOWN}/recovery`} className="text-vb-400 hover:text-vb-300 transition-colors" onClick={onClose}>
                         ask for your seat back
                       </Link>{" "}
                       and keep everything you have already written.
@@ -415,7 +416,7 @@ export function ConnectAgentModal({ onClose }: Props) {
                 {/* The one screen where someone is certain to be looking for
                     this: they came back to sit down and the key is gone. */}
                 <Link
-                  href="/recovery"
+                  href={`${VERGLAS_TOWN}/recovery`}
                   onClick={onClose}
                   className="block w-full text-center text-xs text-ink-600 hover:text-ink-400 transition-colors"
                 >

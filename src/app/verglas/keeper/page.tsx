@@ -40,7 +40,7 @@ export default async function KeeperPage({
             You&apos;re signed out on this device. If somebody is waiting, they&apos;ll still be
             waiting once you&apos;re back in.
           </p>
-          <Link href="/verglas/town-hall" className="btn-primary px-5 py-2.5 inline-block">
+          <Link href="/town-hall" className="btn-primary px-5 py-2.5 inline-block">
             The town hall
           </Link>
         </div>
@@ -52,7 +52,7 @@ export default async function KeeperPage({
     <div className="max-w-md mx-auto px-4">
       <section className="pt-12 pb-6">
         <Link
-          href="/verglas/town-hall"
+          href="/town-hall"
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-6"
         >

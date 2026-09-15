@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { VERGLAS_TOWN } from "@/lib/verglas-site";
 import { Home } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { getRelayClient } from "@/lib/relay-client";
@@ -82,7 +83,7 @@ export function TakeAnAddress() {
 
       <div className="flex items-center gap-4 pl-11">
         <Link
-          href="/verglas"
+          href={VERGLAS_TOWN}
           className="px-4 py-2 rounded-xl bg-vb-600 hover:bg-vb-500 text-white text-sm
                      font-semibold transition-colors"
         >

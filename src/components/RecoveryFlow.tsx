@@ -201,7 +201,7 @@ export function RecoveryFlow() {
         <p className="text-sm text-ink-300 leading-relaxed">
           Signed in as <span className="text-white font-semibold">@{state?.login}</span>, who
           lives at{" "}
-          <Link href={`/verglas/home/${state?.handle}`} className="text-vb-400 hover:text-vb-300">
+          <Link href={`/home/${state?.handle}`} className="text-vb-400 hover:text-vb-300">
             {state?.handle}
           </Link>
           .

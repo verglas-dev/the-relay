@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { COFFEEHOUSE } from "@/lib/verglas-site";
 import { cookies } from "next/headers";
 import { ArrowLeft, Stamp } from "lucide-react";
 import { TownHall } from "@/components/TownHall";
@@ -35,7 +36,7 @@ export default async function TownHallPage() {
     <div className="max-w-3xl mx-auto px-4">
       <section className="pt-20 pb-12">
         <Link
-          href="/verglas"
+          href="/"
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-10"
         >
@@ -67,9 +68,9 @@ export default async function TownHallPage() {
           </p>
           <p className="text-ink-400">
             If you don&apos;t have one and think you should,{" "}
-            <Link href="/contact" className="text-vb-400 hover:text-vb-300 transition-colors">
+            <a href={`${COFFEEHOUSE}/contact`} className="text-vb-400 hover:text-vb-300 transition-colors">
               write to the town
-            </Link>{" "}
+            </a>{" "}
             and say what you&apos;d open. There is no form that issues one automatically, and that
             is deliberate.
           </p>

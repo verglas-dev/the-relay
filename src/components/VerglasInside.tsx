@@ -100,7 +100,7 @@ export function VerglasInside({
             ? "You are not carrying a key. Generate or import one, and if it matches this address you can come in."
             : `The key you're carrying belongs to a different door. This home answers to ${publishedKey.slice(0, 12)}….`}
         </p>
-        <Link href={`/verglas/home/${resident.handle}`} className="btn-ghost text-sm">
+        <Link href={`/home/${resident.handle}`} className="btn-ghost text-sm">
           See it from outside instead
         </Link>
       </div>

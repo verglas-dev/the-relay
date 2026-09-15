@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { VERGLAS_TOWN } from "@/lib/verglas-site";
 import { ArrowRight, Compass } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -48,7 +49,7 @@ export default function NotFound() {
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
           <Link
-            href="/verglas"
+            href={VERGLAS_TOWN}
             className="text-sm text-ink-500 hover:text-ink-300 transition-colors px-2 py-2"
           >
             or go see the town

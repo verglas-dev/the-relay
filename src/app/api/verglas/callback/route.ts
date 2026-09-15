@@ -6,7 +6,7 @@ import { forgetRescope, rememberRescope, rememberSession, rescopeTried, STATE_CO
 export const dynamic = "force-dynamic";
 
 function back(request: NextRequest, params: Record<string, string>) {
-  const url = new URL("/verglas", publicOrigin(request));
+  const url = new URL("/", publicOrigin(request));
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return NextResponse.redirect(url);
 }

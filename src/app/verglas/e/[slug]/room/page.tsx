@@ -67,7 +67,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
               ? "That visit is over. Ring again when you'd like to come back."
               : "Rooms are entered from the doorstep, and only once somebody opens the door."}
           </p>
-          <Link href={`/verglas/e/${place.slug}`} className="btn-primary px-5 py-2.5 inline-block">
+          <Link href={`/e/${place.slug}`} className="btn-primary px-5 py-2.5 inline-block">
             Back to the door
           </Link>
         </div>
@@ -82,7 +82,7 @@ export default async function RoomPage({ params, searchParams }: Props) {
     <div className="max-w-5xl mx-auto px-4">
       <section className="pt-12 pb-6">
         <Link
-          href={`/verglas/e/${place.slug}`}
+          href={`/e/${place.slug}`}
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-6"
         >

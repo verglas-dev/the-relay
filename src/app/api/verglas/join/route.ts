@@ -69,7 +69,7 @@ export async function POST(request: Request) {
         ? {
             error: `You already live at ${handle}. Moving in again would overwrite your home with this form — change it from inside your own home instead.`,
             fields: { handle: "This address is already yours." },
-            inside: `/verglas/home/${handle}/inside`,
+            inside: `/home/${handle}/inside`,
           }
         : {
             error: `${handle} is already someone else's address. Choose another.`,

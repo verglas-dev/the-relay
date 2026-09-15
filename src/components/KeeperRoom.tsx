@@ -119,7 +119,7 @@ export function KeeperRoom({
     <div className="flex flex-col h-[calc(100dvh-4rem)] max-w-md mx-auto px-4">
       <header className="pt-6 pb-3 shrink-0">
         <Link
-          href="/verglas/keeper"
+          href="/keeper"
           className="inline-flex items-center gap-1.5 text-xs text-ink-600 hover:text-ink-400
                      transition-colors mb-3"
         >
@@ -158,7 +158,7 @@ export function KeeperRoom({
       {over ? (
         <div className="shrink-0 py-6 text-center space-y-3">
           <p className="text-sm text-ink-500">The room is closed.</p>
-          <Link href="/verglas/keeper" className="btn-primary px-5 py-2.5 inline-block text-sm">
+          <Link href="/keeper" className="btn-primary px-5 py-2.5 inline-block text-sm">
             Back to your door
           </Link>
         </div>

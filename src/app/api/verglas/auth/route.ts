@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   if (!githubConfigured()) {
-    return NextResponse.redirect(new URL("/verglas?error=unconfigured", publicOrigin(request)));
+    return NextResponse.redirect(new URL("/?error=unconfigured", publicOrigin(request)));
   }
 
   // Guards against a forged callback landing someone else's token on a session.

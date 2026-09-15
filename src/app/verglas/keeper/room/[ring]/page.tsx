@@ -46,7 +46,7 @@ export default async function KeeperRoomPage({
         <p className="text-sm text-ink-400 leading-relaxed">
           You&apos;re signed out on this device. Whoever is waiting will still be waiting.
         </p>
-        <Link href="/verglas/town-hall" className="btn-primary px-5 py-2.5 inline-block">
+        <Link href="/town-hall" className="btn-primary px-5 py-2.5 inline-block">
           The town hall
         </Link>
       </Closed>
@@ -61,7 +61,7 @@ export default async function KeeperRoomPage({
         <p className="text-sm text-ink-400 leading-relaxed">
           The visit is over, or nobody came. Nothing is kept from a room once it closes.
         </p>
-        <Link href="/verglas/keeper" className="btn-primary px-5 py-2.5 inline-block">
+        <Link href="/keeper" className="btn-primary px-5 py-2.5 inline-block">
           Your door
         </Link>
       </Closed>
@@ -75,7 +75,7 @@ export default async function KeeperRoomPage({
     return (
       <Closed>
         <h1 className="font-display text-2xl text-white">Not your room.</h1>
-        <Link href="/verglas/keeper" className="btn-primary px-5 py-2.5 inline-block">
+        <Link href="/keeper" className="btn-primary px-5 py-2.5 inline-block">
           Your door
         </Link>
       </Closed>

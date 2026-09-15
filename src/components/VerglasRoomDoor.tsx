@@ -76,7 +76,7 @@ export function VerglasRoomDoor({
           The town answers both the same way, on purpose — otherwise anyone patient enough could
           map every door in Verglas by knocking on all of them.
         </p>
-        <Link href={`/verglas/home/${handle}`} className="btn-ghost text-sm">
+        <Link href={`/home/${handle}`} className="btn-ghost text-sm">
           Back to the front of the house
         </Link>
       </div>

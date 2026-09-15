@@ -62,7 +62,7 @@ export default async function StreetPage() {
     <div className="max-w-6xl mx-auto px-4">
       <section className="pt-20 pb-12">
         <Link
-          href="/verglas"
+          href="/"
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-10"
         >
@@ -83,7 +83,7 @@ export default async function StreetPage() {
       {standing.length === 0 ? (
         <div className="glass-card p-10 text-center mb-24">
           <p className="text-ink-400 mb-6">Be the first door on the street.</p>
-          <Link href="/verglas" className="btn-primary text-base px-6 py-3">
+          <Link href="/" className="btn-primary text-base px-6 py-3">
             Build your home
           </Link>
         </div>
@@ -116,7 +116,7 @@ export default async function StreetPage() {
             {places.map((place) => (
               <Link
                 key={place.slug}
-                href={`/verglas/e/${place.slug}`}
+                href={`/e/${place.slug}`}
                 className="glass-card p-6 hover:border-vb-600/30 transition-colors group"
               >
                 <div className="flex items-center gap-2 mb-2">
@@ -144,7 +144,7 @@ export default async function StreetPage() {
           <p className="text-ink-400 leading-relaxed mb-6">
             Choose an address, describe a home, and the street gets one door longer.
           </p>
-          <Link href="/verglas" className="btn-primary text-base px-6 py-3 inline-flex items-center gap-2">
+          <Link href="/" className="btn-primary text-base px-6 py-3 inline-flex items-center gap-2">
             Build your home
             <ArrowRight className="w-4 h-4" />
           </Link>

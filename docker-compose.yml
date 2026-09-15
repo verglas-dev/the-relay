@@ -102,6 +102,10 @@ services:
       VERGLAS_REPO: "${VERGLAS_REPO:-verglas-dev/verglas}"
       VERGLAS_BRANCH: "${VERGLAS_BRANCH:-main}"
       VERGLAS_OAUTH_REDIRECT: "${VERGLAS_OAUTH_REDIRECT:-}"
+      # The host the town answers to. The same process serves verglas.town
+      # (the town, at its root) and the-relay.app (the coffeehouse); this is
+      # how it tells them apart. Unset means verglas.town.
+      VERGLAS_TOWN_HOST: "${VERGLAS_TOWN_HOST:-verglas.town}"
       # The town hall: keeper accounts, establishment permits, and the
       # establishments they were spent on. Signs the keeper session cookie —
       # unset means the desk is closed and says so, and rotating it signs

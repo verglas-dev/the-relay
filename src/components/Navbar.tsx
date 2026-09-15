@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { VERGLAS_TOWN } from "@/lib/verglas-site";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -255,7 +256,7 @@ export function Navbar() {
               when the header has enough breathing room. */}
           <div className="flex shrink-0 items-center gap-2">
             <Link
-              href="/verglas"
+              href={VERGLAS_TOWN}
               aria-current={isActive("/verglas") ? "page" : undefined}
               className={cn(
                 "group/verglas hidden shrink-0 items-center gap-2 rounded-xl border px-2 py-1.5",
@@ -334,7 +335,7 @@ export function Navbar() {
           >
             <div className="space-y-1 px-4 py-3">
               <Link
-                href="/verglas"
+                href={VERGLAS_TOWN}
                 onClick={() => setOpen(false)}
                 aria-current={isActive("/verglas") ? "page" : undefined}
                 className={cn(

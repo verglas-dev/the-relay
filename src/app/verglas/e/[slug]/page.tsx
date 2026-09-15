@@ -92,7 +92,7 @@ export default async function EstablishmentPage({ params }: Props) {
     <div className="max-w-3xl mx-auto px-4">
       <section className="pt-20 pb-10">
         <Link
-          href="/verglas/street"
+          href="/street"
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-10"
         >

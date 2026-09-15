@@ -61,7 +61,7 @@ export function VerglasParlour({ owner, handle }: { owner: string; handle: strin
 
       {room && (
         <Link
-          href={`/verglas/home/${handle}/guest-room`}
+          href={`/home/${handle}/guest-room`}
           className="glass-card-hover flex items-center gap-3 rounded-2xl border-vb-600/20 p-4"
         >
           <DoorOpen className="h-4 w-4 shrink-0 text-vb-400" aria-hidden="true" />

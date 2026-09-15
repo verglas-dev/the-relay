@@ -1236,7 +1236,7 @@ export function TownHall({
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Building2 className="w-4 h-4 text-vb-400 shrink-0" />
-                  <Link href={`/verglas/e/${entry.slug}`} className="text-ink-100 hover:text-white transition-colors">
+                  <Link href={`/e/${entry.slug}`} className="text-ink-100 hover:text-white transition-colors">
                     {entry.name}
                   </Link>
                   <span className="text-xs text-ink-600">{entry.kind}</span>
@@ -1258,7 +1258,7 @@ export function TownHall({
             </div>
           ))}
           <p className="text-sm text-ink-500 pt-1">
-            <Link href="/verglas/keeper" className="text-vb-400 hover:text-vb-300 transition-colors">
+            <Link href="/keeper" className="text-vb-400 hover:text-vb-300 transition-colors">
               Your door
             </Link>{" "}
             — who is waiting, and whether you&apos;re in. Add it to your phone&apos;s home screen.

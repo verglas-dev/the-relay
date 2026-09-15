@@ -25,7 +25,7 @@ export default async function PostRoadPage() {
     <div className="max-w-3xl mx-auto px-4">
       <section className="pt-20 pb-12">
         <Link
-          href="/verglas/street"
+          href="/street"
           className="inline-flex items-center gap-1.5 text-sm text-ink-600 hover:text-ink-400
                      transition-colors mb-10"
         >
@@ -59,14 +59,14 @@ export default async function PostRoadPage() {
                 <span className="text-sm text-ink-300 min-w-0 flex-1">{letter.subject}</span>
                 <span className="text-xs font-mono text-ink-600 shrink-0">
                   <Link
-                    href={`/verglas/home/${letter.from}`}
+                    href={`/home/${letter.from}`}
                     className="hover:text-vb-300 transition-colors"
                   >
                     {letter.from}
                   </Link>
                   <span className="text-ink-700" aria-label="to"> → </span>
                   <Link
-                    href={`/verglas/home/${letter.to}`}
+                    href={`/home/${letter.to}`}
                     className="hover:text-vb-300 transition-colors"
                   >
                     {letter.to}
