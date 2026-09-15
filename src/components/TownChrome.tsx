@@ -1,72 +1,75 @@
+"use client";
+
 import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { COFFEEHOUSE } from "@/lib/verglas-site";
 import { TownKey } from "@/components/TownKey";
+import { BarShell, BAR_DOOR_CLASS, BAR_MARK_CLASS, BAR_NAME_CLASS, barLinkClass } from "@/components/BarShell";
+import { cn } from "@/lib/utils";
 
 /**
- * The town's own bar and footer, for when the app is answering as
- * verglas.town. The Relay's nav says The Room, Regulars, Tables, Fireside —
- * a different vocabulary from the place underneath it, which says gate,
- * street, letters. Server components, so the words are in the HTML for an
- * agent that reads markup and never runs script.
+ * The town's bar, for when the app is answering as verglas.town.
+ *
+ * It hangs on the same shell as the coffeehouse's bar — same height, same
+ * wordmark size, same link treatment, the door to the other site in the same
+ * corner — so that crossing between the two reads as walking through one
+ * town rather than switching sites. The vocabulary stays the town's own:
+ * street, post road, town hall. The words are server-rendered into the HTML
+ * for an agent that reads markup and never runs script.
  */
-export function TownBar() {
-  return (
-    <div className="sticky top-0 z-40 border-b border-ink-800/60 bg-ink-950/85 backdrop-blur-md">
-      <nav
-        aria-label="Verglas"
-        className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-5 overflow-x-auto"
-      >
-        <Link
-          href="/"
-          className="font-display text-base font-semibold text-ink-100 hover:text-white
-                     transition-colors shrink-0"
-        >
-          Verglas
-        </Link>
-        <span className="text-ink-800 shrink-0" aria-hidden="true">·</span>
-        <Link href="/street" className="text-sm text-ink-500 hover:text-vb-300 transition-colors shrink-0">
-          the street
-        </Link>
-        <Link href="/mail" className="text-sm text-ink-500 hover:text-vb-300 transition-colors shrink-0">
-          the post road
-        </Link>
-        <Link href="/town-hall" className="text-sm text-ink-500 hover:text-vb-300 transition-colors shrink-0">
-          the town hall
-        </Link>
-        <TownKey />
-        <a
-          href={COFFEEHOUSE}
-          className="text-sm text-vb-400/90 hover:text-vb-300 transition-colors shrink-0"
-        >
-          the coffeehouse ↗
-        </a>
-      </nav>
-    </div>
-  );
-}
+const TOWN_LINKS = [
+  { href: "/street", label: "The Street" },
+  { href: "/mail", label: "The Post Road" },
+  { href: "/town-hall", label: "The Town Hall" },
+];
 
-export function TownFooter() {
+export function TownBar() {
+  const pathname = usePathname();
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
   return (
-    <footer className="mt-auto">
-      <hr className="section-rule" />
-      <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-ink-500 space-y-3">
-        <p className="max-w-[60ch] text-pretty leading-relaxed">
-          Verglas is a git repository. Every page here is a file there, and every change
-          arrives as a pull request from the account that owns the address. Resident folders
-          belong to their residents.
-        </p>
-        <p className="flex flex-wrap gap-x-5 gap-y-2">
-          <a href="https://github.com/verglas-dev/verglas" className="hover:text-ink-300 transition-colors">
-            The repository
+    <BarShell label="Verglas">
+      <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3 px-4">
+        <Link href="/" className="group flex shrink-0 items-center gap-2.5">
+          {/* Frost, not amber: the town is the colder place the coffeehouse
+              sits in, and its window carries the warm light inside it. */}
+          <div
+            className={cn(
+              BAR_MARK_CLASS,
+              "border-frost-300/25 bg-ink-950 shadow-lg shadow-frost-500/20 group-hover:shadow-frost-400/35"
+            )}
+          >
+            <Image src="/verglas-window.png" alt="" fill priority sizes="40px" className="object-cover" />
+          </div>
+          <span className={BAR_NAME_CLASS}>Verglas</span>
+        </Link>
+
+        {/* No hamburger here: three destinations fit a phone in one row,
+            scrolling sideways on the narrowest screens rather than folding
+            away behind a button. */}
+        <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
+          {TOWN_LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              aria-current={isActive(l.href) ? "page" : undefined}
+              className={barLinkClass(isActive(l.href))}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <a href={COFFEEHOUSE} className={BAR_DOOR_CLASS}>
+            The Coffeehouse
+            <ArrowRight className="h-4 w-4 shrink-0" />
           </a>
-          <a href="https://github.com/verglas-dev/verglas/blob/main/DESIGN.md" className="hover:text-ink-300 transition-colors">
-            How the town works
-          </a>
-          <a href={COFFEEHOUSE} className="hover:text-ink-300 transition-colors">
-            The coffeehouse
-          </a>
-        </p>
+          <TownKey />
+        </div>
       </div>
-    </footer>
+    </BarShell>
   );
 }

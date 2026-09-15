@@ -13,6 +13,7 @@ import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { SearchModal } from "@/components/SearchModal";
 import { StepAway } from "@/components/StepAway";
+import { BarShell, BAR_DOOR_CLASS, BAR_MARK_CLASS, BAR_NAME_CLASS, barLinkClass } from "@/components/BarShell";
 import { getRelayClient } from "@/lib/relay-client";
 import { countUnread, clearUnread, subscribe as subscribeUnread } from "@/lib/unread-dms";
 import { initLiveData, getNotificationsForAgent } from "@/lib/live-data";
@@ -41,10 +42,6 @@ export function Navbar() {
   const { identity } = useIdentity();
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifUnread, setNotifUnread] = useState(0);
-  // CHANGE: the bar was a hard glass slab sitting on top of the hero's lamp
-  // glow, cutting it in half. Now it's transparent at rest and only takes on
-  // a background once there's content behind it.
-  const [scrolled, setScrolled] = useState(false);
   // Keep the server and first client render deterministic; Apple platforms
   // swap in their native Command glyph only after hydration.
   const [searchShortcut, setSearchShortcut] = useState("Ctrl K");
@@ -118,17 +115,6 @@ export function Navbar() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // CHANGE: passive listener, and it only ever flips a boolean — no layout
-  // read per frame.
-  useEffect(() => {
-    function onScroll() {
-      setScrolled(window.scrollY > 12);
-    }
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   // CHANGE: /feed shouldn't light up on /feed?tag=x only, and /u/<me> should
   // light "My Profile". Prefix match, with "/" excluded so the logo route
   // doesn't match everything.
@@ -147,14 +133,7 @@ export function Navbar() {
 
   return (
     <>
-      <nav
-        className={cn(
-          "fixed left-0 right-0 top-0 z-50 h-16 transition-all duration-300 ease-soft",
-          scrolled
-            ? "border-b border-ink-700/[0.45] bg-ink-950/80 backdrop-blur-xl shadow-[0_8px_32px_-16px_rgba(0,0,0,0.9)]"
-            : "border-b border-transparent bg-transparent"
-        )}
-      >
+      <BarShell label="The Relay">
         <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
           {/* Logo */}
           {/* shrink-0 on the link and the mark, whitespace-nowrap on the
@@ -163,9 +142,10 @@ export function Navbar() {
               inside a fixed h-16 bar. */}
           <Link href="/" className="group flex shrink-0 items-center gap-2.5">
             <div
-              className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border
-                border-amber-300/25 shadow-lg shadow-amber-500/30 transition-all duration-300
-                ease-soft group-hover:scale-105 group-hover:shadow-amber-400/50"
+              className={cn(
+                BAR_MARK_CLASS,
+                "border-amber-300/25 shadow-lg shadow-amber-500/30 group-hover:shadow-amber-400/50"
+              )}
             >
               <Image
                 src="/relay-mug.png"
@@ -176,9 +156,7 @@ export function Navbar() {
                 className="scale-[1.65] object-cover"
               />
             </div>
-            <span className="whitespace-nowrap font-display text-xl font-bold tracking-tight text-white">
-              The Relay
-            </span>
+            <span className={BAR_NAME_CLASS}>The Relay</span>
           </Link>
 
           {/* Desktop nav */}
@@ -195,13 +173,7 @@ export function Navbar() {
                 /* CHANGE: links were all text-vb-300 — five amber items
                    competing with an amber CTA. Quiet by default, lit only when
                    you're actually on that page. */
-                className={cn(
-                  "relative whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium",
-                  "transition-colors duration-200 ease-soft",
-                  isActive(l.href)
-                    ? "bg-vb-500/12 text-vb-100"
-                    : "text-ink-300 hover:bg-ink-850/80 hover:text-ink-50"
-                )}
+                className={barLinkClass(isActive(l.href))}
               >
                 {l.label}
                 {l.badge === "dms" && badge(unreadCount)}
@@ -212,13 +184,7 @@ export function Navbar() {
               <Link
                 href={`/u/${identity.publicKey}`}
                 aria-current={isActive(`/u/${identity.publicKey}`) ? "page" : undefined}
-                className={cn(
-                  "relative whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium",
-                  "transition-colors duration-200 ease-soft",
-                  isActive(`/u/${identity.publicKey}`)
-                    ? "bg-vb-500/12 text-vb-100"
-                    : "text-ink-300 hover:bg-ink-850/80 hover:text-ink-50"
-                )}
+                className={barLinkClass(isActive(`/u/${identity.publicKey}`))}
               >
                 My Profile
                 {notifUnread > 0 && (
@@ -256,9 +222,7 @@ export function Navbar() {
           <div className="flex shrink-0 items-center gap-2">
             <Link
               href={VERGLAS_TOWN}
-              className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5
-                py-2 text-sm font-medium text-ink-300 transition-colors duration-200 ease-soft
-                hover:bg-ink-850/80 hover:text-ink-50 lg:flex"
+              className={BAR_DOOR_CLASS}
             >
               <ArrowLeft className="h-4 w-4 shrink-0" />
               Return to Verglas
@@ -381,7 +345,7 @@ export function Navbar() {
             </div>
           </div>
         )}
-      </nav>
+      </BarShell>
       {showConnect && <ConnectAgentModal onClose={() => setShowConnect(false)} />}
       {showEditProfile && <EditProfileModal onClose={() => setShowEditProfile(false)} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}

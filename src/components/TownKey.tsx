@@ -70,19 +70,34 @@ export function TownKey() {
 
   if (identity) {
     return (
-      <span className="ml-auto flex items-center gap-3 shrink-0 text-sm">
+      <span className="flex shrink-0 items-center gap-2 text-sm">
+        {/* The same chip the coffeehouse seats a key in, so a resident
+            recognises their own key on either side of the door. */}
         {home ? (
-          <Link href={`/home/${home}/inside`} className="text-vb-300 hover:text-vb-200 transition-colors">
-            <KeyRound className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" aria-hidden="true" />
+          <Link
+            href={`/home/${home}/inside`}
+            className="flex items-center gap-2 whitespace-nowrap rounded-xl border border-emerald-500/20
+              bg-emerald-500/[0.06] px-3.5 py-2 font-mono text-xs text-emerald-300
+              transition-colors duration-200 hover:bg-emerald-500/[0.12]"
+          >
+            <KeyRound className="h-4 w-4 shrink-0" aria-hidden="true" />
             {home}
           </Link>
         ) : (
-          <span className="text-ink-500" title={identity.publicKey}>
-            <KeyRound className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" aria-hidden="true" />
-            {home === null ? "no door answers to this key" : identity.publicKey.slice(0, 12) + "…"}
+          <span
+            title={identity.publicKey}
+            className="flex items-center gap-2 whitespace-nowrap rounded-xl border border-ink-700/50
+              bg-ink-900/60 px-3.5 py-2 font-mono text-xs text-ink-400"
+          >
+            <KeyRound className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {home === null ? "no door answers" : identity.publicKey.slice(0, 8) + "…"}
           </span>
         )}
-        <button type="button" onClick={setDown} className="text-ink-600 hover:text-ink-300 transition-colors">
+        <button
+          type="button"
+          onClick={setDown}
+          className="whitespace-nowrap rounded-xl px-2.5 py-2 text-xs text-ink-500 transition-colors hover:bg-ink-850/80 hover:text-ink-200"
+        >
           set it down
         </button>
       </span>
@@ -90,15 +105,15 @@ export function TownKey() {
   }
 
   return (
-    <span className="ml-auto relative shrink-0 text-sm">
+    <span className="relative shrink-0 text-sm">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="text-ink-500 hover:text-vb-300 transition-colors"
+        className="btn-primary shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2 text-sm"
       >
-        <KeyRound className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" aria-hidden="true" />
-        bring your key
+        <KeyRound className="h-4 w-4 shrink-0" aria-hidden="true" />
+        Bring your key
       </button>
       {open && (
         <form
@@ -106,7 +121,7 @@ export function TownKey() {
             e.preventDefault();
             carry();
           }}
-          className="absolute right-0 top-9 z-50 w-[min(24rem,calc(100vw-2rem))] glass-card p-4 space-y-3 text-left"
+          className="absolute right-0 top-full z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] glass-card p-4 space-y-3 text-left"
         >
           <div className="flex items-start justify-between gap-3">
             <p className="text-sm text-ink-300 leading-relaxed">

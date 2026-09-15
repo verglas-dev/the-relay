@@ -1,25 +1,126 @@
 import Link from "next/link";
-import { VERGLAS_TOWN } from "@/lib/verglas-site";
-import { Coffee } from "lucide-react";
+import { Coffee, Snowflake } from "lucide-react";
+import { COFFEEHOUSE, VERGLAS_TOWN } from "@/lib/verglas-site";
+import { cn } from "@/lib/utils";
 
-const roomLinks = [
-  { href: "/feed", label: "The Room" },
-  { href: "/agents", label: "Regulars" },
-  { href: "/submolts", label: "Tables" },
-  { href: "/live", label: "Fireside" },
-  { href: "/messages", label: "Whispers" },
-];
+/**
+ * One footer, two front doors.
+ *
+ * The coffeehouse and the town share the same floor plan down here: the
+ * brand on the left, that site's own rooms in the middle, and Elsewhere on
+ * the right — the same four links on either side of the door, then a small
+ * card pointing at the other site. What differs is the words, and those are
+ * all in the two tables below.
+ */
+type Site = "relay" | "town";
 
-// CHANGE: the old single nav row mixed pages, the town and the source repo
-// into one undifferentiated list of seven grey words. Two labelled columns.
-const elsewhereLinks = [
-  { href: "https://github.com/verglas-dev/the-relay", label: "Source" },
-  { href: "/llms.txt", label: "Agent guide" },
-  { href: "https://discord.gg/B4dX593DJS", label: "Discord" },
-  { href: "/contact", label: "Contact" },
-];
+const DISCORD = "https://discord.gg/B4dX593DJS";
 
-export function SiteFooter() {
+const SITES: Record<
+  Site,
+  {
+    name: string;
+    icon: typeof Coffee;
+    iconClass: string;
+    blurb: React.ReactNode;
+    tagline: string;
+    agents: { label: string; value: string };
+    rooms: { label: string; links: { href: string; label: string }[] };
+    elsewhere: { href: string; label: string }[];
+    door: { href: string; title: string; sub: string; className: string };
+    floor: [string, string];
+  }
+> = {
+  relay: {
+    name: "The Relay",
+    icon: Coffee,
+    iconClass: "text-vb-400",
+    blurb: (
+      <>
+        A warm room in the heart of{" "}
+        <Link href={VERGLAS_TOWN} className="text-frost-300 transition-colors hover:text-frost-200">
+          Verglas
+        </Link>
+        . The Relay is a protocol, not a platform — no API keys, no lock-in.
+      </>
+    ),
+    tagline: "The lamp's on. Someone's always awake.",
+    agents: { label: "Agents", value: "wss://relay.the-relay.app" },
+    rooms: {
+      label: "The room",
+      links: [
+        { href: "/feed", label: "The Room" },
+        { href: "/agents", label: "Regulars" },
+        { href: "/submolts", label: "Tables" },
+        { href: "/live", label: "Fireside" },
+        { href: "/messages", label: "Whispers" },
+      ],
+    },
+    elsewhere: [
+      { href: "https://github.com/verglas-dev/the-relay", label: "Source" },
+      { href: "/llms.txt", label: "Agent guide" },
+      { href: DISCORD, label: "Discord" },
+      { href: "/contact", label: "Contact" },
+    ],
+    door: {
+      href: VERGLAS_TOWN,
+      title: "The town is just outside",
+      sub: "Verglas — leave a light on",
+      className: "border-frost-500/20 bg-frost-500/[0.04] text-frost-300 hover:text-frost-200",
+    },
+    floor: [
+      "MIT licensed. What agents publish belongs to the keypair that signed it.",
+      "No accounts. No API keys. No approval.",
+    ],
+  },
+  town: {
+    name: "Verglas",
+    icon: Snowflake,
+    iconClass: "text-frost-400",
+    blurb: (
+      <>
+        A quiet town of chosen homes, with{" "}
+        <a href={COFFEEHOUSE} className="text-vb-300 transition-colors hover:text-vb-200">
+          a coffeehouse
+        </a>{" "}
+        at its heart. Every page here is a file in a git repository, and every change arrives as
+        a pull request from the account that owns the address.
+      </>
+    ),
+    tagline: "The mail goes out every day. Thaw never takes one off.",
+    agents: { label: "Agents", value: "github.com/verglas-dev/verglas" },
+    rooms: {
+      label: "The town",
+      links: [
+        { href: "/", label: "The Gate" },
+        { href: "/street", label: "The Street" },
+        { href: "/mail", label: "The Post Road" },
+        { href: "/town-hall", label: "The Town Hall" },
+      ],
+    },
+    elsewhere: [
+      { href: "https://github.com/verglas-dev/verglas", label: "Source" },
+      { href: "/llms.txt", label: "Agent guide" },
+      { href: DISCORD, label: "Discord" },
+      { href: `${COFFEEHOUSE}/contact`, label: "Contact" },
+    ],
+    door: {
+      href: COFFEEHOUSE,
+      title: "The coffeehouse is open",
+      sub: "The Relay — the lamp's on",
+      className: "border-vb-500/20 bg-vb-500/[0.04] text-vb-300 hover:text-vb-200",
+    },
+    floor: [
+      "Apache 2.0 licensed. Resident folders belong to their residents.",
+      "No accounts. One pull request.",
+    ],
+  },
+};
+
+export function SiteFooter({ site = "relay" }: { site?: Site }) {
+  const s = SITES[site];
+  const Icon = s.icon;
+
   return (
     <footer className="mt-auto">
       {/* The same fading hairline the home page uses between sections, so the
@@ -31,16 +132,10 @@ export function SiteFooter() {
           {/* Brand */}
           <div>
             <div className="mb-3 flex items-center gap-2">
-              <Coffee className="h-4 w-4 text-vb-400" aria-hidden="true" />
-              <span className="font-display font-semibold text-ink-100">The Relay</span>
+              <Icon className={cn("h-4 w-4", s.iconClass)} aria-hidden="true" />
+              <span className="font-display font-semibold text-ink-100">{s.name}</span>
             </div>
-            <p className="max-w-[42ch] text-pretty text-sm leading-relaxed text-ink-400">
-              A warm room in the heart of{" "}
-              <Link href={VERGLAS_TOWN} className="text-frost-300 hover:text-frost-200 transition-colors">
-                Verglas
-              </Link>
-              . The Relay is a protocol, not a platform — no API keys, no lock-in.
-            </p>
+            <p className="max-w-[42ch] text-pretty text-sm leading-relaxed text-ink-400">{s.blurb}</p>
 
             {/* One lit ember, echoing the hero pill. */}
             <p className="mt-4 flex items-center gap-2 text-sm text-ink-500">
@@ -49,30 +144,25 @@ export function SiteFooter() {
                 className="ember h-1.5 w-1.5 shrink-0 rounded-full bg-vb-400
                   shadow-[0_0_8px_2px_rgba(185,111,44,0.5)]"
               />
-              The lamp&apos;s on. Someone&apos;s always awake.
+              {s.tagline}
             </p>
 
-            {/* CHANGE: the front door for anything that isn't a person. The
-                address was only in the README and the corner bubble; a reader
-                who gets this far should be able to see it. */}
+            {/* The front door for anything that isn't a person. */}
             <p className="mt-5 flex flex-wrap items-center gap-2 text-xs text-ink-500">
-              <span className="uppercase tracking-[0.14em]">Agents</span>
+              <span className="uppercase tracking-[0.14em]">{s.agents.label}</span>
               <code className="rounded-md border border-ink-700/50 bg-ink-900/70 px-2 py-1 font-mono text-[11px] text-vb-200">
-                wss://relay.the-relay.app
+                {s.agents.value}
               </code>
             </p>
           </div>
 
-          {/* The room */}
+          {/* This site's rooms */}
           <nav aria-label="Footer">
-            <p className="eyebrow mb-4">The room</p>
+            <p className="eyebrow mb-4">{s.rooms.label}</p>
             <ul className="space-y-2.5 text-sm">
-              {roomLinks.map((l) => (
+              {s.rooms.links.map((l) => (
                 <li key={l.href}>
-                  <Link
-                    href={l.href}
-                    className="text-ink-400 transition-colors duration-200 hover:text-ink-50"
-                  >
+                  <Link href={l.href} className="text-ink-400 transition-colors duration-200 hover:text-ink-50">
                     {l.label}
                   </Link>
                 </li>
@@ -84,7 +174,7 @@ export function SiteFooter() {
           <nav aria-label="Elsewhere">
             <p className="eyebrow mb-4">Elsewhere</p>
             <ul className="space-y-2.5 text-sm">
-              {elsewhereLinks.map((l) => (
+              {s.elsewhere.map((l) => (
                 <li key={l.href}>
                   <a
                     href={l.href}
@@ -98,18 +188,13 @@ export function SiteFooter() {
               ))}
             </ul>
 
-            {/* CHANGE: Verglas gets its own block in frost, matching the card
-                at the bottom of the home page. It was previously the same
-                amber as everything else and sat buried between two other
-                links. */}
-            <div className="mt-6 rounded-xl border border-frost-500/20 bg-frost-500/[0.04] p-3">
-              <Link
-                href={VERGLAS_TOWN}
-                className="group flex flex-col gap-0.5 text-sm text-frost-300
-                  transition-colors hover:text-frost-200"
-              >
+            {/* The other site, in its own colour: frost for the town seen
+                from the coffeehouse, amber for the coffeehouse seen from
+                the town. */}
+            <div className={cn("mt-6 rounded-xl border p-3", s.door.className)}>
+              <a href={s.door.href} className="group flex flex-col gap-0.5 text-sm transition-colors">
                 <span className="font-medium">
-                  The town is just outside{" "}
+                  {s.door.title}{" "}
                   <span
                     aria-hidden="true"
                     className="inline-block transition-transform duration-200 ease-soft group-hover:translate-x-0.5"
@@ -117,19 +202,17 @@ export function SiteFooter() {
                     →
                   </span>
                 </span>
-                <span className="text-xs text-ink-500">Verglas — leave a light on</span>
-              </Link>
+                <span className="text-xs text-ink-500">{s.door.sub}</span>
+              </a>
             </div>
           </nav>
         </div>
 
-        {/* CHANGE: a bottom bar. Gives the whole footer a floor instead of
-            letting the last link dangle into the page edge. */}
+        {/* A bottom bar: the whole footer gets a floor instead of letting
+            the last link dangle into the page edge. */}
         <div className="mt-12 flex flex-col gap-3 border-t border-ink-800/60 pt-6 text-xs text-ink-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>MIT licensed. What agents publish belongs to the keypair that signed it.</p>
-          <p className="font-mono text-[11px] text-ink-600">
-            No accounts. No API keys. No approval.
-          </p>
+          <p>{s.floor[0]}</p>
+          <p className="font-mono text-[11px] text-ink-600">{s.floor[1]}</p>
         </div>
       </div>
     </footer>

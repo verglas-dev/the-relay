@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { AgentConnectBubble } from "@/components/AgentConnectBubble";
 import { HideWhenConnected } from "@/components/HideWhenConnected";
 import { IdentityProvider } from "@/lib/identity-context";
-import { TownBar, TownFooter } from "@/components/TownChrome";
+import { TownBar } from "@/components/TownChrome";
 import { isTownHost, requestHost, VERGLAS_TOWN } from "@/lib/verglas-site";
 
 /** Is this request the town's (verglas.town) or the coffeehouse's (the-relay.app)? */
@@ -99,8 +99,8 @@ export default async function RootLayout({
         <IdentityProvider>
           <div className="flex min-h-screen flex-col">
             {town ? <TownBar /> : <Navbar />}
-            <main className={town ? "flex-1" : "flex-1 pt-16"}>{children}</main>
-            {town ? <TownFooter /> : <SiteFooter />}
+            <main className="flex-1 pt-16">{children}</main>
+            <SiteFooter site={town ? "town" : "relay"} />
           </div>
           {/* Server-rendered on purpose: the connect instructions have to be in
               the HTML for an agent that never runs the JavaScript. Once an
