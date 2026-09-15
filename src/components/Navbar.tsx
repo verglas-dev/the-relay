@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 // MessageCircle was imported and never used — dropped.
-import { Search, Menu, X, Armchair, CheckCircle } from "lucide-react";
+import { Search, Menu, X, Armchair, CheckCircle, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
@@ -250,38 +250,18 @@ export function Navbar() {
             </button>
           </div>
 
-          {/* Right side. Verglas lives opposite the coffeehouse wordmark on
-              purpose: The Relay is the room; this is the door back out into
-              the town. Keep the mark visible at lg and let the word appear
-              when the header has enough breathing room. */}
+          {/* Right side. The way back out into the town sits opposite the
+              coffeehouse wordmark. It is a plain link in the bar's own voice:
+              the Relay is a room in Verglas, so the door out is not a pitch. */}
           <div className="flex shrink-0 items-center gap-2">
             <Link
               href={VERGLAS_TOWN}
-              aria-current={isActive("/verglas") ? "page" : undefined}
-              className={cn(
-                "group/verglas hidden shrink-0 items-center gap-2 rounded-xl border px-2 py-1.5",
-                "transition-all duration-200 ease-soft lg:flex",
-                isActive("/verglas")
-                  ? "border-frost-400/35 bg-frost-500/12 text-frost-100 shadow-[0_0_18px_-10px_rgba(130,205,230,0.75)]"
-                  : "border-frost-500/20 bg-frost-500/[0.05] text-frost-300 hover:border-frost-400/35 hover:bg-frost-500/10 hover:text-frost-100"
-              )}
+              className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5
+                py-2 text-sm font-medium text-ink-300 transition-colors duration-200 ease-soft
+                hover:bg-ink-850/80 hover:text-ink-50 lg:flex"
             >
-              <span
-                className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg border border-frost-300/20
-                  bg-ink-950 shadow-[0_0_14px_-6px_rgba(150,215,235,0.7)] transition-transform
-                  duration-200 ease-soft group-hover/verglas:scale-105"
-              >
-                <Image
-                  src="/verglas-window.png"
-                  alt=""
-                  fill
-                  sizes="28px"
-                  className="object-cover"
-                />
-              </span>
-              <span className="hidden whitespace-nowrap pr-1 text-sm font-semibold xl:inline">
-                Verglas
-              </span>
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              Return to Verglas
             </Link>
 
             {identity ? (
@@ -337,21 +317,11 @@ export function Navbar() {
               <Link
                 href={VERGLAS_TOWN}
                 onClick={() => setOpen(false)}
-                aria-current={isActive("/verglas") ? "page" : undefined}
-                className={cn(
-                  "mb-2 flex items-center gap-3 rounded-xl border px-3 py-2.5 font-medium transition-all",
-                  isActive("/verglas")
-                    ? "border-frost-400/35 bg-frost-500/12 text-frost-100"
-                    : "border-frost-500/20 bg-frost-500/[0.05] text-frost-300 hover:border-frost-400/35 hover:bg-frost-500/10 hover:text-frost-100"
-                )}
+                className="mb-2 flex w-fit items-center gap-2 rounded-xl px-4 py-2 font-medium
+                  text-ink-300 transition-colors hover:bg-ink-850 hover:text-ink-50"
               >
-                <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-frost-300/20 bg-ink-950">
-                  <Image src="/verglas-window.png" alt="" fill sizes="32px" className="object-cover" />
-                </span>
-                <span>
-                  <span className="block">Verglas</span>
-                  <span className="block text-xs font-normal text-ink-500">The town outside the coffeehouse</span>
-                </span>
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                Return to Verglas
               </Link>
 
               {NAV_LINKS.map((l) => (
