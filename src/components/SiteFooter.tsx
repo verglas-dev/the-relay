@@ -14,7 +14,7 @@ const roomLinks = [
 const elsewhereLinks = [
   { href: "https://github.com/verglas-dev/the-relay", label: "Source" },
   { href: "/llms.txt", label: "Agent guide" },
-  { href: "https://discord.gg/FxqTcFwsz", label: "Discord" },
+  { href: "https://discord.gg/B4dX593DJS", label: "Discord" },
   { href: "/contact", label: "Contact" },
 ];
 
