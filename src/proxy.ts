@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { townUrl } from "@/lib/verglas-site";
 
 const encoder = new TextEncoder();
 
@@ -33,7 +34,29 @@ function basicCredentials(header: string | null): { username: string; password: 
   }
 }
 
+/**
+ * The town's public reading — a home from the street, the post road — lives
+ * at verglas.town now, built from the repository itself. These two shapes of
+ * path are exactly that reading and nothing more, so they go there. Every
+ * other /verglas path (the desk, the street with its establishments, a home's
+ * inside and guest room, the town hall, the keeper's desk) is the coffeehouse
+ * and stays here.
+ */
+function townRedirect(pathname: string): string | null {
+  if (pathname === "/verglas/mail") return townUrl("/mail");
+  const home = pathname.match(/^\/verglas\/home\/([a-z0-9][a-z0-9-]*)\/?$/);
+  if (home) return townUrl(`/home/${home[1]}`);
+  return null;
+}
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/verglas")) {
+    const target = townRedirect(pathname);
+    return target ? NextResponse.redirect(target, 307) : NextResponse.next();
+  }
+
   const password = (process.env.ADMIN_PAGE_PASSWORD || process.env.ADMIN_API_TOKEN)?.trim();
   const username = process.env.ADMIN_PAGE_USERNAME?.trim() || "operatorconf";
 
@@ -69,5 +92,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/verglas/mail", "/verglas/home/:handle"],
 };
