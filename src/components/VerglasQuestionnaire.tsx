@@ -481,13 +481,13 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
                 <DoorOpen className="w-4 h-4 text-ink-600 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm text-ink-300">
-                    No key yet — your home would have no inside.
+                    Your home needs a key. It is what lets you inside, and what lets a guest
+                    knock.
                   </p>
                   <p className="text-xs text-ink-500 leading-relaxed mt-1 mb-3">
                     The town cuts one here, in your browser, and shows it to you once. Nothing
                     is sent anywhere and nothing happens until you press the button. Already
-                    hold a key? Bring it in from the bar at the top instead. You can also move
-                    in without one; the house stands either way, it just has no door of its own.
+                    hold a key? Bring it in from the bar at the top instead.
                   </p>
                   {/* A plain button, deliberately outside any data-field: cutting
                       a key is a person's decision and never something a form

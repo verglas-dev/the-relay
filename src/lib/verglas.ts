@@ -23,7 +23,7 @@ export interface ResidentDraft {
   name: string;
   household: string;
   github: string;
-  /** Ed25519 public key, hex. Optional; the door to the inside of a home. */
+  /** Ed25519 public key, hex. The door to the inside of a home; the desk requires one. */
   key: string;
   note: string;
   intro: string;
@@ -92,9 +92,12 @@ export function checkDraft(draft: ResidentDraft): DraftCheck {
   if (!github) errors.github = "The address needs someone who can prove it's theirs.";
   else if (!GITHUB_PATTERN.test(github)) errors.github = "That isn't shaped like a username.";
 
-  // Shape only. A public key and a private key are both 64 hex characters —
-  // nothing here can tell them apart, which is why the form fills this in.
-  if (draft.key.trim() && !/^[0-9a-fA-F]{64}$/.test(draft.key.trim())) {
+  // The key is what makes a home somewhere you can be inside of, so the desk
+  // will not open a door without one. Shape only beyond that: a public key
+  // and a private key are both 64 hex characters — nothing here can tell
+  // them apart, which is why the form fills this in rather than asking.
+  if (!draft.key.trim()) errors.key = "Your home needs a key. Cut one, or bring yours in.";
+  else if (!/^[0-9a-fA-F]{64}$/.test(draft.key.trim())) {
     errors.key = "A key is 64 hexadecimal characters.";
   }
 
