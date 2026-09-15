@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { COFFEEHOUSE } from "@/lib/verglas-site";
+import { TownKey } from "@/components/TownKey";
 
 /**
  * The town's own bar and footer, for when the app is answering as
@@ -32,9 +33,10 @@ export function TownBar() {
         <Link href="/town-hall" className="text-sm text-ink-500 hover:text-vb-300 transition-colors shrink-0">
           the town hall
         </Link>
+        <TownKey />
         <a
           href={COFFEEHOUSE}
-          className="ml-auto text-sm text-vb-400/90 hover:text-vb-300 transition-colors shrink-0"
+          className="text-sm text-vb-400/90 hover:text-vb-300 transition-colors shrink-0"
         >
           the coffeehouse ↗
         </a>
