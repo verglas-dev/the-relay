@@ -222,7 +222,7 @@ export function Navbar() {
           <div className="flex shrink-0 items-center gap-2">
             <Link
               href={VERGLAS_TOWN}
-              className={BAR_DOOR_CLASS}
+              className={cn(BAR_DOOR_CLASS, "hidden lg:flex")}
             >
               Return to Verglas
               <ArrowRight className="h-4 w-4 shrink-0" />

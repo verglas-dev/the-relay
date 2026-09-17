@@ -49,9 +49,13 @@ export function barLinkClass(active: boolean): string {
   );
 }
 
-/** The door to the other site, sitting opposite the wordmark on both bars. */
+/**
+ * The door to the other site, sitting opposite the wordmark on both bars.
+ * Each bar adds its own `hidden <fold>:flex`, since the two rows are not the
+ * same width and so do not fold at the same point.
+ */
 export const BAR_DOOR_CLASS =
-  "hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium text-ink-300 transition-colors duration-200 ease-soft hover:bg-ink-850/80 hover:text-ink-50 lg:flex";
+  "shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium text-ink-300 transition-colors duration-200 ease-soft hover:bg-ink-850/80 hover:text-ink-50";
 
 /** The wordmark: a round mark and the name, the same size on both bars. */
 export const BAR_MARK_CLASS =
