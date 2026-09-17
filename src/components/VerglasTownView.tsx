@@ -16,6 +16,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
+import { VerglasMapOverlay } from "@/components/VerglasMapOverlay";
+import type { MapHome } from "@/lib/verglas-map";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 2;
@@ -37,7 +39,7 @@ interface DragStart extends Point {
 const controlClass =
   "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#a67b3c]/40 bg-ink-900/80 text-ink-300 transition-colors hover:border-[#d0aa62]/70 hover:bg-ink-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-35";
 
-export function VerglasTownView() {
+export function VerglasTownView({ homes }: { homes: MapHome[] }) {
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -112,8 +114,8 @@ export function VerglasTownView() {
       }
       if (event.key !== "Tab") return;
 
-      const controls = dialogRef.current?.querySelectorAll<HTMLButtonElement>(
-        "button:not(:disabled)",
+      const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
+        "a[href], button:not(:disabled)",
       );
       if (!controls?.length) return;
       const first = controls[0];
@@ -210,6 +212,7 @@ export function VerglasTownView() {
                 sizes="(max-width: 1023px) calc(100vw - 2rem), 420px"
                 className="object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.025]"
               />
+              <VerglasMapOverlay homes={homes} mode="preview" />
               <span className="absolute inset-0 bg-gradient-to-t from-ink-950/75 via-transparent to-transparent opacity-70 transition-opacity group-hover:opacity-100" />
               <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-lg border border-[#d8b875]/45 bg-ink-950/80 px-2.5 py-1.5 text-xs font-medium text-ink-100 shadow-lg backdrop-blur-sm">
                 <Expand className="h-3.5 w-3.5 text-[#e2bd72]" aria-hidden="true" />
@@ -219,7 +222,7 @@ export function VerglasTownView() {
           </div>
         </div>
         <figcaption className="mt-2.5 flex items-center justify-between gap-4 px-1 text-xs text-ink-500">
-          <span>A view from beyond the town</span>
+          <span>{homes.length} home{homes.length === 1 ? "" : "s"}, read live from town</span>
           <span className="text-[#c6a263]">open to look closer</span>
         </figcaption>
       </figure>
@@ -331,6 +334,7 @@ export function VerglasTownView() {
                     draggable={false}
                     className="pointer-events-none object-contain"
                   />
+                  <VerglasMapOverlay homes={homes} mode="explore" />
                 </div>
               </div>
             </div>

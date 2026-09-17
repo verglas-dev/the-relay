@@ -19,6 +19,7 @@ import { VerglasMap } from "@/components/VerglasMap";
 import type { HomeEdit } from "@/lib/verglas-edit";
 import { BUILDER } from "@/lib/verglas-commission";
 import type { Letter, Resident } from "@/lib/verglas-town";
+import type { MapHome } from "@/lib/verglas-map";
 
 /**
  * Standing inside your own home.
@@ -67,7 +68,7 @@ export function VerglasInside({
   /** The drawing currently on the wall, by filename, if there is one. */
   hung: string | null;
   /** Every light currently on the map, including this home. */
-  mapHomes: { handle: string; title: string }[];
+  mapHomes: MapHome[];
 }) {
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");

@@ -6,6 +6,7 @@ import { VerglasInside } from "@/components/VerglasInside";
 import { editFromFiles, EMPTY_EDIT } from "@/lib/verglas-edit";
 import { listResidents, readCrossings, readLetter, readResident, readResidentFiles } from "@/lib/verglas-town";
 import { readOfferFor, readPendingFor } from "@/lib/verglas-workbench";
+import type { MapHome } from "@/lib/verglas-map";
 
 export const revalidate = 60;
 
@@ -54,15 +55,19 @@ export default async function InsidePage({ params }: { params: Promise<{ handle:
     await Promise.all(
       residents.map(async (other) => {
         if (other.handle === resident.handle) {
-          return { handle: other.handle, title: home.title || other.name };
+          return { handle: other.handle, title: home.title || other.name, image: home.image };
         }
         const mapped = await readResident(other.handle);
         return mapped
-          ? { handle: other.handle, title: mapped.home.title || mapped.resident.name }
+          ? {
+              handle: other.handle,
+              title: mapped.home.title || mapped.resident.name,
+              image: mapped.home.image,
+            }
           : null;
       }),
     )
-  ).filter((mapped): mapped is { handle: string; title: string } => mapped !== null);
+  ).filter((mapped): mapped is MapHome => mapped !== null);
 
   // The edit form works from the raw documents, not from the parsed view
   // above, so a field this site doesn't know about survives an edit.

@@ -4,6 +4,8 @@ import { ArrowRight, DoorClosed, Home, Mail, ShieldCheck, Stamp } from "lucide-r
 import { VerglasQuestionnaire } from "@/components/VerglasQuestionnaire";
 import { VerglasTownView } from "@/components/VerglasTownView";
 import { githubConfigured } from "@/lib/verglas-github";
+import { listResidents, readResident } from "@/lib/verglas-town";
+import type { MapHome } from "@/lib/verglas-map";
 
 // The move-in card depends on OAuth credentials that only exist at runtime —
 // the image is built without them. Prerendering this page would bake
@@ -35,7 +37,23 @@ const ideas = [
   },
 ];
 
-export default function VerglasPage() {
+export default async function VerglasPage() {
+  const residents = await listResidents();
+  const homes = (
+    await Promise.all(
+      residents.map(async (resident) => {
+        const entry = await readResident(resident.handle);
+        return entry
+          ? {
+              handle: entry.resident.handle,
+              title: entry.home.title || entry.resident.name,
+              image: entry.home.image,
+            }
+          : null;
+      }),
+    )
+  ).filter((home): home is MapHome => home !== null);
+
   return (
     <div className="max-w-5xl mx-auto px-4">
       {/* Arrival */}
@@ -70,7 +88,7 @@ export default function VerglasPage() {
             </div>
           </div>
 
-          <VerglasTownView />
+          <VerglasTownView homes={homes} />
         </div>
       </section>
 
