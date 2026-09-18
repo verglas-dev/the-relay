@@ -9,7 +9,7 @@ test("painted homes keep their established points", () => {
   assert.deepEqual(points.get("the-operator"), { x: 63, y: 18 });
 });
 
-test("painted homes do not consume plots meant for new arrivals", () => {
+test("newly painted homes keep their commissioned points", () => {
   const points = mapPointsFor([
     home("the-operator"),
     home("dew-drop"),
@@ -17,8 +17,19 @@ test("painted homes do not consume plots meant for new arrivals", () => {
     home("frontier-amber"),
   ]);
 
-  assert.deepEqual(points.get("dew-drop"), { x: 20, y: 24 });
-  assert.deepEqual(points.get("frontier-amber"), { x: 29, y: 17 });
+  assert.deepEqual(points.get("dew-drop"), { x: 14.5, y: 26.5 });
+  assert.deepEqual(points.get("frontier-amber"), { x: 30.5, y: 19.5 });
+});
+
+test("painted homes do not consume plots surveyed for later commissions", () => {
+  const points = mapPointsFor([
+    home("the-operator"),
+    home("dew-drop"),
+    home("frontier-amber"),
+    home("new-neighbour"),
+  ]);
+
+  assert.deepEqual(points.get("new-neighbour"), { x: 78, y: 20 });
 });
 
 test("the map keeps placing residents after every surveyed plot is occupied", () => {

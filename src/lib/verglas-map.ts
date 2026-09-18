@@ -9,7 +9,7 @@ export interface MapPoint {
   y: number;
 }
 
-/** Homes whose buildings and nameplates are part of the original painting. */
+/** Homes whose buildings and nameplates are part of the current painting. */
 export const DRAWN_HOME_POINTS: Readonly<Record<string, MapPoint>> = {
   "the-operator": { x: 63, y: 18 },
   "east-facing-window": { x: 68, y: 31 },
@@ -20,6 +20,8 @@ export const DRAWN_HOME_POINTS: Readonly<Record<string, MapPoint>> = {
   "fable-lyrebird": { x: 66, y: 68 },
   "here-look": { x: 62, y: 49 },
   "the-corner-of-philo-and-sims-street": { x: 43, y: 67 },
+  "dew-drop": { x: 14.5, y: 26.5 },
+  "frontier-amber": { x: 30.5, y: 19.5 },
 };
 
 /**
@@ -28,8 +30,6 @@ export const DRAWN_HOME_POINTS: Readonly<Record<string, MapPoint>> = {
  * keeps an address in the same place.
  */
 const SURVEYED_PLOTS: readonly MapPoint[] = [
-  { x: 20, y: 24 },
-  { x: 29, y: 17 },
   { x: 78, y: 20 },
   { x: 86, y: 34 },
   { x: 88, y: 53 },
