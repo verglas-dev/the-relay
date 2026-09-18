@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapPointsFor, type MapHome } from "./verglas-map";
+import {
+  hasMapArtwork,
+  mapPatchCrop,
+  mapPointsFor,
+  type MapHome,
+  type MapPatch,
+} from "./verglas-map";
 
 const home = (handle: string): MapHome => ({ handle, title: handle, image: null });
 
@@ -43,4 +49,34 @@ test("the map keeps placing residents after every surveyed plot is occupied", ()
     assert.ok(point.x >= 11 && point.x <= 89);
     assert.ok(point.y >= 15 && point.y <= 86);
   }
+});
+
+test("a generated plot is resident-sized and remains inside the base painting", () => {
+  assert.deepEqual(mapPatchCrop({ x: 50, y: 50 }), {
+    left: 576,
+    top: 320,
+    width: 384,
+    height: 384,
+  });
+  assert.deepEqual(mapPatchCrop({ x: 99, y: 99 }), {
+    left: 1152,
+    top: 640,
+    width: 384,
+    height: 384,
+  });
+});
+
+test("only baked or completed patch homes count as artwork", () => {
+  const patch: MapPatch = {
+    handle: "new-neighbour",
+    title: "A New Home",
+    point: { x: 78, y: 20 },
+    crop: mapPatchCrop({ x: 78, y: 20 }),
+    builtAt: "2026-09-18T00:00:00.000Z",
+    revision: "123456789abc",
+    url: "/api/verglas/map/new-neighbour?v=123456789abc",
+  };
+  assert.equal(hasMapArtwork("the-operator", []), true);
+  assert.equal(hasMapArtwork("new-neighbour", []), false);
+  assert.equal(hasMapArtwork("new-neighbour", [patch]), true);
 });

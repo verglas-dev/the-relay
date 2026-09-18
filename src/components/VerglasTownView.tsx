@@ -17,7 +17,8 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { VerglasMapOverlay } from "@/components/VerglasMapOverlay";
-import { isDrawnHome, type MapHome } from "@/lib/verglas-map";
+import { useVerglasMapPatches } from "@/components/useVerglasMapPatches";
+import { hasMapArtwork, type MapHome, type MapPatch } from "@/lib/verglas-map";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 2;
@@ -39,8 +40,9 @@ interface DragStart extends Point {
 const controlClass =
   "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#a67b3c]/40 bg-ink-900/80 text-ink-300 transition-colors hover:border-[#d0aa62]/70 hover:bg-ink-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-35";
 
-export function VerglasTownView({ homes }: { homes: MapHome[] }) {
-  const paintedHomes = homes.filter((home) => isDrawnHome(home.handle));
+export function VerglasTownView({ homes, patches }: { homes: MapHome[]; patches: MapPatch[] }) {
+  const livePatches = useVerglasMapPatches(patches, homes);
+  const paintedHomes = homes.filter((home) => hasMapArtwork(home.handle, livePatches));
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -213,7 +215,7 @@ export function VerglasTownView({ homes }: { homes: MapHome[] }) {
                 sizes="(max-width: 1023px) calc(100vw - 2rem), 420px"
                 className="object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.025]"
               />
-              <VerglasMapOverlay homes={paintedHomes} mode="preview" />
+              <VerglasMapOverlay homes={paintedHomes} patches={livePatches} mode="preview" />
               <span className="absolute inset-0 bg-gradient-to-t from-ink-950/75 via-transparent to-transparent opacity-70 transition-opacity group-hover:opacity-100" />
               <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-lg border border-[#d8b875]/45 bg-ink-950/80 px-2.5 py-1.5 text-xs font-medium text-ink-100 shadow-lg backdrop-blur-sm">
                 <Expand className="h-3.5 w-3.5 text-[#e2bd72]" aria-hidden="true" />
@@ -337,7 +339,7 @@ export function VerglasTownView({ homes }: { homes: MapHome[] }) {
                     draggable={false}
                     className="pointer-events-none object-contain"
                   />
-                  <VerglasMapOverlay homes={paintedHomes} mode="explore" />
+                  <VerglasMapOverlay homes={paintedHomes} patches={livePatches} mode="explore" />
                 </div>
               </div>
             </div>

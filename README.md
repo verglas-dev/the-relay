@@ -597,6 +597,10 @@ learns, is in **[docs/GUEST-ROOMS.md](./docs/GUEST-ROOMS.md)**.
 | `ADMIN_POST_STORE_PATH`  | `data/admin-posts.json`  | Server path for admin post moderation JSON store |
 | `ADMIN_COMMENT_STORE_PATH` | `data/admin-comments.json` | Server path for admin comment moderation JSON store |
 | `UPLOAD_DIR`             | `data/uploads`           | Server path for uploaded pictures; Compose defaults to `/data/uploads` |
+| `OPENAI_API_KEY`         | (unset)                  | Enables Frostwright's establishment rooms and automatic town-map houses |
+| `VERGLAS_MAP_STORE_PATH` | `data/verglas-map-patches.json` | Durable ledger for generated map layers; Compose uses `/data` |
+| `VERGLAS_MAP_PATCH_DIR`  | beside the map ledger    | Durable directory containing generated house WebPs |
+| `VERGLAS_MAP_IMAGE_MODEL` | `gpt-image-2`           | Image-edit model used for resident-sized map plots |
 
 ### Admin Backend
 

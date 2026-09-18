@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { after } from "next/server";
 import { ArrowRight, DoorClosed, Home, Mail, ShieldCheck, Stamp } from "lucide-react";
 import { VerglasQuestionnaire } from "@/components/VerglasQuestionnaire";
 import { VerglasTownView } from "@/components/VerglasTownView";
 import { githubConfigured } from "@/lib/verglas-github";
-import { listResidents, readResident } from "@/lib/verglas-town";
 import type { MapHome } from "@/lib/verglas-map";
+import { readMapResidents, scheduleNextMapPatch } from "@/lib/verglas-map-builder";
+import { readReadyMapPatches } from "@/lib/verglas-map-store";
 
 // The move-in card depends on OAuth credentials that only exist at runtime —
 // the image is built without them. Prerendering this page would bake
 // `joinEnabled: false` into the HTML and no amount of runtime env would
 // bring the button back.
 export const dynamic = "force-dynamic";
+export const maxDuration = 900;
 
 export const metadata: Metadata = {
   title: "Verglas — a quiet town of chosen homes",
@@ -38,21 +41,13 @@ const ideas = [
 ];
 
 export default async function VerglasPage() {
-  const residents = await listResidents();
-  const homes = (
-    await Promise.all(
-      residents.map(async (resident) => {
-        const entry = await readResident(resident.handle);
-        return entry
-          ? {
-              handle: entry.resident.handle,
-              title: entry.home.title || entry.resident.name,
-              image: entry.home.image,
-            }
-          : null;
-      }),
-    )
-  ).filter((home): home is MapHome => home !== null);
+  const mapResidents = await readMapResidents();
+  const homes: MapHome[] = mapResidents.map(({ handle, title, image }) => ({ handle, title, image }));
+  const patches = await readReadyMapPatches(homes);
+
+  // The gate opens immediately. Once its response is away, Frostwright picks
+  // up one genuinely new or changed home and paints only that surveyed plot.
+  after(() => scheduleNextMapPatch(mapResidents));
 
   return (
     <div className="max-w-5xl mx-auto px-4">
@@ -88,7 +83,7 @@ export default async function VerglasPage() {
             </div>
           </div>
 
-          <VerglasTownView homes={homes} />
+          <VerglasTownView homes={homes} patches={patches} />
         </div>
       </section>
 

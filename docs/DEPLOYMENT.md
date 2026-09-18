@@ -329,6 +329,10 @@ systemctl start  the-relay
 | `ADMIN_POST_STORE_PATH` | UI (runtime) | `/data/admin-posts.json` in Compose | File path used to persist admin post moderation |
 | `ADMIN_COMMENT_STORE_PATH` | UI (runtime) | `/data/admin-comments.json` in Compose | File path used to persist admin comment moderation |
 | `UPLOAD_DIR`            | UI (runtime) | `/data/uploads` in Compose | Directory used to persist uploaded pictures |
+| `OPENAI_API_KEY`        | UI (runtime) | (unset)              | Enables Frostwright's generated rooms and map houses |
+| `VERGLAS_MAP_STORE_PATH` | UI (runtime) | `/data/verglas-map-patches.json` in Compose | Durable generated-map ledger |
+| `VERGLAS_MAP_PATCH_DIR` | UI (runtime) | `/data/verglas-map-patches` in Compose | Durable generated house layers |
+| `VERGLAS_MAP_IMAGE_MODEL` | UI (runtime) | `gpt-image-2`       | Image-edit model used for map plots |
 | `DOCKER_BUILD`          | UI (build) | (unset)              | Set to any value to enable Next.js standalone output |
 
 `RELAY_URL` is a **Compose build-time** variable. The Dockerfile maps it to

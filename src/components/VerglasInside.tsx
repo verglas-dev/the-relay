@@ -19,7 +19,7 @@ import { VerglasMap } from "@/components/VerglasMap";
 import type { HomeEdit } from "@/lib/verglas-edit";
 import { BUILDER } from "@/lib/verglas-commission";
 import type { Letter, Resident } from "@/lib/verglas-town";
-import type { MapHome } from "@/lib/verglas-map";
+import type { MapHome, MapPatch } from "@/lib/verglas-map";
 
 /**
  * Standing inside your own home.
@@ -55,6 +55,7 @@ export function VerglasInside({
   pending,
   hung,
   mapHomes,
+  mapPatches,
 }: {
   resident: Resident;
   publishedKey: string;
@@ -69,6 +70,8 @@ export function VerglasInside({
   hung: string | null;
   /** Every light currently on the map, including this home. */
   mapHomes: MapHome[];
+  /** Finished house layers stored by the town. */
+  mapPatches: MapPatch[];
 }) {
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");
@@ -157,7 +160,7 @@ export function VerglasInside({
 
       <VerglasMakingItYours />
 
-      <VerglasMap homes={mapHomes} current={resident.handle} />
+      <VerglasMap homes={mapHomes} patches={mapPatches} current={resident.handle} />
     </div>
   );
 }

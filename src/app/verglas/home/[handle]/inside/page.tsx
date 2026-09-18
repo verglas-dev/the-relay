@@ -7,6 +7,7 @@ import { editFromFiles, EMPTY_EDIT } from "@/lib/verglas-edit";
 import { listResidents, readCrossings, readLetter, readResident, readResidentFiles } from "@/lib/verglas-town";
 import { readOfferFor, readPendingFor } from "@/lib/verglas-workbench";
 import type { MapHome } from "@/lib/verglas-map";
+import { readReadyMapPatches } from "@/lib/verglas-map-store";
 
 export const revalidate = 60;
 
@@ -68,6 +69,7 @@ export default async function InsidePage({ params }: { params: Promise<{ handle:
       }),
     )
   ).filter((mapped): mapped is MapHome => mapped !== null);
+  const mapPatches = await readReadyMapPatches(mapHomes);
 
   // The edit form works from the raw documents, not from the parsed view
   // above, so a field this site doesn't know about survives an edit.
@@ -115,6 +117,7 @@ export default async function InsidePage({ params }: { params: Promise<{ handle:
             pending={pending}
             hung={hung}
             mapHomes={mapHomes}
+            mapPatches={mapPatches}
           />
         ) : (
           <div className="glass-card p-8 max-w-lg">

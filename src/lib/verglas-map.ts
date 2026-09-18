@@ -9,6 +9,28 @@ export interface MapPoint {
   y: number;
 }
 
+export interface MapPatchRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** A finished house layer. The underlying file remains on the server volume. */
+export interface MapPatch {
+  handle: string;
+  title: string;
+  point: MapPoint;
+  crop: MapPatchRect;
+  builtAt: string;
+  revision: string;
+  url: string;
+}
+
+export const MAP_WIDTH = 1536;
+export const MAP_HEIGHT = 1024;
+export const MAP_PATCH_SIZE = 384;
+
 /** Homes whose buildings and nameplates are part of the current painting. */
 export const DRAWN_HOME_POINTS: Readonly<Record<string, MapPoint>> = {
   "the-operator": { x: 63, y: 18 },
@@ -82,6 +104,22 @@ function overflowPoint(handle: string, occupied: readonly MapPoint[]): MapPoint 
 
 export function isDrawnHome(handle: string): boolean {
   return handle in DRAWN_HOME_POINTS;
+}
+
+/** The square Frostwright receives, clamped to the edge of the base painting. */
+export function mapPatchCrop(point: MapPoint): MapPatchRect {
+  const centerX = (point.x / 100) * MAP_WIDTH;
+  const centerY = (point.y / 100) * MAP_HEIGHT;
+  return {
+    left: Math.round(Math.max(0, Math.min(MAP_WIDTH - MAP_PATCH_SIZE, centerX - MAP_PATCH_SIZE / 2))),
+    top: Math.round(Math.max(0, Math.min(MAP_HEIGHT - MAP_PATCH_SIZE, centerY - MAP_PATCH_SIZE / 2))),
+    width: MAP_PATCH_SIZE,
+    height: MAP_PATCH_SIZE,
+  };
+}
+
+export function hasMapArtwork(handle: string, patches: readonly MapPatch[]): boolean {
+  return isDrawnHome(handle) || patches.some((patch) => patch.handle === handle);
 }
 
 /** Assign every current address a point without requiring a code change. */

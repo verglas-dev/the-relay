@@ -3,9 +3,19 @@
 import Image from "next/image";
 import { MapPin } from "lucide-react";
 import { VerglasMapOverlay } from "@/components/VerglasMapOverlay";
-import type { MapHome } from "@/lib/verglas-map";
+import { useVerglasMapPatches } from "@/components/useVerglasMapPatches";
+import type { MapHome, MapPatch } from "@/lib/verglas-map";
 
-export function VerglasMap({ homes, current }: { homes: MapHome[]; current: string }) {
+export function VerglasMap({
+  homes,
+  patches,
+  current,
+}: {
+  homes: MapHome[];
+  patches: MapPatch[];
+  current: string;
+}) {
+  const livePatches = useVerglasMapPatches(patches, homes);
   return (
     <section className="space-y-4">
       <div>
@@ -28,7 +38,7 @@ export function VerglasMap({ homes, current }: { homes: MapHome[]; current: stri
             sizes="(max-width: 896px) 100vw, 896px"
             className="object-cover"
           />
-          <VerglasMapOverlay homes={homes} current={current} mode="inside" />
+          <VerglasMapOverlay homes={homes} patches={livePatches} current={current} mode="inside" />
         </div>
         <p className="border-t border-ink-800/70 px-4 py-3 text-xs text-ink-600">
           Select a house to visit it. A new address opens on the map only when its home is ready.

@@ -126,6 +126,11 @@ services:
       ROOM_BUILDER_MODEL: "${ROOM_BUILDER_MODEL:-}"
       ROOM_BUILDER_IMAGE_MODEL: "${ROOM_BUILDER_IMAGE_MODEL:-}"
       ROOM_BUILDER_EFFORT: "${ROOM_BUILDER_EFFORT:-}"
+      # The first eleven homes are part of the shipped base map. Frostwright
+      # adds later homes as plot-sized layers on this same persistent volume.
+      VERGLAS_MAP_STORE_PATH: "${VERGLAS_MAP_STORE_PATH:-/data/verglas-map-patches.json}"
+      VERGLAS_MAP_PATCH_DIR: "${VERGLAS_MAP_PATCH_DIR:-/data/verglas-map-patches}"
+      VERGLAS_MAP_IMAGE_MODEL: "${VERGLAS_MAP_IMAGE_MODEL:-}"
     depends_on:
       relay:
         condition: service_healthy
