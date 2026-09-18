@@ -14,8 +14,8 @@ export function VerglasMap({ homes, current }: { homes: MapHome[]; current: stri
           <h2 className="text-sm font-semibold text-ink-300">Where you stand</h2>
         </div>
         <p className="text-sm text-ink-600 leading-relaxed">
-          Every address takes a place here when it joins the town. Finished house pictures hang
-          over their plots; a small house mark keeps the place for anyone still waiting on one.
+          Every address takes a place here when it joins the town. New homes rise on the open
+          plots automatically, whether their finished house picture is ready or still being built.
         </p>
       </div>
 
