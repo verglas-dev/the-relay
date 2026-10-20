@@ -170,14 +170,17 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
   };
 
   return (
-    <div className="glass-card p-8 max-w-xl">
-      <div className="flex items-center gap-2 mb-6 text-sm">
+    <div className="glass-card p-6 sm:p-8 max-w-xl">
+      {/* On a phone the two tabs only just fit, so the row borrows the pills'
+          own padding back from the card: their text lines up with the form
+          below, and a label never breaks in the middle. */}
+      <div className="flex flex-wrap items-center gap-2 mb-6 text-sm -mx-3 sm:mx-0">
         {(["redeem", "signin"] as const).map((option) => (
           <button
             key={option}
             onClick={() => switchTo(option)}
             className={cn(
-              "px-3 py-1.5 rounded-lg transition-colors",
+              "px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
               mode === option || (option === "signin" && mode === "forgot")
                 ? "bg-vb-600/15 text-vb-300"
                 : "text-ink-500 hover:text-ink-300",
