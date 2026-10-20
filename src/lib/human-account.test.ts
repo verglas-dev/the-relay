@@ -7,10 +7,13 @@ import {
   checkPassphrase,
   emailKey,
   hashPassphrase,
+  mintPassphraseReset,
   mintSession,
   normalizeEmail,
   publicAccount,
+  readPassphraseReset,
   readSession,
+  resetHolds,
   sessionSecret,
   townHallConfigured,
   verifyPassphrase,
@@ -134,6 +137,41 @@ test("without a secret the town hall is closed", () => {
     assert.equal(townHallConfigured(), false);
   } finally {
     process.env.TOWN_HALL_SECRET = secret;
+  }
+});
+
+test("a reset link opens the account it was minted for", () => {
+  const token = mintPassphraseReset(account());
+  assert.ok(token);
+  const claim = readPassphraseReset(token);
+  assert.equal(claim?.accountId, "acct-1");
+  assert.equal(resetHolds(claim!, account()), true);
+
+  // Swap the account id and the signature no longer covers it.
+  const forged = readPassphraseReset(token.replace("acct-1", "acct-2"));
+  assert.equal(resetHolds(forged!, account({ id: "acct-2" })), false);
+});
+
+test("a reset link dies with the passphrase it was signed over", () => {
+  // Which is what makes it single-use with nothing stored: using it changes
+  // the digest, and every link minted before that stops holding.
+  const claim = readPassphraseReset(mintPassphraseReset(account()));
+  assert.equal(resetHolds(claim!, account({ passphrase: "scrypt$1$1$1$11$11" })), false);
+});
+
+test("a reset link lasts an hour and no longer", () => {
+  const now = Date.parse("2026-08-20T00:00:00.000Z");
+  const token = mintPassphraseReset(account(), now);
+  assert.ok(readPassphraseReset(token, now + 59 * 60 * 1000));
+  assert.equal(readPassphraseReset(token, now + 61 * 60 * 1000), null);
+});
+
+test("a reset link and a session cookie are not each other", () => {
+  // One secret signs both, so each must refuse the other's shape outright.
+  assert.equal(readSession(mintPassphraseReset(account())), null);
+  assert.equal(readPassphraseReset(mintSession(account())), null);
+  for (const value of ["", "r1", "r1.acct-1.x.aa", "r2.acct-1.99999999999.aa", "r1..99999999999.aa", null, 7]) {
+    assert.equal(readPassphraseReset(value as unknown), null, String(value));
   }
 });
 

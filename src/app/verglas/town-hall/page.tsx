@@ -4,6 +4,7 @@ import { COFFEEHOUSE } from "@/lib/verglas-site";
 import { cookies } from "next/headers";
 import { ArrowLeft, Stamp } from "lucide-react";
 import { TownHall } from "@/components/TownHall";
+import { mailConfigured } from "@/lib/contact-mail";
 import { publicView } from "@/lib/establishment";
 import { townHallConfigured } from "@/lib/human-account";
 import { currentKeeper } from "@/lib/keeper-session";
@@ -80,6 +81,7 @@ export default async function TownHallPage() {
       <section className="pb-28">
         <TownHall
           configured={configured}
+          canMail={mailConfigured()}
           email={account?.email ?? null}
           permitsInHand={permits.length}
           establishments={establishments.map(publicView)}

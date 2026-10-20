@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  accountByEmail,
   bindPermit,
   demolishEstablishment,
   establishmentsFor,
@@ -14,9 +15,12 @@ import {
   listPermits,
   openEstablishment,
   registerKeeper,
+  resetPassphrase,
+  signIn,
   unspentPermits,
 } from "./town-hall";
 import { emailKey } from "./keeper-rules";
+import { mintPassphraseReset } from "./human-account";
 import { EMPTY_ESTABLISHMENT } from "./establishment";
 import { permitState } from "./establishment-permit";
 
@@ -27,6 +31,9 @@ const dir = mkdtempSync(join(tmpdir(), "town-hall-"));
 process.env.TOWN_HALL_STORE_PATH = join(dir, "town-hall.json");
 
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
+
+// Reset links are signed with the session key, read per call like the store path.
+process.env.TOWN_HALL_SECRET = "b".repeat(48);
 
 let n = 0;
 
@@ -152,4 +159,39 @@ test("the moderation list shows who holds what, and no credentials", async () =>
   assert.deepEqual(Object.keys(listed).sort(), [
     "email", "hasRoom", "keeper", "kind", "name", "openedAt", "slug", "wired",
   ]);
+});
+
+test("a forgotten passphrase is replaced once, and every old cookie stops counting", async () => {
+  const account = await keeperWith("forgotten-place");
+  const token = mintPassphraseReset(account);
+  assert.ok(token);
+
+  const reset = await resetPassphrase({ token, next: "a brand new sentence" });
+  assert.equal(reset.ok, true, JSON.stringify(reset));
+  if (!reset.ok) throw new Error("unreachable");
+  assert.equal(reset.account.sessionEpoch, account.sessionEpoch + 1);
+
+  assert.equal((await signIn({ emailKey: account.emailKey, passphrase: "a long enough passphrase" })).ok, false);
+  assert.equal((await signIn({ emailKey: account.emailKey, passphrase: "a brand new sentence" })).ok, true);
+
+  // The same link again is refused: the digest it was signed over is gone.
+  assert.equal((await resetPassphrase({ token, next: "somebody else's sentence" })).ok, false);
+  // And the place itself is exactly where it was.
+  assert.equal((await establishmentsFor(account.id)).length, 1);
+});
+
+test("a reset link for one keeper opens nobody else", async () => {
+  const mine = await keeperWith("my-place");
+  const theirs = await keeperWith("their-place");
+  const token = mintPassphraseReset(mine);
+  assert.ok(token);
+  const forged = token.replace(mine.id, theirs.id);
+  assert.equal((await resetPassphrase({ token: forged, next: "taking it over now" })).ok, false);
+  assert.equal((await signIn({ emailKey: theirs.emailKey, passphrase: "a long enough passphrase" })).ok, true);
+});
+
+test("an address finds its keeper whatever the case, and finds nobody otherwise", async () => {
+  const account = await keeperWith("found-place");
+  assert.equal((await accountByEmail(emailKey(account.email.toUpperCase())))?.id, account.id);
+  assert.equal(await accountByEmail("nobody@example.com"), null);
 });

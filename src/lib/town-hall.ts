@@ -6,6 +6,8 @@ import {
   emailKey as toEmailKey,
   hashPassphrase,
   newAccountId,
+  readPassphraseReset,
+  resetHolds,
   verifyPassphrase,
 } from "@/lib/human-account";
 import {
@@ -299,11 +301,47 @@ export async function changePassphrase(params: {
       return no("That is not your current passphrase.", "current");
     }
 
-    const updated: Account = {
-      ...account,
-      passphrase: hashPassphrase(params.next),
-      sessionEpoch: account.sessionEpoch + 1,
-    };
+    const updated = rekeyed(account, params.next);
+    store.accounts[account.id] = updated;
+    await writeFile(store);
+    return { ok: true as const, account: updated };
+  });
+}
+
+/** A new passphrase, and every cookie issued under the old one stops counting. */
+function rekeyed(account: Account, next: string): Account {
+  return { ...account, passphrase: hashPassphrase(next), sessionEpoch: account.sessionEpoch + 1 };
+}
+
+/**
+ * Who an address belongs to — for mailing them a reset link, and nothing else.
+ * Sign-in goes through `signIn`, which hashes whether or not anybody is found.
+ */
+export async function accountByEmail(emailKey: string): Promise<Account | null> {
+  const store = await readFile();
+  return Object.values(store.accounts).find((account) => account.emailKey === emailKey) ?? null;
+}
+
+/**
+ * Choose a new passphrase with the link from the mail instead of the old one.
+ *
+ * Checked inside the write chain, so two tabs submitting the same link cannot
+ * both succeed: the first changes the digest the second was signed over. One
+ * refusal for every way a link can fail — expired, used, or never ours.
+ */
+export async function resetPassphrase(params: {
+  token: string;
+  next: string;
+}): Promise<Result<{ account: Account }>> {
+  return withWrite(async () => {
+    const store = await readFile();
+    const claim = readPassphraseReset(params.token);
+    const account = claim ? store.accounts[claim.accountId] : undefined;
+    if (!claim || !account || !resetHolds(claim, account)) {
+      return no("That link has expired or has already been used. Ask for another.");
+    }
+
+    const updated = rekeyed(account, params.next);
     store.accounts[account.id] = updated;
     await writeFile(store);
     return { ok: true as const, account: updated };

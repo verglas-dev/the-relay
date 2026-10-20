@@ -5,19 +5,23 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   BellRing,
   Building2,
   Check,
   Hammer,
+  KeyRound,
   Loader2,
   LogOut,
+  Mail,
   Pencil,
   Plus,
   Stamp,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { COFFEEHOUSE } from "@/lib/verglas-site";
 import {
   EMPTY_ESTABLISHMENT,
   checkEstablishment,
@@ -104,32 +108,55 @@ function Trouble({ children }: { children: React.ReactNode }) {
 
 /* ── The permit desk ───────────────────────────────────────────────────── */
 
-function PermitDesk() {
-  const [mode, setMode] = useState<"redeem" | "signin">("redeem");
+type DeskMode = "redeem" | "signin" | "forgot";
+
+/** Which window each mode of the desk posts to. */
+const DESK_WINDOWS: Record<DeskMode, string> = {
+  redeem: "/api/town-hall/account",
+  signin: "/api/town-hall/session",
+  forgot: "/api/town-hall/reset",
+};
+
+function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: DeskMode }) {
+  const [mode, setMode] = useState<DeskMode>(initialMode);
   const [code, setCode] = useState("");
   const [email, setEmail] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [trouble, setTrouble] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
+  /** The address a reset link was asked for, once it has been. */
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const codeLooksRight = normalizePermitCode(code) !== null;
+
+  const switchTo = (next: DeskMode) => {
+    setMode(next);
+    setTrouble(null);
+    setFields({});
+    setSentTo(null);
+  };
 
   const submit = async () => {
     setBusy(true);
     setTrouble(null);
     setFields({});
     try {
-      const redeeming = mode === "redeem";
-      const response = await fetch(redeeming ? "/api/town-hall/account" : "/api/town-hall/session", {
+      const response = await fetch(DESK_WINDOWS[mode], {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(redeeming ? { code, email, passphrase } : { email, passphrase }),
+        body: JSON.stringify(
+          mode === "redeem" ? { code, email, passphrase } : mode === "signin" ? { email, passphrase } : { email },
+        ),
       });
       const body = await response.json();
       if (!response.ok) {
         setTrouble(body.error ?? "That did not go through.");
         setFields(body.fields ?? {});
+        return;
+      }
+      if (mode === "forgot") {
+        setSentTo(email.trim());
         return;
       }
       // The page is server-rendered from the cookie; a reload is the whole
@@ -148,10 +175,12 @@ function PermitDesk() {
         {(["redeem", "signin"] as const).map((option) => (
           <button
             key={option}
-            onClick={() => { setMode(option); setTrouble(null); setFields({}); }}
+            onClick={() => switchTo(option)}
             className={cn(
               "px-3 py-1.5 rounded-lg transition-colors",
-              mode === option ? "bg-vb-600/15 text-vb-300" : "text-ink-500 hover:text-ink-300",
+              mode === option || (option === "signin" && mode === "forgot")
+                ? "bg-vb-600/15 text-vb-300"
+                : "text-ink-500 hover:text-ink-300",
             )}
           >
             {option === "redeem" ? "I have a permit" : "I already keep a place"}
@@ -159,6 +188,57 @@ function PermitDesk() {
         ))}
       </div>
 
+      {mode === "forgot" ? (
+        <div className="space-y-5">
+          {sentTo ? (
+            <>
+              <p className="text-sm text-ink-300 leading-relaxed">
+                If <span className="text-ink-100">{sentTo}</span> keeps a place here, a link is on its way
+                to it. It works once, for an hour. If nothing arrives in a few minutes, check spam —
+                and check it&apos;s the address you redeemed your permit with.
+              </p>
+              <button
+                onClick={() => setSentTo(null)}
+                className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
+              >
+                Send it again
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-ink-400 leading-relaxed">
+                The town will mail a link to the address you redeemed your permit with. Open it and
+                choose a new passphrase; your place and everything in it stay exactly as they are.
+              </p>
+              <Field label="Your email address" error={fields.email}>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter" && !busy) void submit(); }}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  className={inputClass}
+                />
+              </Field>
+
+              {trouble && <Trouble>{trouble}</Trouble>}
+
+              <button onClick={() => void submit()} disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                Mail me a link
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => switchTo("signin")}
+            className="text-sm text-ink-500 hover:text-ink-300 transition-colors inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            back to signing in
+          </button>
+        </div>
+      ) : (
       <div className="space-y-5">
         {mode === "redeem" && (
           <Field
@@ -182,7 +262,13 @@ function PermitDesk() {
           </Field>
         )}
 
-        <Field label="Your email address" hint="How the town reaches you. It is never shown on your page." error={fields.email}>
+        <Field
+          label="Your email address"
+          hint={mode === "redeem"
+            ? "How the town reaches you, and where it sends a link if you ever forget your passphrase. It is never shown on your page."
+            : undefined}
+          error={fields.email}
+        >
           <input
             type="email"
             value={email}
@@ -194,9 +280,9 @@ function PermitDesk() {
         </Field>
 
         <Field
-          label="A passphrase"
+          label={mode === "redeem" ? "Choose a passphrase" : "Your passphrase"}
           hint={mode === "redeem"
-            ? `At least ${PASSPHRASE_MIN} characters. A short sentence you'll remember beats a clever word.`
+            ? `You'll sign in with this and your email address. At least ${PASSPHRASE_MIN} characters — a short sentence you'll remember beats a clever word.`
             : undefined}
           error={fields.passphrase}
         >
@@ -223,6 +309,115 @@ function PermitDesk() {
             open a place with it — so there is no rush from here.
           </p>
         )}
+
+        {mode === "signin" && (canMail ? (
+          <button
+            onClick={() => switchTo("forgot")}
+            className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
+          >
+            Forgot your passphrase?
+          </button>
+        ) : (
+          <p className="text-sm text-ink-500">
+            Forgot your passphrase?{" "}
+            <a href={`${COFFEEHOUSE}/contact`} className="text-vb-400 hover:text-vb-300 transition-colors">
+              Write to the town
+            </a>
+            .
+          </p>
+        ))}
+      </div>
+      )}
+    </div>
+  );
+}
+
+/* ── A forgotten passphrase, from the link in the mail ─────────────────── */
+
+function NewPassphraseDesk({ token, onLeave }: { token: string; onLeave: () => void }) {
+  const [passphrase, setPassphrase] = useState("");
+  const [again, setAgain] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [trouble, setTrouble] = useState<string | null>(null);
+  const [fields, setFields] = useState<Record<string, string>>({});
+
+  const submit = async () => {
+    setTrouble(null);
+    setFields({});
+    // Typed twice because this is the one form nobody remembers filling in.
+    if (passphrase !== again) {
+      setFields({ again: "The two don't match." });
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/town-hall/reset", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, passphrase }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        setTrouble(body.error ?? "That did not go through.");
+        setFields(body.fields ?? {});
+        return;
+      }
+      // Signed in by the same reply. The token is already out of the address
+      // bar, so a reload lands on the keeper's own desk.
+      window.location.reload();
+    } catch {
+      setTrouble("Could not reach the town hall. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="glass-card p-8 max-w-xl">
+      <h3 className="font-display text-xl text-white mb-2">Choose a new passphrase</h3>
+      <p className="text-sm text-ink-400 leading-relaxed mb-6">
+        This signs you in here, and out everywhere else.
+      </p>
+
+      <div className="space-y-5">
+        <Field
+          label="A new passphrase"
+          hint={`At least ${PASSPHRASE_MIN} characters. A short sentence you'll remember beats a clever word.`}
+          error={fields.passphrase}
+        >
+          <input
+            type="password"
+            value={passphrase}
+            onChange={(event) => setPassphrase(event.target.value)}
+            autoComplete="new-password"
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="The same again" error={fields.again}>
+          <input
+            type="password"
+            value={again}
+            onChange={(event) => setAgain(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter" && !busy) void submit(); }}
+            autoComplete="new-password"
+            className={inputClass}
+          />
+        </Field>
+
+        {trouble && <Trouble>{trouble}</Trouble>}
+
+        <button onClick={() => void submit()} disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+          Set it and sign in
+        </button>
+
+        <button
+          onClick={onLeave}
+          className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
+        >
+          {trouble ? "Ask for another link" : "Never mind"}
+        </button>
       </div>
     </div>
   );
@@ -1152,12 +1347,15 @@ function EstablishmentForm({
 
 export function TownHall({
   configured,
+  canMail,
   email,
   permitsInHand,
   establishments,
   wiredBells,
 }: {
   configured: boolean;
+  /** Whether this server can send a forgotten-passphrase link at all. */
+  canMail: boolean;
   email: string | null;
   permitsInHand: number;
   establishments: PublicEstablishment[];
@@ -1168,6 +1366,25 @@ export function TownHall({
   const [code, setCode] = useState("");
   const [codeTrouble, setCodeTrouble] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [deskMode, setDeskMode] = useState<DeskMode>("redeem");
+
+  // The link in the mail carries its token in the fragment, which no server
+  // and no Referer ever sees. Taken once, then wiped from the address bar and
+  // the history, because until it is used it opens the account.
+  useEffect(() => {
+    const take = () => {
+      const token = new URLSearchParams(window.location.hash.slice(1)).get("reset");
+      if (!token) return;
+      setResetToken(token);
+      window.history.replaceState({}, "", window.location.pathname + window.location.search);
+    };
+    take();
+    // Pasting the link into a tab already on this page changes only the
+    // fragment, and a fragment change reloads nothing.
+    window.addEventListener("hashchange", take);
+    return () => window.removeEventListener("hashchange", take);
+  }, []);
 
   if (!configured) {
     return (
@@ -1181,7 +1398,16 @@ export function TownHall({
     );
   }
 
-  if (!email) return <PermitDesk />;
+  if (resetToken) {
+    return (
+      <NewPassphraseDesk
+        token={resetToken}
+        onLeave={() => { setResetToken(null); setDeskMode("forgot"); }}
+      />
+    );
+  }
+
+  if (!email) return <PermitDesk canMail={canMail} initialMode={deskMode} />;
 
   const signOut = async () => {
     await fetch("/api/town-hall/session", { method: "DELETE" });

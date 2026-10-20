@@ -48,12 +48,12 @@ It is enforced in exactly one place: `openEstablishment()` in
 | The paper | `src/lib/establishment-permit.ts` | Minting a code, reading one back off somebody who typed it, hashing it. |
 | The questions | `src/lib/establishment.ts` | What an establishment record holds and what the town will accept in it. |
 | The credentials | `src/lib/keeper-rules.ts` | Browser-safe: what a well-formed address and passphrase are. |
-| The crypto | `src/lib/human-account.ts` | scrypt, and the signed session cookie. Server-only. |
+| The crypto | `src/lib/human-account.ts` | scrypt, the signed session cookie, and the signed reset link. Server-only. |
 | The cookie | `src/lib/keeper-session.ts` | Who is signed in, if anyone. |
 | The register | `src/lib/town-hall.ts` | One file, one write chain: accounts, permits, establishments. |
-| The desk | `src/components/TownHall.tsx` | Redeem, sign in, answer the questions, rewrite them later. |
+| The desk | `src/components/TownHall.tsx` | Redeem, sign in, forget, answer the questions, rewrite them later. |
 | The permit office | `src/app/api/admin/permits/` | Issue and revoke, behind `ADMIN_API_TOKEN`. |
-| The windows | `src/app/api/town-hall/` | account · session · permit · establishment |
+| The windows | `src/app/api/town-hall/` | account · session · reset · permit · establishment |
 | The pages | `src/app/verglas/town-hall/`, `src/app/verglas/e/[slug]/` | The desk, and a place's public page. |
 
 ---
@@ -576,6 +576,39 @@ out. A passphrase change does the same for one account, without a session
 table to sweep: the account carries a `sessionEpoch` folded into the
 signature, and bumping it invalidates every cookie already issued.
 
+### A forgotten passphrase
+
+The passphrase is chosen once, on the same form that redeems the permit, and
+the address typed beside it is where the town writes if it is forgotten.
+"Forgot your passphrase?" under the sign-in asks `POST /api/town-hall/reset`
+to mail a link; the link opens the desk, which asks for a new passphrase and
+sends it back with `PUT`.
+
+- **Nothing is stored.** The link is signed with `TOWN_HALL_SECRET`, like the
+  cookie, over the account id, an expiry an hour out, and the account's
+  current passphrase digest. Using it changes the digest, so it works once,
+  and every other link minted before it dies at the same moment.
+- **It rides in the fragment** (`/town-hall#reset=…`), which no server log
+  and no Referer ever carries, and the desk wipes it from the address bar as
+  soon as it reads it.
+- **Asking says nothing.** The answer is the same whether or not the address
+  keeps a place, and the lookup and the mail both run in `after()`, so the
+  reply does not take longer for a real keeper.
+- **The link is built from configuration, never the request.**
+  `VERGLAS_PUBLIC_ORIGIN`, else `https://verglas.town`. A link built from the
+  Host header would carry the token to whichever host the caller wrote there.
+- **One letter a minute per address**, keyed on what was typed rather than on
+  whether anybody holds it, so the limit cannot be used to tell either.
+- **Setting the new one signs every other device out**, the same epoch bump
+  as any passphrase change, and signs this one in.
+
+It needs the contact form's mail settings (`SMTP_*`, and `CONTACT_FROM` or
+`SMTP_USER` as the sender). With `SMTP_HOST` unset the desk offers "write to
+the town" instead of the link.
+
+The address was never verified. A keeper who mistyped it at redemption gets no
+letter, and still has to write to the town.
+
 ---
 
 ## The moderator's button
@@ -618,8 +651,9 @@ longer exists.
 
 ## What is deliberately not here
 
-- **No email verification, and no password reset.** There is nothing to reset
-  against yet. A keeper who loses their passphrase writes to the town.
+- **No email verification.** The address is taken as typed at redemption.
+  A reset link goes there and nowhere else; a keeper who mistyped it writes
+  to the town.
 - **No moderation queue.** Issuing the permit *is* the review.
 - **No CAPTCHA.** Rate limits on every endpoint, and a gate that cannot be
   automated against, are enough until they aren't.

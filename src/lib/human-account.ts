@@ -16,7 +16,8 @@
  * request has to load the account anyway, so the account carries a
  * `sessionEpoch` that is folded into the signature — which buys real
  * revocation ("sign me out everywhere", or a password change) without a
- * session store to sweep.
+ * session store to sweep. A forgotten passphrase is handled the same way: the
+ * link in the mail is signed, not stored.
  *
  * Server-side only. `node:crypto` never reaches the browser.
  */
@@ -187,4 +188,63 @@ export function readSession(value: unknown, now = Date.now()): SessionClaim | nu
   if (!Number.isSafeInteger(sessionEpoch)) return null;
 
   return { accountId, sessionEpoch };
+}
+
+/* ── Forgotten passphrases ─────────────────────────────────────────────── */
+
+/** An hour: long enough to find the mail, short enough that an old inbox is not a key. */
+export const RESET_MAX_AGE = 60 * 60;
+
+/**
+ * A link that lets somebody choose a new passphrase without the old one.
+ *
+ * Signed rather than stored, like the session — and signed over the account's
+ * current passphrase digest as well as its id and expiry. That last part is
+ * what makes it single-use with no table to keep: the moment one is used, the
+ * digest it was signed over is gone, and every other link minted before it
+ * dies with it.
+ *
+ * `r1`, not `v1`. The same secret signs sessions, and a reset link must never
+ * read as a cookie or the other way round.
+ */
+export function mintPassphraseReset(account: Account, now = Date.now()): string | null {
+  const secret = sessionSecret();
+  if (!secret) return null;
+  const expires = Math.floor(now / 1000) + RESET_MAX_AGE;
+  const payload = `r1.${account.id}.${expires}`;
+  return `${payload}.${sign(`${payload}.${account.passphrase}`, secret)}`;
+}
+
+export interface ResetClaim {
+  accountId: string;
+  payload: string;
+  mac: string;
+}
+
+/**
+ * Read a reset link back as far as it can be read without the store: its
+ * shape and its clock. Whether it still holds is `resetHolds`, once the caller
+ * has loaded the account it names.
+ */
+export function readPassphraseReset(value: unknown, now = Date.now()): ResetClaim | null {
+  if (!sessionSecret() || typeof value !== "string") return null;
+
+  const parts = value.trim().split(".");
+  if (parts.length !== 4 || parts[0] !== "r1") return null;
+
+  const [, accountId, expires, mac] = parts;
+  const expiresAt = Number(expires);
+  if (!accountId || !Number.isSafeInteger(expiresAt) || expiresAt * 1000 <= now) return null;
+
+  return { accountId, payload: `r1.${accountId}.${expires}`, mac };
+}
+
+/** True if the claim was signed over this account's passphrase as it stands now. */
+export function resetHolds(claim: ResetClaim, account: Account): boolean {
+  const secret = sessionSecret();
+  if (!secret || claim.accountId !== account.id) return false;
+
+  const expected = Buffer.from(sign(`${claim.payload}.${account.passphrase}`, secret), "utf8");
+  const given = Buffer.from(claim.mac, "utf8");
+  return expected.length === given.length && timingSafeEqual(expected, given);
 }

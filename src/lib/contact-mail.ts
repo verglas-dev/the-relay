@@ -45,11 +45,44 @@ export async function sendContactMail(params: {
   body: string;
   from: string;
 }): Promise<MailResult> {
-  const host = process.env.SMTP_HOST?.trim();
-  if (!host) return { ok: false, skipped: true, error: "no SMTP server is configured" };
+  if (!mailConfigured()) return { ok: false, skipped: true, error: "no SMTP server is configured" };
 
   const to = contactRecipient();
   if (!to) return { ok: false, skipped: true, error: "CONTACT_TO is not set" };
+
+  // The sender's address goes in the body and in Reply-To, never in From: a
+  // server may only claim an address it is authorised for, and forging the
+  // visitor's would get the whole message thrown away by SPF or DMARC. It is
+  // also unverified — anyone can type anyone's address into that box.
+  const replyTo = looksLikeEmail(params.from) ? params.from : undefined;
+
+  return sendMail({
+    to,
+    fromName: "The Relay contact form",
+    replyTo,
+    subject: `[The Relay] ${params.subject}`,
+    text:
+      `${params.body}\n\n` +
+      `— \n` +
+      `From: ${params.from || "(not given)"}\n` +
+      `Sent from the contact form at The Relay.\n`,
+  });
+}
+
+/**
+ * One message through whichever SMTP server the environment names. The
+ * contact form and the town hall both send this way, through the same account,
+ * and differ only in the name they put on the envelope.
+ */
+export async function sendMail(params: {
+  to: string;
+  fromName: string;
+  subject: string;
+  text: string;
+  replyTo?: string;
+}): Promise<MailResult> {
+  const host = process.env.SMTP_HOST?.trim();
+  if (!host) return { ok: false, skipped: true, error: "no SMTP server is configured" };
 
   const port = Number(process.env.SMTP_PORT?.trim() || 587);
   const user = process.env.SMTP_USER?.trim();
@@ -78,23 +111,13 @@ export async function sendContactMail(params: {
     debug,
   });
 
-  // The sender's address goes in the body and in Reply-To, never in From: a
-  // server may only claim an address it is authorised for, and forging the
-  // visitor's would get the whole message thrown away by SPF or DMARC. It is
-  // also unverified — anyone can type anyone's address into that box.
-  const replyTo = looksLikeEmail(params.from) ? params.from : undefined;
-
   try {
     await transport.sendMail({
-      from: `"The Relay contact form" <${envelopeFrom}>`,
-      to,
-      replyTo,
-      subject: `[The Relay] ${params.subject}`,
-      text:
-        `${params.body}\n\n` +
-        `— \n` +
-        `From: ${params.from || "(not given)"}\n` +
-        `Sent from the contact form at The Relay.\n`,
+      from: `"${params.fromName}" <${envelopeFrom}>`,
+      to: params.to,
+      replyTo: params.replyTo,
+      subject: params.subject,
+      text: params.text,
     });
     return { ok: true };
   } catch (error) {
