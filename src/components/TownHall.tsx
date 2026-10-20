@@ -191,19 +191,11 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
       {mode === "forgot" ? (
         <div className="space-y-5">
           {sentTo ? (
-            <>
-              <p className="text-sm text-ink-300 leading-relaxed">
-                If <span className="text-ink-100">{sentTo}</span> keeps a place here, a link is on its way
-                to it. It works once, for an hour. If nothing arrives in a few minutes, check spam —
-                and check it&apos;s the address you redeemed your permit with.
-              </p>
-              <button
-                onClick={() => setSentTo(null)}
-                className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
-              >
-                Send it again
-              </button>
-            </>
+            <p className="text-sm text-ink-300 leading-relaxed">
+              If <span className="text-ink-100">{sentTo}</span> keeps a place here, a link is on its way
+              to it. It works once, for an hour. If nothing arrives in a few minutes, check spam —
+              and check it&apos;s the address you redeemed your permit with.
+            </p>
           ) : (
             <>
               <p className="text-sm text-ink-400 leading-relaxed">
@@ -230,13 +222,23 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
               </button>
             </>
           )}
-          <button
-            onClick={() => switchTo("signin")}
-            className="text-sm text-ink-500 hover:text-ink-300 transition-colors inline-flex items-center gap-1.5"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            back to signing in
-          </button>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <button
+              onClick={() => switchTo("signin")}
+              className="text-sm text-ink-500 hover:text-ink-300 transition-colors inline-flex items-center gap-1.5"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              back to signing in
+            </button>
+            {sentTo && (
+              <button
+                onClick={() => setSentTo(null)}
+                className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
+              >
+                Send it again
+              </button>
+            )}
+          </div>
         </div>
       ) : (
       <div className="space-y-5">
