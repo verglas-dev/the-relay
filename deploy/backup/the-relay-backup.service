@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up the-relay volumes and host config
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/the-relay-backup
+TimeoutStartSec=30min
+# The box is small and serves the live site, so the site goes first.
+Nice=10
+IOSchedulingClass=idle

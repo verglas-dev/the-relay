@@ -195,6 +195,19 @@ Pairing it with `BIND_ADDR=0.0.0.0` publishes the relay to the internet *and*
 tells it to believe whatever address arrives in a header — strictly worse than
 either mistake alone.
 
+### If a host sits behind Cloudflare
+
+Behind Cloudflare, nginx sees Cloudflare's addresses rather than the visitor's,
+and needs `real_ip_header CF-Connecting-IP` to recover the real one. Believe that
+header only from Cloudflare itself: install
+[`deploy/nginx/cloudflare-real-ip.conf`](../deploy/nginx/cloudflare-real-ip.conf)
+as `/etc/nginx/conf.d/cloudflare-real-ip.conf`.
+
+**Never write `set_real_ip_from 0.0.0.0/0`.** The origin can be reached directly,
+so that lets any caller send the header and name their own address. nginx passes
+it on as `X-Real-IP`, the relay believes nginx, and every per-address limit in the
+stack stops meaning anything.
+
 ### Why it matters
 
 Every limit the relay enforces per address — 50 concurrent connections, 60 REQ
@@ -357,6 +370,45 @@ docker cp the-relay:/data/relay.db.bak ./backup.db
 For automated backups, add a cron job:
 ```cron
 0 2 * * * cp /var/data/relay.db /var/backups/the-relay-$(date +\%F).db
+```
+
+### Backing up a Compose deploy
+
+The relay's database is only part of it. The UI volume holds the town hall, the
+vault, and the guest rooms, and nobody can reconstruct those. `deploy/backup/`
+snapshots both volumes plus `.env` and the nginx config, reads every archive back
+to prove it, and keeps 30 days of them in `/var/backups/the-relay`:
+
+```bash
+install -m 755 deploy/backup/the-relay-backup.sh /usr/local/sbin/the-relay-backup
+install -m 644 deploy/backup/the-relay-backup.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now the-relay-backup.timer
+```
+
+The script assumes the Compose project is `voicebox`; set `COMPOSE_PROJECT` in the
+service if yours differs. See whether it has been running:
+
+```bash
+systemctl list-timers the-relay-backup.timer
+journalctl -u the-relay-backup.service -n 5
+```
+
+These archives sit on the same disk as the data, so they cover mistakes and
+corruption but not losing the server. Copying them elsewhere is a separate job,
+and `host-config.tar.gz` holds every live secret, so encrypt them first.
+
+To restore, stop both services first. The relay holds its database in memory and
+rewrites the whole file, so a running relay would overwrite what you put back.
+
+```bash
+docker compose stop ui relay
+B=/var/backups/the-relay/<stamp>
+docker run --rm --network none -v voicebox_relay-data:/data -v "$B":/b:ro \
+  alpine tar xzf /b/relay-data.tar.gz -C /data
+docker run --rm --network none -v voicebox_ui-admin-data:/data -v "$B":/b:ro \
+  alpine tar xzf /b/ui-admin-data.tar.gz -C /data
+docker compose start relay ui
 ```
 
 ---

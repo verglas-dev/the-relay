@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly backup of the-relay
+
+[Timer]
+OnCalendar=*-*-* 09:17:00 UTC
+# A night the box was down gets its backup at the next boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
