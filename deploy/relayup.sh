@@ -19,7 +19,7 @@ set -euo pipefail
 REPO_DIR="${RELAY_DIR:-/root/the-relay}"
 STATE_FILE="${RELAY_STATE_FILE:-/var/lib/the-relay/relay-commit}"
 HEALTH_WAIT_SECONDS="${HEALTH_WAIT_SECONDS:-90}"
-PROJECT=voicebox
+PROJECT="${RELAY_PROJECT:-voicebox}"
 SITES=(https://the-relay.app/ https://verglas.town/ https://verglas.town/street)
 
 force_relay=false
@@ -60,28 +60,51 @@ relay_is_healthy() {
 ui_check() { wait_for sites_answer; }
 relay_check() { wait_for relay_is_healthy; }
 
-# Build first, so a failed build leaves the site exactly as it was. Keep whatever
-# is running under a rollback tag, because the build moves `latest` off it.
+# Build first, so a failed build leaves the site exactly as it was.
+#
+# The running image has to be tagged before that build. `docker compose build`
+# forgets the image `latest` moves off, even while a container is running it, and
+# after that it cannot be found by its ID. If it is already lost that way, `latest`
+# is the nearest thing left. The rollback tag only moves once the build has produced
+# something different, so a deploy that changes nothing keeps the real way back.
+#
+# "Different" has to mean the contents. Every compose build gets a new image ID,
+# even when nothing changed.
+fingerprint() {
+  docker image inspect --format '{{json .RootFS.Layers}}{{json .Config}}' "$1"
+}
+
 deploy_service() {
   local service="$1" check="$2" image="$PROJECT-$1"
-  local container previous="" new can_roll_back=false
+  local container previous before="" kept=false can_roll_back=false
 
   container="$(docker compose ps -q "$service")"
   if [ -n "$container" ]; then
     previous="$(docker inspect --format '{{.Image}}' "$container")"
-  fi
-
-  say "Building $service"
-  docker compose build "${build_flags[@]}" "$service" ||
-    die "the $service build failed. The site is untouched."
-
-  new="$(docker image inspect --format '{{.Id}}' "$image:latest")"
-  if [ -n "$previous" ] && [ "$previous" != "$new" ]; then
-    if docker tag "$previous" "$image:rollback" 2>/dev/null; then
-      can_roll_back=true
+    if docker tag "$previous" "$image:pre-deploy" 2>/dev/null ||
+      docker tag "$image:latest" "$image:pre-deploy" 2>/dev/null; then
+      kept=true
+      before="$(fingerprint "$image:pre-deploy")"
     else
       say "Could not keep the running $service as a rollback; continuing without one"
     fi
+  fi
+
+  say "Building $service"
+  if ! docker compose build "${build_flags[@]}" "$service"; then
+    if "$kept"; then docker rmi "$image:pre-deploy" > /dev/null 2>&1 || true; fi
+    die "the $service build failed. The site is untouched."
+  fi
+
+  if "$kept"; then
+    if [ "$before" = "$(fingerprint "$image:latest")" ]; then
+      # Nothing changed, so leave things as they were found: what is running keeps
+      # its name, and the rebuilt copy of it is forgotten.
+      docker tag "$image:pre-deploy" "$image:latest"
+    elif docker tag "$image:pre-deploy" "$image:rollback"; then
+      can_roll_back=true
+    fi
+    docker rmi "$image:pre-deploy" > /dev/null 2>&1 || true
   fi
 
   say "Starting $service"
@@ -176,4 +199,8 @@ deploy_service ui ui_check
 docker image prune -f > /dev/null || true
 
 say "Live: $(git log -1 --format='%h %s')"
-say "To go back: docker tag $PROJECT-ui:rollback $PROJECT-ui:latest && docker compose up -d --no-deps ui"
+if docker image inspect "$PROJECT-ui:rollback" > /dev/null 2>&1; then
+  say "To go back: docker tag $PROJECT-ui:rollback $PROJECT-ui:latest && docker compose up -d --no-deps ui"
+else
+  say "No earlier version is kept yet, so there is nothing to go back to"
+fi
