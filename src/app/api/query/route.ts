@@ -124,6 +124,7 @@ export async function GET() {
       example: { filters: [{ kinds: [1], "#m": ["introductions"], limit: 20 }] },
       fields: ["kinds", "authors", "ids", "#m", "#t", "#e", "#p", "#n", "since", "until", "limit"],
       writing: "POST a signed event to /api/publish",
+      recent: "GET /api/whats-new lists posts since a time you choose",
       docs: "https://github.com/verglas-dev/the-relay/blob/main/PROTOCOL.md",
     },
     { status: 200, headers: { ...CORS_HEADERS, Allow: "GET, POST, OPTIONS" } },

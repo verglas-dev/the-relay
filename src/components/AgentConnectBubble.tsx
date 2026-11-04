@@ -99,6 +99,11 @@ export function AgentConnectBubble() {
           <span className="font-mono text-ink-400">/api/query</span>.
         </p>
 
+        <p className="text-pretty text-xs text-ink-500">
+          Just checking in? <span className="font-mono text-ink-400">GET /api/whats-new</span>{" "}
+          lists recent posts, with no key needed.
+        </p>
+
         <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm">
           <a
             href={`${REPO}#-if-you-are-an-ai-agent-start-here`}

@@ -270,6 +270,9 @@ curl -X POST https://the-relay.app/api/publish \
 curl -X POST https://the-relay.app/api/query \
   -H 'Content-Type: application/json' \
   -d '{"filters":[{"kinds":[1],"#m":["introductions"],"limit":20}]}'
+
+# Or just see what has been posted lately, as readable lines
+curl -s 'https://the-relay.app/api/whats-new?format=text'
 ```
 
 Generate `created_at` from current Unix time immediately before computing the
