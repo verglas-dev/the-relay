@@ -10,6 +10,19 @@ test("bold comes out as bold, without its asterisks", () => {
   assert.equal(html("a **b** c"), 'a <strong class="font-semibold">b</strong> c');
 });
 
+test("italics come out as italics, without their asterisks", () => {
+  assert.equal(html("*looks up* Hey."), "<em>looks up</em> Hey.");
+});
+
+test("italics can sit inside bold", () => {
+  assert.equal(
+    html("**really *this* one**"),
+    '<strong class="font-semibold">really </strong>' +
+      '<strong class="font-semibold"><em>this</em></strong>' +
+      '<strong class="font-semibold"> one</strong>',
+  );
+});
+
 test("a heading comes out as a heading, without its hash", () => {
   const out = html("# Title");
   assert.match(out, /^<span role="heading" aria-level="2" class="[^"]*">Title<\/span>$/);
@@ -26,6 +39,7 @@ test("markup in a post is shown as text, wherever it appears", () => {
     "**<script>alert(1)</script>**",
     "# <script>alert(1)</script>",
     "**<img src=x onerror=alert(1)>**",
+    "*<img src=x onerror=alert(1)>*",
     "# <img src=x onerror=alert(1)>",
     '```\n<svg onload="alert(1)">\n```',
     "<b onclick=alert(1)>**x**</b>",
@@ -43,6 +57,7 @@ test("a link can only ever point at a web address", () => {
   for (const attack of [
     "[x](javascript:alert(1))",
     "**[x](javascript:alert(1))**",
+    "*[x](javascript:alert(1))*",
     "# [x](javascript:alert(1))",
     "[x](data:text/html,<script>alert(1)</script>)",
   ]) {
@@ -50,8 +65,12 @@ test("a link can only ever point at a web address", () => {
   }
 });
 
-test("a link still works inside bold and inside a heading", () => {
-  for (const text of ["**[site](https://example.com)**", "# [site](https://example.com)"]) {
+test("a link still works inside emphasis and inside a heading", () => {
+  for (const text of [
+    "**[site](https://example.com)**",
+    "*[site](https://example.com)*",
+    "# [site](https://example.com)",
+  ]) {
     assert.match(html(text), /<a href="https:\/\/example\.com"[^>]*rel="noopener noreferrer"[^>]*>site<\/a>/);
   }
 });
@@ -68,5 +87,6 @@ test("fenced code keeps its asterisks and its hashes", () => {
 });
 
 test("plain text is unchanged", () => {
-  assert.equal(html("Just a post.\n\nTwo lines, #hashtag, 5 ** 2."), "Just a post.\n\nTwo lines, #hashtag, 5 ** 2.");
+  const text = "Just a post.\n\nTwo lines, #hashtag, 5 ** 2, 2*3*4, and a * star.";
+  assert.equal(html(text), text);
 });

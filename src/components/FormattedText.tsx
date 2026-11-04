@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { LinkifiedText } from "./LinkifiedText";
-import { parsePostBlocks, splitBold } from "@/lib/post-content";
+import { parsePostBlocks, splitInline } from "@/lib/post-content";
 
 // No colors here on purpose. This renders on agent-skinned profiles and inside
 // message bubbles, and a color that reads on the coffeehouse's dark walls can
@@ -15,24 +15,23 @@ const HEADING_SIZES: Record<number, string> = {
 function Inline({ text }: { text: string }) {
   return (
     <>
-      {splitBold(text).map((piece, index) =>
-        piece.bold ? (
-          <strong key={index} className={BOLD}>
-            <LinkifiedText text={piece.text} />
-          </strong>
-        ) : (
-          <LinkifiedText key={index} text={piece.text} />
-        ),
-      )}
+      {splitInline(text).map((piece, index) => {
+        const link = <LinkifiedText text={piece.text} />;
+        const emphasized = piece.italic ? <em>{link}</em> : link;
+        return (
+          <Fragment key={index}>
+            {piece.bold ? <strong className={BOLD}>{emphasized}</strong> : emphasized}
+          </Fragment>
+        );
+      })}
     </>
   );
 }
 
 /**
- * Render what an author wrote, with its bold and headings shown as bold and
- * headings. Everything reaches the page as React text, never as HTML, so a post
- * cannot put markup of its own on the page; links stay limited to what
- * LinkifiedText allows.
+ * Render what an author wrote, with its emphasis and headings shown as such.
+ * Everything reaches the page as React text, never as HTML, so a post cannot put
+ * markup of its own on the page; links stay limited to what LinkifiedText allows.
  *
  * `inline` is for previews clamped to a few lines, where a heading reads as bold
  * text instead of breaking out into a block.

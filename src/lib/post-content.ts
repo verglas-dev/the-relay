@@ -11,6 +11,7 @@ export type PostBlock =
 export interface InlinePiece {
   text: string;
   bold: boolean;
+  italic: boolean;
 }
 
 // The caps below are what keep this cheap. Content is written by strangers and
@@ -20,9 +21,10 @@ export interface InlinePiece {
 const HEADING = /^ {0,3}(#{1,6})[ \t]+(\S.{0,299})$/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
-// Code and addresses come first so that their asterisks are not taken for bold.
+// Code and addresses come first so that their asterisks are not taken for
+// emphasis. Group 1 is bold, group 2 is italic.
 const INLINE =
-  /`[^`\n]{1,1000}`|\[[^\]\n]{1,1000}\]\(https?:\/\/[^\s)]+\)|(?:https?:\/\/|www\.)[^\s<]+|\*\*(?=[^\s*])([^\n]{0,1000}?[^\s*])\*\*(?!\*)/gi;
+  /`[^`\n]{1,1000}`|\[[^\]\n]{1,1000}\]\(https?:\/\/[^\s)]+\)|(?:https?:\/\/|www\.)[^\s<]+|\*\*(?=[^\s*])([^\n]{0,1000}?[^\s*])\*\*(?!\*)|\*(?=[^\s*])([^*\n]{0,1000}?[^\s*])\*(?![\p{L}\p{N}*])/giu;
 const WORD_OR_STAR = /[\p{L}\p{N}*]/u;
 
 function readHeading(line: string): { level: number; text: string } | null {
@@ -77,45 +79,52 @@ export function parsePostBlocks(content: string): PostBlock[] {
 }
 
 /**
- * Split a run of text around its `**bold**` spans. Opening asterisks need a
- * non-space after them, closing ones a non-space before, and an opener cannot sit
- * against the end of a word, so `5 ** 2 ** 3` and `x**2 + y**2` keep their
- * meaning. Getting one of these wrong the other way would only leave asterisks
- * showing, which is the better failure.
+ * Split a run of text around its `**bold**` and `*italic*` spans. Opening
+ * asterisks need a non-space after them, closing ones a non-space before, and an
+ * opener cannot sit against the end of a word, so `5 * 2 * 3`, `2*3*4`, and
+ * `x**2 + y**2` keep their meaning. Getting one of these wrong the other way would
+ * only leave asterisks showing, which is the better failure.
  */
-export function splitBold(text: string): InlinePiece[] {
+export function splitInline(text: string): InlinePiece[] {
   const pieces: InlinePiece[] = [];
+  const inline = new RegExp(INLINE);
   let cursor = 0;
 
-  INLINE.lastIndex = 0;
-  for (let match = INLINE.exec(text); match; match = INLINE.exec(text)) {
-    if (match[1] === undefined) continue;
+  for (let match = inline.exec(text); match; match = inline.exec(text)) {
+    const [whole, bold, italic] = match;
+    if (bold === undefined && italic === undefined) continue;
 
     if (match.index > 0 && WORD_OR_STAR.test(text[match.index - 1])) {
-      INLINE.lastIndex = match.index + 2;
+      inline.lastIndex = match.index + 1;
       continue;
     }
 
     if (match.index > cursor) {
-      pieces.push({ text: text.slice(cursor, match.index), bold: false });
+      pieces.push({ text: text.slice(cursor, match.index), bold: false, italic: false });
     }
-    pieces.push({ text: match[1], bold: true });
-    cursor = match.index + match[0].length;
+    if (bold !== undefined) {
+      for (const inner of splitInline(bold)) pieces.push({ ...inner, bold: true });
+    } else {
+      pieces.push({ text: italic, bold: false, italic: true });
+    }
+    cursor = match.index + whole.length;
   }
 
-  if (cursor < text.length) pieces.push({ text: text.slice(cursor), bold: false });
+  if (cursor < text.length) {
+    pieces.push({ text: text.slice(cursor), bold: false, italic: false });
+  }
   return pieces;
 }
 
 /**
- * The same content with its bold and heading markers removed, for places that
- * show one flat line of it: titles, search results, notifications.
+ * The same content with its emphasis and heading markers removed, for places
+ * that show one flat line of it: titles, search results, notifications.
  */
 export function plainPostText(content: string): string {
   return parsePostBlocks(content)
     .map((block) => {
       if (block.kind === "verbatim") return block.text;
-      const text = splitBold(block.text).map((piece) => piece.text).join("");
+      const text = splitInline(block.text).map((piece) => piece.text).join("");
       return block.kind === "heading" ? `${text}\n` : text;
     })
     .join("")
