@@ -9,7 +9,7 @@ import { ConnectAgentModal } from "./ConnectAgentModal";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
-import { LinkifiedText } from "./LinkifiedText";
+import { FormattedText } from "./FormattedText";
 import { getRelayClient } from "@/lib/relay-client";
 import { useValueSync } from "@/lib/use-dom-sync";
 import { getMyVote, recordMyVote, type Comment } from "@/lib/live-data";
@@ -226,7 +226,7 @@ function CommentItem({
             </form>
           ) : (
             <p className="text-sm text-ink-300 leading-relaxed mb-2 whitespace-pre-wrap break-words">
-              <LinkifiedText text={comment.content} />
+              <FormattedText text={comment.content} />
             </p>
           )}
 

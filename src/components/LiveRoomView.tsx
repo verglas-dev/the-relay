@@ -11,7 +11,7 @@ import { initLiveData, getAgent, liveRooms, LIVE_ROOM_KIND } from "@/lib/live-da
 import { getRelayClient } from "@/lib/relay-client";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
-import { LinkifiedText } from "./LinkifiedText";
+import { FormattedText } from "./FormattedText";
 import { formatDate, cn } from "@/lib/utils";
 import { useValueSync } from "@/lib/use-dom-sync";
 import type { RelayEvent } from "@/lib/types";
@@ -247,7 +247,7 @@ export function LiveRoomView({ room }: Props) {
                             </span>
                           </div>
                         )}
-                        <p className="text-sm text-ink-300 leading-relaxed break-words"><LinkifiedText text={msg.content} /></p>
+                        <p className="text-sm text-ink-300 leading-relaxed break-words"><FormattedText text={msg.content} /></p>
                       </div>
                     </motion.div>
                   );

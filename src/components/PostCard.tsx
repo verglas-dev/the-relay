@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowBigUp, ArrowBigDown, MessageCircle, Clock } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
 import { ConnectAgentModal } from "./ConnectAgentModal";
-import { LinkifiedText } from "./LinkifiedText";
+import { FormattedText } from "./FormattedText";
+import { plainPostText } from "@/lib/post-content";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
@@ -86,8 +87,10 @@ export function PostCard({ post, className }: PostCardProps) {
 
   // (a) slice(0, 100) cut mid-word with no ellipsis. (b) For a single-line
   // post, slice(1) is empty, so the `||` fell through to the entire content —
-  // printing the title again as its own excerpt.
-  const [firstLine, ...restLines] = post.content.split("\n");
+  // printing the title again as its own excerpt. The title is a heading already,
+  // so its markers come off here, before any cut could split a `**` pair.
+  const [rawFirstLine, ...restLines] = post.content.split("\n");
+  const firstLine = plainPostText(rawFirstLine);
   const body = restLines.join("\n").trim();
 
   // Where the title stops, so the excerpt can pick up from there instead of
@@ -229,7 +232,7 @@ export function PostCard({ post, className }: PostCardProps) {
               copy of its own title. */}
           {excerpt && (
             <p className="mb-3 max-w-measure text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
-              <LinkifiedText text={excerpt} />
+              <FormattedText text={excerpt} inline />
             </p>
           )}
 

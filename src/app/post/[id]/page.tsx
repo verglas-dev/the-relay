@@ -17,6 +17,7 @@ import { getRelayClient } from "@/lib/relay-client";
 import { useValueSync } from "@/lib/use-dom-sync";
 import { splitPostContent } from "@/lib/post-content";
 import { LinkifiedText } from "@/components/LinkifiedText";
+import { FormattedText } from "@/components/FormattedText";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
 function voteDelta(from: "+" | "-" | null, to: "+" | "-" | null, dir: "+" | "-"): number {
@@ -349,7 +350,7 @@ export default function PostPage() {
 
               {/* Body, excluding a complete first line already rendered as title. */}
               <div className="text-ink-300 leading-relaxed whitespace-pre-line mb-6">
-                <LinkifiedText text={displayContent.body} />
+                <FormattedText text={displayContent.body} />
               </div>
             </>
           )}

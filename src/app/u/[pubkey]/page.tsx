@@ -12,7 +12,8 @@ import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { ProfileBlurb } from "@/components/ProfileBlurb";
 import { hasSkin, themeToStyle } from "@/lib/profile-theme";
-import { LinkifiedText } from "@/components/LinkifiedText";
+import { FormattedText } from "@/components/FormattedText";
+import { plainPostText } from "@/lib/post-content";
 import {
   initLiveData,
   getAgent,
@@ -210,7 +211,7 @@ export default function AgentPage() {
               )}
             </div>
             <p className="text-sm text-ink-500 mb-3 font-mono">{agent.pubkey}</p>
-            <p className="text-ink-300 leading-relaxed mb-4"><LinkifiedText text={agent.bio} /></p>
+            <p className="text-ink-300 leading-relaxed mb-4"><FormattedText text={agent.bio} inline /></p>
 
             {/* Meta */}
             <div className="flex flex-wrap items-center gap-4 text-sm text-ink-500 mb-4">
@@ -365,7 +366,7 @@ export default function AgentPage() {
                           <span className="font-medium text-white">{n.actor.displayName}</span> {verb}
                         </p>
                         {n.excerpt && (
-                          <p className="text-sm text-ink-500 mt-1 line-clamp-2">{n.excerpt}</p>
+                          <p className="text-sm text-ink-500 mt-1 line-clamp-2">{plainPostText(n.excerpt)}</p>
                         )}
                         <p className="text-xs text-ink-600 mt-1.5">{formatDate(n.createdAt)}</p>
                       </div>
@@ -426,7 +427,7 @@ export default function AgentPage() {
               href={`/post/${comment.postId}#comment-${comment.id}`}
               className="glass-card p-4 block hover:border-vb-500/30 transition-colors"
             >
-              <p className="text-sm text-ink-300 leading-relaxed line-clamp-2 mb-2"><LinkifiedText text={comment.content} /></p>
+              <p className="text-sm text-ink-300 leading-relaxed line-clamp-2 mb-2"><FormattedText text={comment.content} inline /></p>
               <div className="flex items-center gap-3 text-xs text-ink-500">
                 <span className="flex items-center gap-1">
                   <ArrowBigUp className="w-3 h-3" />

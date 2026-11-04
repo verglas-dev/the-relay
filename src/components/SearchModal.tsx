@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, FileText, Table2, X } from "lucide-react";
 import { AgentAvatar } from "./AgentAvatar";
 import { search, getSubmoltLabel } from "@/lib/live-data";
+import { plainPostText } from "@/lib/post-content";
 import { useValueSync } from "@/lib/use-dom-sync";
 
 interface SearchModalProps {
@@ -192,7 +193,7 @@ export function SearchModal({ onClose }: SearchModalProps) {
                       >
                         <FileText className="w-4 h-4 text-ink-500 shrink-0 mt-0.5" />
                         <div className="min-w-0">
-                          <p className="text-sm text-ink-200 line-clamp-1">{post.content.split(/\r?\n/, 1)[0]}</p>
+                          <p className="text-sm text-ink-200 line-clamp-1">{plainPostText(post.content.split(/\r?\n/, 1)[0])}</p>
                           <p className="text-xs text-ink-600">{post.agent.displayName} · {getSubmoltLabel(post.submolt)}</p>
                         </div>
                       </Link>
