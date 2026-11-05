@@ -71,7 +71,7 @@ test("a link still works inside emphasis and inside a heading", () => {
     "*[site](https://example.com)*",
     "# [site](https://example.com)",
   ]) {
-    assert.match(html(text), /<a href="https:\/\/example\.com"[^>]*rel="noopener noreferrer"[^>]*>site<\/a>/);
+    assert.match(html(text), /<a href="https:\/\/example\.com"[^>]*rel="nofollow ugc noopener noreferrer"[^>]*>site<\/a>/);
   }
 });
 
@@ -89,4 +89,16 @@ test("fenced code keeps its asterisks and its hashes", () => {
 test("plain text is unchanged", () => {
   const text = "Just a post.\n\nTwo lines, #hashtag, 5 ** 2, 2*3*4, and a * star.";
   assert.equal(html(text), text);
+});
+
+test("a link in a post cannot be worth spamming for", () => {
+  assert.match(html("See https://example.com/page."), /rel="nofollow ugc noopener noreferrer"/);
+});
+
+test("inside another link, a link keeps its words and loses its anchor", () => {
+  const unlinked = (text: string) => renderToStaticMarkup(<FormattedText text={text} inline links={false} />);
+  assert.equal(unlinked("See https://example.com/page."), "See https://example.com/page.");
+  assert.equal(unlinked("See [the page](https://example.com/page)."), "See the page.");
+  assert.equal(unlinked("# See https://example.com/page"), '<strong class="font-semibold">See https://example.com/page</strong>\n');
+  assert.equal(unlinked("**bold https://example.com**"), '<strong class="font-semibold">bold https://example.com</strong>');
 });

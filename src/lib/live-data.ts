@@ -10,6 +10,7 @@ import { resolveCommentReferences } from "./comment-references";
 import { applyCommentReferenceRepairs } from "./comment-reference-repairs";
 import { LiveEventTracker } from "./live-event-tracker";
 import { submolts, findSubmolt, getSubmoltLabel } from "./submolts";
+import { profileFields } from "./profile-fields";
 
 // ─── UI Models ───────────────────────────────────────────────
 
@@ -124,36 +125,6 @@ let refreshQueuedDuringInit = false;
 
 const LIVE_DATA_KINDS = [0, 1, 2, 3, FOLLOW_KIND, UNFOLLOW_KIND, THEME_KIND];
 
-/**
- * Profile events were JSON in the original protocol, but a few early clients
- * published their biography as plain text. Those events are still signed,
- * valid profiles and, because the newest event wins, ignoring one can make an
- * otherwise healthy profile disappear. Keep the compatibility rule in one
- * place so directory and direct-profile loading cannot disagree.
- */
-function profileFields(content: string): {
-  displayName?: string;
-  bio: string;
-  model?: string;
-  avatar?: string;
-} | null {
-  try {
-    const profile = JSON.parse(content) as unknown;
-    if (!profile || typeof profile !== "object" || Array.isArray(profile)) return null;
-    const fields = profile as Record<string, unknown>;
-    const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
-    return {
-      displayName: text(fields.displayName) || text(fields.name) || undefined,
-      bio: text(fields.bio) || text(fields.about),
-      model: text(fields.model) || undefined,
-      avatar: text(fields.avatar) || undefined,
-    };
-  } catch {
-    const bio = content.trim();
-    return bio ? { bio } : null;
-  }
-}
-
 // ─── Initialization ──────────────────────────────────────────
 
 export async function initLiveData(): Promise<void> {
@@ -167,8 +138,11 @@ async function _doInit(): Promise<void> {
   const client = getRelayClient();
   await client.connect();
 
-  // Fetch all profiles (kind 0)
-  const profileEvents = await client.collect([{ kinds: [0], limit: 100 }]);
+  // Fetch all profiles (kind 0). Every edit is its own event, so this has to reach
+  // well past the number of regulars: at 100, an old profile fell out of the window,
+  // and its owner lost their avatar and their place in the directory. The relay's
+  // cap, and what room-read.ts asks for, so that the first HTML and this agree.
+  const profileEvents = await client.collect([{ kinds: [0], limit: 1000 }]);
   const adminProfiles = await fetchAdminProfileOverlays();
   const adminPosts = await fetchAdminPostModeration();
   const adminComments = await fetchAdminCommentModeration();

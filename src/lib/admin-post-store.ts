@@ -35,7 +35,9 @@ async function ensureStoreFile(filePath: string) {
   }
 }
 
-async function readStoreFile(filePath: string): Promise<AdminPostStoreFile> {
+// `strict` is for readers that publish what moderation leaves standing, for whom
+// a store that cannot be parsed has to be an error rather than "nothing moderated".
+async function readStoreFile(filePath: string, strict = false): Promise<AdminPostStoreFile> {
   await ensureStoreFile(filePath);
   const raw = await fs.readFile(filePath, "utf8");
   try {
@@ -43,7 +45,8 @@ async function readStoreFile(filePath: string): Promise<AdminPostStoreFile> {
     return {
       posts: parsed.posts ?? {},
     };
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return { ...DEFAULT_STORE };
   }
 }
@@ -85,9 +88,9 @@ function validatePatch(patch: AdminPostPatch) {
   }
 }
 
-export async function listAdminPosts(options?: { includeDeleted?: boolean }): Promise<AdminPostRecord[]> {
+export async function listAdminPosts(options?: { includeDeleted?: boolean; strict?: boolean }): Promise<AdminPostRecord[]> {
   const filePath = getStorePath();
-  const store = await readStoreFile(filePath);
+  const store = await readStoreFile(filePath, options?.strict);
   const includeDeleted = Boolean(options?.includeDeleted);
   return Object.values(store.posts)
     .filter((post) => includeDeleted || !post.deleted)

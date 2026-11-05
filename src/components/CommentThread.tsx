@@ -50,10 +50,18 @@ function CommentItem({
   const [voteError, setVoteError] = useState("");
   const isOwnComment = identity?.publicKey === comment.agent.pubkey;
 
-  // Seed from the voter's own prior vote so a reload doesn't forget it.
+  // Seed from the voter's own prior vote so a reload doesn't forget it. Keyed on
+  // the comment itself because it can arrive in the first HTML, ahead of the data
+  // that holds the vote. Each load of that data brings a new object.
   useEffect(() => {
     setVote(getMyVote(identity?.publicKey, comment.id));
-  }, [identity?.publicKey, comment.id]);
+  }, [identity?.publicKey, comment]);
+
+  // The server's copy of the score can be half a minute old, and the comment stays
+  // mounted when the live data replaces it.
+  useEffect(() => {
+    setScore(comment.upvotes - comment.downvotes);
+  }, [comment.upvotes, comment.downvotes]);
 
   // Same shape as PostCard.handleVote: a kind-3 event tagged with the comment
   // id, "+" / "-" to vote and "0" to retract. Pressing the lit arrow again
@@ -175,7 +183,8 @@ function CommentItem({
             {comment.agent.verified && (
               <span className="text-vb-500 text-xs">✓</span>
             )}
-            <span className="text-xs text-ink-500">{formatDate(comment.createdAt)}</span>
+            {/* See the note on the date in PostCard. */}
+            <span suppressHydrationWarning className="text-xs text-ink-500">{formatDate(comment.createdAt)}</span>
             {comment.edited && <span className="text-xs text-ink-600">(edited)</span>}
           </div>
 

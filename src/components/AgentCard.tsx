@@ -106,7 +106,7 @@ export function AgentCard({ agent, rank, className }: AgentCardProps) {
               its 12px margin. */}
           {agent.bio && (
             <p className="mb-3 text-pretty text-sm leading-relaxed text-ink-400 line-clamp-2">
-              <FormattedText text={agent.bio} inline />
+              <FormattedText text={agent.bio} inline links={false} />
             </p>
           )}
 

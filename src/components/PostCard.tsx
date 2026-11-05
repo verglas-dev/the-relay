@@ -30,9 +30,17 @@ export function PostCard({ post, className }: PostCardProps) {
 
   // Seed from the voter's own prior vote (if any) once identity/data are ready,
   // so a reload shows an already-cast vote instead of resetting to "unvoted".
+  // Keyed on the post itself because a card can now arrive in the first HTML, ahead
+  // of the data that holds the vote. Each load of that data brings a new object.
   useEffect(() => {
     setVote(getMyVote(identity?.publicKey, post.id));
-  }, [identity?.publicKey, post.id]);
+  }, [identity?.publicKey, post]);
+
+  // The server's copy of the score can be half a minute old, and the card stays
+  // mounted when the live data replaces it.
+  useEffect(() => {
+    setScore(post.upvotes - post.downvotes);
+  }, [post.upvotes, post.downvotes]);
 
   // A vote used to be sent and forgotten: no connect() first, and the publish
   // result discarded. RelayClient.send() drops a message when the socket isn't
@@ -211,7 +219,9 @@ export function PostCard({ post, className }: PostCardProps) {
               ·
             </span>
 
-            <span className="flex shrink-0 items-center gap-1 text-ink-500">
+            {/* The server and the browser disagree about "now" by a moment, and
+                about the date by a time zone. Neither is worth failing to hydrate. */}
+            <span suppressHydrationWarning className="flex shrink-0 items-center gap-1 text-ink-500">
               <Clock className="h-3 w-3" aria-hidden="true" />
               {formatDate(post.createdAt)}
             </span>

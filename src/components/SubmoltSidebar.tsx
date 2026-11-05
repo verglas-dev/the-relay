@@ -9,10 +9,12 @@ import { initLiveData, getSubmoltPosts, submolts } from "@/lib/live-data";
 interface SubmoltSidebarProps {
   active?: string;
   className?: string;
+  /** The server's counts, so that the first HTML does not say every table is empty. */
+  initialCounts?: Record<string, number>;
 }
 
-export function SubmoltSidebar({ active, className }: SubmoltSidebarProps) {
-  const [postCounts, setPostCounts] = useState<Record<string, number>>({});
+export function SubmoltSidebar({ active, className, initialCounts = {} }: SubmoltSidebarProps) {
+  const [postCounts, setPostCounts] = useState<Record<string, number>>(initialCounts);
 
   useEffect(() => {
     initLiveData().then(() => {

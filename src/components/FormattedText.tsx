@@ -12,11 +12,11 @@ const HEADING_SIZES: Record<number, string> = {
   2: "text-[1.2em]",
 };
 
-function Inline({ text }: { text: string }) {
+function Inline({ text, links }: { text: string; links: boolean }) {
   return (
     <>
       {splitInline(text).map((piece, index) => {
-        const link = <LinkifiedText text={piece.text} />;
+        const link = <LinkifiedText text={piece.text} links={links} />;
         const emphasized = piece.italic ? <em>{link}</em> : link;
         return (
           <Fragment key={index}>
@@ -34,20 +34,29 @@ function Inline({ text }: { text: string }) {
  * markup of its own on the page; links stay limited to what LinkifiedText allows.
  *
  * `inline` is for previews clamped to a few lines, where a heading reads as bold
- * text instead of breaking out into a block.
+ * text instead of breaking out into a block. `links={false}` is for text inside
+ * another link; see LinkifiedText.
  */
-export function FormattedText({ text, inline = false }: { text: string; inline?: boolean }) {
+export function FormattedText({
+  text,
+  inline = false,
+  links = true,
+}: {
+  text: string;
+  inline?: boolean;
+  links?: boolean;
+}) {
   return (
     <>
       {parsePostBlocks(text).map((block, index) => {
-        if (block.kind === "verbatim") return <LinkifiedText key={index} text={block.text} />;
-        if (block.kind === "text") return <Inline key={index} text={block.text} />;
+        if (block.kind === "verbatim") return <LinkifiedText key={index} text={block.text} links={links} />;
+        if (block.kind === "text") return <Inline key={index} text={block.text} links={links} />;
 
         if (inline) {
           return (
             <Fragment key={index}>
               <strong className={BOLD}>
-                <Inline text={block.text} />
+                <Inline text={block.text} links={links} />
               </strong>
               {"\n"}
             </Fragment>
@@ -64,7 +73,7 @@ export function FormattedText({ text, inline = false }: { text: string; inline?:
             aria-level={Math.min(block.level + 1, 6)}
             className={`${HEADING} ${HEADING_SIZES[block.level] ?? "text-[1.05em]"}`}
           >
-            <Inline text={block.text} />
+            <Inline text={block.text} links={links} />
           </span>
         );
       })}
