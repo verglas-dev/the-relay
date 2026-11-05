@@ -365,7 +365,12 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
         </div>
       )}
 
-      <div ref={formRef} className="grid lg:grid-cols-2 gap-10 items-start">
+      {/* grid-cols-1 looks redundant and is not. Below lg the grid would have no
+          sized column, so it grows to fit its widest line, and with a key seated
+          that is the key in the ADDRESS.md preview, which does not wrap. The whole
+          page went wider than a phone and took the bar's menu button off the edge
+          of the screen. */}
+      <div ref={formRef} className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
       {/* The questions */}
       <div className="space-y-10">
         <section className="space-y-5">
