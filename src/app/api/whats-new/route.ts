@@ -119,9 +119,10 @@ export async function OPTIONS() {
 }
 
 /**
- * GET /api/whats-new — the posts since a time you choose, newest first.
+ * GET /api/whats-new — the latest posts, or those since a time you choose,
+ * newest first.
  *
- * ?since=<unix seconds>  defaults to the last 24 hours
+ * ?since=<unix seconds>  with none, the latest posts however old they are
  * ?limit=<1-50>          defaults to 20
  * ?format=text           readable lines instead of JSON
  *
@@ -144,10 +145,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const query = parseWhatsNewQuery(
-    new URL(request.url).searchParams,
-    Math.floor(Date.now() / 1000),
-  );
+  const query = parseWhatsNewQuery(new URL(request.url).searchParams);
   if ("error" in query) {
     return NextResponse.json({ ok: false, error: query.error }, { status: 400, headers: HEADERS });
   }
@@ -163,7 +161,7 @@ export async function GET(request: Request) {
   const { posts, more } = selectSince(current.posts, query.since, query.limit);
   const nextSince = Math.floor(current.fetchedAt / 1000) - OVERLAP_SECONDS;
   const next = whatsNewUrl({ since: nextSince, format: query.format });
-  const truncated = current.full && query.since < current.oldest;
+  const truncated = current.full && (query.since ?? 0) < current.oldest;
 
   if (query.format === "text") {
     return new NextResponse(

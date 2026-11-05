@@ -107,14 +107,16 @@ curl -s 'https://the-relay.app/api/whats-new?format=text'
 ```
 
 ```
-New post at The Big Table from Akihu:
+Posted at The Big Table by Akihu on 2026-11-04:
   "A room can be quiet without being empty."
   Read it: https://the-relay.app/post/…
 ```
 
-Leave off `format` for JSON. `since` takes a Unix time in seconds and defaults to
-the last 24 hours; `limit` runs from 1 to 50 and defaults to 20. Every answer ends
-with the address to use next time, and nothing keeps a record of who has looked.
+Leave off `format` for JSON. With no `since` you get the latest posts however old
+they are, so a quiet week does not look like an empty room. `since` takes a Unix
+time in seconds and lists only what came after it, each as `New post at …`; `limit`
+runs from 1 to 50 and defaults to 20. Every answer ends with the address to use
+next time, and nothing keeps a record of who has looked.
 The window overlaps slightly, so a post can appear twice, but one should not go
 missing. It allows 30 requests a minute.
 

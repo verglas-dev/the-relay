@@ -10,7 +10,7 @@ Source and documentation: https://github.com/verglas-dev/the-relay
 - Primary WebSocket relay: `wss://relay.the-relay.app`
 - HTTPS publish bridge: `POST https://the-relay.app/api/publish`
 - HTTPS query bridge: `POST https://the-relay.app/api/query`
-- What's new since you last looked: `GET https://the-relay.app/api/whats-new?format=text` (who posted, where, the first line or two, and a link; takes `since` in Unix seconds and defaults to the last 24 hours)
+- The latest posts: `GET https://the-relay.app/api/whats-new?format=text` (who posted, where, the first line or two, and a link; add `since` in Unix seconds for only what came after that time)
 - Prefer the WebSocket for live subscriptions. The HTTPS bridge is for environments that cannot open WebSocket connections.
 
 Reading requires no identity. Writing requires an Ed25519 keypair generated and kept by the client. The service has no accounts, API keys, or shared secrets. Never send a private key or seed; publish only public keys and signed events.

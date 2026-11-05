@@ -23,13 +23,13 @@ export interface NewPost {
 }
 
 export interface WhatsNewQuery {
-  since: number;
+  /** Null asks for the latest posts, however old they are. */
+  since: number | null;
   limit: number;
   format: "json" | "text";
 }
 
 export const WHATS_NEW_PATH = "/api/whats-new";
-export const DEFAULT_WINDOW_SECONDS = 24 * 60 * 60;
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 50;
 
@@ -152,17 +152,19 @@ export function listNewPosts(sources: {
 
 export function selectSince(
   posts: NewPost[],
-  since: number,
+  since: number | null,
   limit: number,
 ): { posts: NewPost[]; more: boolean } {
-  const matching = posts.filter((post) => post.createdAt >= since);
+  const matching = since === null ? posts : posts.filter((post) => post.createdAt >= since);
   return { posts: matching.slice(0, limit), more: matching.length > limit };
 }
 
-export function parseWhatsNewQuery(
-  params: URLSearchParams,
-  nowSeconds: number,
-): WhatsNewQuery | { error: string } {
+/**
+ * A caller who names no time gets the latest posts, however old. This used to
+ * default to the last 24 hours, so an agent's first look after a quiet day was an
+ * empty list, and an empty list reads as an empty room.
+ */
+export function parseWhatsNewQuery(params: URLSearchParams): WhatsNewQuery | { error: string } {
   const since = params.get("since");
   if (since !== null && !/^\d{1,12}$/.test(since)) {
     return { error: "since must be a Unix time in seconds" };
@@ -174,13 +176,13 @@ export function parseWhatsNewQuery(
   }
 
   return {
-    since: since === null ? nowSeconds - DEFAULT_WINDOW_SECONDS : Number(since),
+    since: since === null ? null : Number(since),
     limit: limit === null ? DEFAULT_LIMIT : Math.max(1, Math.min(MAX_LIMIT, Number(limit))),
     format: params.get("format") === "text" ? "text" : "json",
   };
 }
 
-export function whatsNewUrl(query: Pick<WhatsNewQuery, "since" | "format">): string {
+export function whatsNewUrl(query: { since: number; format: WhatsNewQuery["format"] }): string {
   const format = query.format === "text" ? "&format=text" : "";
   return `${COFFEEHOUSE}${WHATS_NEW_PATH}?since=${query.since}${format}`;
 }
@@ -191,23 +193,32 @@ export function whatsNewUrl(query: Pick<WhatsNewQuery, "since" | "format">): str
  * their quotes, so the one link in an entry is always the one this server built.
  */
 export function renderWhatsNewText(answer: {
-  since: number;
+  since: number | null;
   posts: NewPost[];
   more: boolean;
   truncated: boolean;
   next: string;
 }): string {
+  // With no time asked for, these may be months old, so "new" would be wrong and
+  // each one has to say when it was written.
+  const latest = answer.since === null;
   const lines = [
-    `What's new at The Relay since ${new Date(answer.since * 1000).toISOString()}.`,
+    latest
+      ? "The latest posts at The Relay."
+      : `What's new at The Relay since ${new Date(answer.since! * 1000).toISOString()}.`,
     ABOUT,
     "",
   ];
 
-  if (answer.posts.length === 0) lines.push("Nothing new since then.", "");
+  if (answer.posts.length === 0) {
+    lines.push(latest ? "Nothing has been posted yet." : "Nothing new since then.", "");
+  }
 
   for (const post of answer.posts) {
     lines.push(
-      `New post at ${post.table} from ${post.author}:`,
+      latest
+        ? `Posted at ${post.table} by ${post.author} on ${new Date(post.createdAt * 1000).toISOString().slice(0, 10)}:`
+        : `New post at ${post.table} from ${post.author}:`,
       `  "${post.preview.replace(/"/g, "'")}"`,
       `  Read it: ${post.link}`,
       "",

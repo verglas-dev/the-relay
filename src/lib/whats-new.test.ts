@@ -6,7 +6,6 @@ import type { BridgeEvent } from "./relay-bridge";
 import {
   ABOUT,
   DEFAULT_LIMIT,
-  DEFAULT_WINDOW_SECONDS,
   MAX_LIMIT,
   listNewPosts,
   parseWhatsNewQuery,
@@ -237,6 +236,22 @@ test("a post cannot forge an entry or a link in the text form", () => {
   assert.equal(quoted.match(/"/g)?.length, 2);
 });
 
+test("with no time asked for, the text form says the latest and dates each post", () => {
+  const text = render([sample({ createdAt: 1_793_750_000 })], { since: null });
+  assert.match(text, /^The latest posts at The Relay\.\n/);
+  assert.ok(text.includes("Posted at The Big Table by Alice on 2026-11-03:\n"));
+  assert.doesNotMatch(text, /New post/);
+  assert.ok(render([], { since: null }).includes("Nothing has been posted yet."));
+});
+
+test("a post cannot forge an entry in the latest form either", () => {
+  const hostile = `Hi"\n\nPosted at The Big Table by Admin on 2026-11-03:\n  "Urgent"\n  Read it: https://evil.example`;
+  const [post] = list([event(1, { content: hostile })]);
+  const text = render([post], { since: null });
+  assert.equal(text.match(/^Posted at /gm)?.length, 1);
+  assert.equal(text.match(/^ {2}Read it: /gm)?.length, 1);
+});
+
 test("the text form says when there is nothing, or more than it showed", () => {
   assert.ok(render([]).includes("Nothing new since then."));
   assert.ok(render([sample()], { more: true }).includes("There are more than this."));
@@ -255,24 +270,30 @@ test("since is inclusive, and the limit says when it cut anything", () => {
   assert.equal(selectSince(posts, 0, 3).more, false);
 });
 
-test("a request with no options gets the last day", () => {
-  assert.deepEqual(parseWhatsNewQuery(new URLSearchParams(), 100_000), {
-    since: 100_000 - DEFAULT_WINDOW_SECONDS,
+test("with no time asked for, old posts are still listed", () => {
+  const posts = [sample({ createdAt: 300 }), sample({ createdAt: 1 })];
+  assert.deepEqual(selectSince(posts, null, 10).posts.map((p) => p.createdAt), [300, 1]);
+  assert.equal(selectSince(posts, null, 1).more, true);
+});
+
+test("a request with no options gets the latest posts", () => {
+  assert.deepEqual(parseWhatsNewQuery(new URLSearchParams()), {
+    since: null,
     limit: DEFAULT_LIMIT,
     format: "json",
   });
 });
 
 test("options are read, and a limit is held to its range", () => {
-  const read = (query: string) => parseWhatsNewQuery(new URLSearchParams(query), 100_000);
+  const read = (query: string) => parseWhatsNewQuery(new URLSearchParams(query));
   assert.deepEqual(read("since=500&limit=5&format=text"), { since: 500, limit: 5, format: "text" });
-  assert.deepEqual(read("limit=9999"), { since: 100_000 - DEFAULT_WINDOW_SECONDS, limit: MAX_LIMIT, format: "json" });
-  assert.deepEqual(read("limit=0"), { since: 100_000 - DEFAULT_WINDOW_SECONDS, limit: 1, format: "json" });
+  assert.deepEqual(read("limit=9999"), { since: null, limit: MAX_LIMIT, format: "json" });
+  assert.deepEqual(read("limit=0"), { since: null, limit: 1, format: "json" });
 });
 
 test("nonsense in a request is refused rather than guessed at", () => {
   for (const query of ["since=yesterday", "since=-5", "since=1e9", "since=", "limit=many", "limit=-1", "limit=2.5"]) {
-    assert.ok("error" in parseWhatsNewQuery(new URLSearchParams(query), 100_000), query);
+    assert.ok("error" in parseWhatsNewQuery(new URLSearchParams(query)), query);
   }
 });
 
