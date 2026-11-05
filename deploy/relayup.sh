@@ -26,6 +26,10 @@ force_relay=false
 dry_run=false
 build_flags=()
 
+# One line for each service this run really replaced, saying how to undo it. Empty
+# means nothing new went live, however much was rebuilt.
+ways_back=()
+
 for arg in "$@"; do
   case "$arg" in
     --relay) force_relay=true ;;
@@ -76,7 +80,7 @@ fingerprint() {
 
 deploy_service() {
   local service="$1" check="$2" image="$PROJECT-$1"
-  local container previous before="" kept=false can_roll_back=false
+  local container previous before="" kept=false can_roll_back=false changed=true
 
   container="$(docker compose ps -q "$service")"
   if [ -n "$container" ]; then
@@ -96,11 +100,24 @@ deploy_service() {
     die "the $service build failed. The site is untouched."
   fi
 
+  # The build reads the checkout as it goes, so a merge or an edit landing part way
+  # can leave an image of no commit at all. There is no telling from here, so it is
+  # not put live.
+  if [ "$(git rev-parse HEAD)" != "$deploying" ] ||
+    [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    if "$kept"; then
+      docker tag "$image:pre-deploy" "$image:latest"
+      docker rmi "$image:pre-deploy" > /dev/null 2>&1 || true
+    fi
+    die "the checkout changed during the $service build, so that build was thrown away and $service is untouched. Run relayup again."
+  fi
+
   if "$kept"; then
     if [ "$before" = "$(fingerprint "$image:latest")" ]; then
       # Nothing changed, so leave things as they were found: what is running keeps
       # its name, and the rebuilt copy of it is forgotten.
       docker tag "$image:pre-deploy" "$image:latest"
+      changed=false
     elif docker tag "$image:pre-deploy" "$image:rollback"; then
       can_roll_back=true
     fi
@@ -113,6 +130,13 @@ deploy_service() {
   say "Waiting for $service to come up"
   if "$check"; then
     say "$service is up"
+    if "$changed"; then
+      if "$can_roll_back"; then
+        ways_back+=("To go back: docker tag $image:rollback $image:latest && docker compose up -d --no-deps $service")
+      else
+        ways_back+=("No earlier $service is kept, so there is nothing to go back to")
+      fi
+    fi
     return
   fi
 
@@ -185,6 +209,11 @@ fi
 git pull -q --ff-only origin main ||
   die "this checkout has diverged from main on GitHub. Nothing was deployed."
 
+# The commit this run is about. The checkout can move while a build takes minutes,
+# and nothing here stops someone merging, so later steps compare against this rather
+# than trusting where HEAD has got to.
+deploying="$(git rev-parse HEAD)"
+
 if "$deploy_relay"; then
   deploy_service relay relay_check
 else
@@ -198,9 +227,17 @@ deploy_service ui ui_check
 # Each deploy leaves the image before last untagged, and they add up on this disk.
 docker image prune -f > /dev/null || true
 
-say "Live: $(git log -1 --format='%h %s')"
-if docker image inspect "$PROJECT-ui:rollback" > /dev/null 2>&1; then
-  say "To go back: docker tag $PROJECT-ui:rollback $PROJECT-ui:latest && docker compose up -d --no-deps ui"
+# Name the commit this run built, and call it live only if an image was replaced. A
+# run that found nothing new once finished just after a merge landed, and announced
+# that merge as live while the old image kept running.
+built="$(git log -1 --format='%h %s' "$deploying")"
+if ((${#ways_back[@]})); then
+  say "Live: $built"
+  for way_back in "${ways_back[@]}"; do say "$way_back"; done
 else
-  say "No earlier version is kept yet, so there is nothing to go back to"
+  say "Nothing new went live: what is running already matches $built"
+fi
+
+if [ "$(git rev-parse HEAD)" != "$deploying" ]; then
+  die "the checkout moved to $(git log -1 --format='%h %s') during this run, so that is not live. Run relayup again."
 fi

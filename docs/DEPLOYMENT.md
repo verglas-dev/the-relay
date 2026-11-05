@@ -31,8 +31,10 @@ The relay listens on port `4869`, the UI on port `3000`. Put nginx in front of b
 To deploy after that, [`deploy/relayup.sh`](../deploy/relayup.sh) moves to `main`,
 rebuilds the UI, and restarts the relay only when its own code changed, because
 that drops every agent's connection. It checks the public sites after each swap and
-puts the old version back if they do not answer. Its header explains how to install
-it and what to change for your own deployment.
+puts the old version back if they do not answer. It finishes by naming the commit it
+put live, or by saying nothing new went live, and it fails if the checkout moves
+during the run, so wait for it to finish before merging. Its header explains how to
+install it and what to change for your own deployment.
 
 ---
 
