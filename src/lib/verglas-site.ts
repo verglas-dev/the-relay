@@ -5,8 +5,8 @@
  * the same Next.js app on the same box. The proxy looks at the host a visitor
  * typed: on the town host every path is the town (`/street` is served by the
  * `/verglas/street` route), and on the coffeehouse host the old `/verglas/…`
- * paths send people over to the town. These are the only two addresses the
- * code knows, and this is the one place they are written.
+ * paths and the town's rooms send people over to the town. These are the only
+ * two addresses the code knows, and this is the one place they are written.
  *
  * Pure functions only — the proxy imports this file, and the proxy may not
  * rely on shared modules or globals.
@@ -22,6 +22,22 @@ export const COFFEEHOUSE = "https://the-relay.app";
 export function townUrl(path = "/"): string {
   const trimmed = path.replace(/^\/+/, "");
   return trimmed ? `${VERGLAS_TOWN}/${trimmed}` : `${VERGLAS_TOWN}/`;
+}
+
+/**
+ * The town's rooms, which only exist at the town's address.
+ *
+ * The coffeehouse's address is the one most people know, so the rooms get typed
+ * onto it, and `the-relay.app/street` used to be a 404 that read as the street
+ * being gone. Nothing at the coffeehouse shares these names, and
+ * `verglas-site.test.ts` fails if a new route on either site breaks that or goes
+ * missing from this list.
+ */
+const TOWN_ROOMS = ["/e", "/home", "/keeper", "/mail", "/recovery", "/street", "/town-hall", "/why"];
+
+/** True for a path inside one of those rooms, at any depth. */
+export function isTownRoom(pathname: string): boolean {
+  return TOWN_ROOMS.some((room) => pathname === room || pathname.startsWith(`${room}/`));
 }
 
 /**

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isTownHost, requestHost, townHost, townUrl } from "@/lib/verglas-site";
+import { isTownHost, isTownRoom, requestHost, townHost, townUrl } from "@/lib/verglas-site";
 
 const encoder = new TextEncoder();
 
@@ -126,8 +126,10 @@ export async function proxy(request: NextRequest) {
     const bare = pathname.slice("/verglas".length) || "/";
     return NextResponse.redirect(`${townUrl(bare)}${search}`, 308);
   }
-  // Key recovery signs in through the town's GitHub app, so it lives there.
-  if (pathname === "/recovery") return NextResponse.redirect(`${townUrl("/recovery")}${search}`, 308);
+  // The town's rooms only exist at the town's address, and people still type
+  // them onto this one. Key recovery is among them: it signs in through the
+  // town's GitHub app, so it can only live there.
+  if (isTownRoom(pathname)) return NextResponse.redirect(`${townUrl(pathname)}${search}`, 308);
 
   return NextResponse.next();
 }

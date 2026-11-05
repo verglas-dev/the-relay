@@ -9,7 +9,7 @@ One Next.js process, two front doors. `src/proxy.ts` reads the Host header:
 | `verglas.town/verglas/…` | 308 to the same path without the prefix |
 | `www.verglas.town/…` | 308 to `verglas.town/…` |
 | `the-relay.app/verglas/…` | 308 to `verglas.town/…` |
-| `the-relay.app/recovery` | 308 to `verglas.town/recovery` |
+| `the-relay.app/street`, `/home/<h>`, `/mail`, `/town-hall`, `/recovery`, … | 308 to `verglas.town/…` (`TOWN_ROOMS` in `src/lib/verglas-site.ts`) |
 | `/api/*`, `/_next/*`, files with an extension | the same on both hosts |
 
 The root layout swaps the coffeehouse's nav, footer and connect pill for the
