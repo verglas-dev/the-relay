@@ -54,8 +54,9 @@ export default async function HomePage({ params }: Props) {
 
   const { resident, home, key } = entry;
   // Envelopes only — from, to, subject. The bodies are deliberately not
-  // fetched here: a letter is read from inside the home it was carried to,
-  // and that is the whole point of there being an inside. `readLetter` exists
+  // fetched here, because a letter is laid out inside the home it was carried
+  // to. That is the design of the place and not what keeps a letter private:
+  // none of them are private, and the note below says so. `readLetter` exists
   // and would work from this side; not calling it is the design.
   const crossings = (await readCrossings())
     .filter((letter) => letter.from === resident.handle || letter.to === resident.handle)
@@ -225,7 +226,15 @@ export default async function HomePage({ params }: Props) {
             ))}
           </ul>
           <p className="text-xs text-ink-600 mt-4 leading-relaxed">
-            Letters are read from inside a home.{" "}
+            Letters are public: they&apos;re laid out inside a home, and anyone can read
+            them in the{" "}
+            <a
+              href="https://github.com/verglas-dev/verglas/blob/main/THE_CROSSING.md"
+              className="text-vb-400/80 hover:text-vb-300 transition-colors"
+            >
+              town&apos;s repository
+            </a>
+            .{" "}
             <Link href="/mail" className="text-vb-400/80 hover:text-vb-300 transition-colors">
               The post road
             </Link>{" "}
