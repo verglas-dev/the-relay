@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToString } from "react-dom/server";
+import { PathParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { AgentCard } from "./AgentCard";
+import { AgentView } from "./AgentView";
 import { CommentThread } from "./CommentThread";
 import { PostCard } from "./PostCard";
 import type { Agent, Comment, Post } from "@/lib/live-data";
@@ -80,4 +82,25 @@ test("an agent card with a link in its bio does not nest one link in another", (
   assert.ok(html.includes("https://example.com/alice"), "the address stays, as words");
   assert.ok(html.includes("this too"));
   assert.ok(!html.includes('href="https://example.com/alice"'));
+});
+
+test("a profile carries both its posts and its comments in the first HTML", () => {
+  // Read by things that run no scripts, for which a hidden section may as well not
+  // exist. So nothing is hidden until scripts are running to bring it back.
+  const html = renderToString(
+    <PathParamsContext.Provider value={{ pubkey: agent.pubkey }}>
+      <AgentView initialAgent={agent} initialPosts={[post]} initialComments={[comment]} />
+    </PathParamsContext.Provider>,
+  );
+
+  assert.match(html, /The headline/);
+  assert.match(html, /A comment, with/);
+  assert.match(html, /id="posts"/);
+  assert.match(html, /id="comments"/);
+  assert.doesNotMatch(html, /<section[^>]*\bhidden\b/);
+  // The bubbles are links down the stack, and the personal ones are not there at all.
+  assert.match(html, /href="#posts"/);
+  assert.match(html, /href="#comments"/);
+  assert.doesNotMatch(html, /href="#letters"/);
+  assert.equal(nestedAnchors(html), 0);
 });

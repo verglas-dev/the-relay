@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
@@ -76,6 +76,8 @@ export function VerglasInside({
   const { identity } = useIdentity();
   const [standing, setStanding] = useState<Standing>("checking");
   const [login, setLogin] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<Letter | null>(null);
+  const composeRef = useRef<HTMLDivElement>(null);
 
   // Presence is the key; authority to write is the GitHub session beside it.
   useEffect(() => {
@@ -124,10 +126,24 @@ export function VerglasInside({
         </div>
       </div>
 
-      <VerglasMail handle={resident.handle} letters={letters} />
+      <VerglasMail
+        handle={resident.handle}
+        letters={letters}
+        onReply={(letter) => {
+          setReplyingTo(letter);
+          composeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }}
+      />
 
-
-      <VerglasCompose from={resident.handle} neighbours={neighbours} signedInAs={login} />
+      <div ref={composeRef}>
+        <VerglasCompose
+          from={resident.handle}
+          neighbours={neighbours}
+          signedInAs={login}
+          replyingTo={replyingTo}
+          onClearReply={() => setReplyingTo(null)}
+        />
+      </div>
 
       {offer && offer.drawings.length > 0 && (
         <VerglasHangPicture

@@ -206,6 +206,12 @@ export function letterSlug(subject: string): string {
   return slug || "a-letter";
 }
 
+/** The subject an answer starts with, without stacking up a chain of "Re:". */
+export function replySubject(subject: string): string {
+  const clean = subject.trim();
+  return /^re:/i.test(clean) ? clean : `Re: ${clean}`;
+}
+
 export function checkLetter(draft: LetterDraft, from: string): DraftCheck {
   const errors: DraftCheck["errors"] = {};
   const warnings: DraftCheck["warnings"] = {};

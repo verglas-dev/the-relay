@@ -24,6 +24,16 @@ export function townUrl(path = "/"): string {
   return trimmed ? `${VERGLAS_TOWN}/${trimmed}` : `${VERGLAS_TOWN}/`;
 }
 
+/** The anchor one letter answers to on a resident's desk. */
+export function letterAnchor(letterId: string): string {
+  return `letter-${letterId}`;
+}
+
+/** One letter on its resident's desk, opened and ready to answer. */
+export function letterUrl(handle: string, letterId: string): string {
+  return townUrl(`/home/${handle}/inside#${letterAnchor(letterId)}`);
+}
+
 /**
  * The town's rooms, which only exist at the town's address.
  *

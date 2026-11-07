@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkDraft, EMPTY_DRAFT, letterSlug, suggestHandle } from "./verglas";
+import { checkDraft, EMPTY_DRAFT, letterSlug, replySubject, suggestHandle } from "./verglas";
 
 test("suggestHandle folds Latin diacritics before creating a slug", () => {
   assert.equal(suggestHandle("Émile O'Brien & Söhne"), "emile-obrien-sohne");
@@ -35,4 +35,11 @@ test("a key that is not 64 hex characters is refused by shape", () => {
   const check = checkDraft({ ...furnished, key: "not-a-key" });
   assert.equal(check.ok, false);
   assert.match(check.errors.key ?? "", /64 hexadecimal/);
+});
+
+test("replySubject marks an answer once, however long the exchange runs", () => {
+  assert.equal(replySubject("The lamp was on"), "Re: The lamp was on");
+  assert.equal(replySubject("  The lamp was on "), "Re: The lamp was on");
+  assert.equal(replySubject("Re: The lamp was on"), "Re: The lamp was on");
+  assert.equal(replySubject("RE: The lamp was on"), "RE: The lamp was on");
 });

@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { AlertCircle, Loader2, Send } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Loader2, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDomSync } from "@/lib/use-dom-sync";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
-import { checkLetter, EMPTY_LETTER, type LetterDraft } from "@/lib/verglas";
-import type { Resident } from "@/lib/verglas-town";
+import { checkLetter, EMPTY_LETTER, replySubject, type LetterDraft } from "@/lib/verglas";
+import type { Letter, Resident } from "@/lib/verglas-town";
 
 const inputClass = `w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                     text-white placeholder-ink-600 focus:outline-none focus:border-vb-500
@@ -16,15 +16,22 @@ const inputClass = `w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2
  * Writing to a neighbour. The letter leaves through the resident's own GitHub
  * account, so the town can see it really came from them — the same door their
  * address came through.
+ *
+ * Answering a letter fills in who it goes to, its subject, and `reply_to`, the
+ * exact id MAIL.md asks for, which is how the town knows the two belong together.
  */
 export function VerglasCompose({
   from,
   neighbours,
   signedInAs,
+  replyingTo = null,
+  onClearReply,
 }: {
   from: string;
   neighbours: Resident[];
   signedInAs: string | null;
+  replyingTo?: Letter | null;
+  onClearReply?: () => void;
 }) {
   const [draft, setDraft] = useState<LetterDraft>(EMPTY_LETTER);
   const [sending, setSending] = useState(false);
@@ -32,6 +39,17 @@ export function VerglasCompose({
   const [trouble, setTrouble] = useState<string | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!replyingTo) return;
+    setSent(null);
+    setDraft({
+      ...EMPTY_LETTER,
+      to: replyingTo.from,
+      subject: replySubject(replyingTo.subject),
+      replyTo: replyingTo.id,
+    });
+  }, [replyingTo]);
 
   // A letter written by an agent is filled, not typed. Without this the
   // subject and body reach the page but never the state, and the town would
@@ -54,6 +72,7 @@ export function VerglasCompose({
       if (!response.ok) return setTrouble(body.error ?? "The letter did not get out.");
       setSent(body);
       setDraft(EMPTY_LETTER);
+      onClearReply?.();
     } catch {
       setTrouble("Could not reach the town. Check your connection and try again.");
     } finally {
@@ -106,6 +125,25 @@ export function VerglasCompose({
           <VerglasSignOut />
         </span>
       </div>
+
+      {replyingTo && draft.replyTo === replyingTo.id && (
+        <p className="flex items-center justify-between gap-3 text-xs text-ink-500">
+          <span className="min-w-0 truncate">
+            Answering &ldquo;{replyingTo.subject}&rdquo; from {replyingTo.from}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(EMPTY_LETTER);
+              onClearReply?.();
+            }}
+            className="inline-flex shrink-0 items-center gap-1 hover:text-ink-300 transition-colors"
+          >
+            <X className="w-3 h-3" />
+            Write a new letter instead
+          </button>
+        </p>
+      )}
 
       <div>
         <label className="block text-sm text-ink-300 mb-1.5">To</label>

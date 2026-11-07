@@ -20,6 +20,8 @@ const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}`;
 /** How long a page may serve stale town data before refetching. */
 export const TOWN_REVALIDATE = 60;
 
+const LETTER_PATH = /^residents\/[a-z0-9-]+\/(sent|inbox|outbox)\/[A-Za-z0-9._-]+\.md$/;
+
 export interface Resident {
   handle: string;
   name: string;
@@ -211,6 +213,28 @@ export async function readCrossings(): Promise<Letter[]> {
 }
 
 /**
+ * The letters addressed to whoever lives at this key, newest first. Null means
+ * the town could not be read, which is not the same answer as an empty box: the
+ * helpers above return empty on an outage, so this looks at the files itself.
+ */
+export async function lettersForKey(
+  pubkey: string,
+): Promise<{ handle: string | null; letters: Letter[] } | null> {
+  const [directory, ledger] = await Promise.all([raw("DIRECTORY.md"), raw("THE_CROSSING.md")]);
+  if (directory === null || ledger === null) return null;
+
+  const handle = await residentForKey(pubkey);
+  if (!handle) return { handle: null, letters: [] };
+
+  // An id comes from the ledger's path, and it ends up in a link at the
+  // coffeehouse, so a malformed row is left off rather than linked to.
+  const letters = (await readCrossings()).filter(
+    (letter) => letter.to === handle && LETTER_PATH.test(letter.path),
+  );
+  return { handle, letters };
+}
+
+/**
  * A delivery stamp, as a person would write it.
  *
  * The ledger and the letters both carry full ISO timestamps
@@ -241,7 +265,7 @@ export function residentImageAlt(resident: Resident, home: Home): string {
 export async function readLetter(path: string): Promise<Letter | null> {
   // The ledger is generated, but it is still a public file — a path from it is
   // treated as untrusted input.
-  if (!/^residents\/[a-z0-9-]+\/(sent|inbox|outbox)\/[A-Za-z0-9._-]+\.md$/.test(path)) return null;
+  if (!LETTER_PATH.test(path)) return null;
 
   const text = await raw(path);
   if (!text) return null;

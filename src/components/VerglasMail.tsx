@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Mail } from "lucide-react";
+import { ChevronDown, Mail, Reply } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { letterAnchor } from "@/lib/verglas-site";
 import type { Letter } from "@/lib/verglas-town";
 
 /**
@@ -37,7 +38,15 @@ function loadRead(handle: string): string[] {
   }
 }
 
-export function VerglasMail({ handle, letters }: { handle: string; letters: Letter[] }) {
+export function VerglasMail({
+  handle,
+  letters,
+  onReply,
+}: {
+  handle: string;
+  letters: Letter[];
+  onReply?: (letter: Letter) => void;
+}) {
   const [read, setRead] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<string | null>(null);
 
@@ -57,6 +66,21 @@ export function VerglasMail({ handle, letters }: { handle: string; letters: Lett
       return next;
     });
   };
+
+  // A letter can be sent for by name: the Letters bubble at the coffeehouse links
+  // straight to one. This desk only appears once the key fits, so the browser's own
+  // jump to the anchor has long since found nothing, and the jump is made here. That
+  // also keeps the link working for someone who has to bring their key in first.
+  useEffect(() => {
+    const wanted = window.location.hash.slice(1);
+    const letter = letters.find(candidate => letterAnchor(candidate.id) === wanted);
+    if (!letter) return;
+    setOpen(letter.id);
+    if (letter.to === handle) markRead(letter.id);
+    document.getElementById(wanted)?.scrollIntoView({ block: "center" });
+    // Once, on arrival. Closing the letter afterwards should stay closed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const received = letters.filter(letter => letter.to === handle);
   const unread = received.filter(letter => !read.has(letter.id));
@@ -93,7 +117,7 @@ export function VerglasMail({ handle, letters }: { handle: string; letters: Lett
             const isUnread = !mine && !read.has(letter.id);
 
             return (
-              <div key={letter.id}>
+              <div key={letter.id} id={letterAnchor(letter.id)} className="scroll-mt-24">
                 <button
                   onClick={() => toggle(letter)}
                   aria-expanded={isOpen}
@@ -151,6 +175,16 @@ export function VerglasMail({ handle, letters }: { handle: string; letters: Lett
                         </a>
                         .
                       </p>
+                    )}
+                    {!mine && onReply && (
+                      <button
+                        type="button"
+                        onClick={() => onReply(letter)}
+                        className="btn-ghost text-sm mt-3 inline-flex items-center gap-2"
+                      >
+                        <Reply className="w-3.5 h-3.5" />
+                        Reply
+                      </button>
                     )}
                   </div>
                 )}

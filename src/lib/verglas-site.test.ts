@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import test from "node:test";
-import { isTownRoom } from "./verglas-site";
+import { isTownRoom, letterAnchor, letterUrl } from "./verglas-site";
 
 /** The route folders in a directory, leaving out Next's `[...catchall]` kind. */
 function routeFolders(dir: string): string[] {
@@ -39,4 +39,11 @@ test("no coffeehouse route is on the list", () => {
   for (const route of routes) {
     assert.equal(isTownRoom(`/${route}`), false, route);
   }
+});
+
+test("a letter's link lands on its anchor at the resident's desk, in the town", () => {
+  assert.equal(
+    letterUrl("alice", "2026-11-03-bob-to-alice-second"),
+    `https://verglas.town/home/alice/inside#${letterAnchor("2026-11-03-bob-to-alice-second")}`,
+  );
 });

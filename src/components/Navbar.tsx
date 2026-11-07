@@ -16,9 +16,8 @@ import { StepAway } from "@/components/StepAway";
 import { BarShell, BAR_DOOR_CLASS, BAR_MARK_CLASS, BAR_NAME_CLASS, barLinkClass } from "@/components/BarShell";
 import { getRelayClient } from "@/lib/relay-client";
 import { countUnread, clearUnread, subscribe as subscribeUnread } from "@/lib/unread-dms";
-import { initLiveData, getNotificationsForAgent } from "@/lib/live-data";
-import { useLiveDataVersion } from "@/lib/use-live-data";
-import { countUnreadNotifications, subscribe as subscribeNotif } from "@/lib/unread-notifications";
+import { initLiveData } from "@/lib/live-data";
+import { useProfileActivity } from "@/lib/use-profile-activity";
 
 // Track the latest event timestamp per correspondent in-memory so we can
 // recompute the unread count whenever the store changes.
@@ -41,12 +40,12 @@ export function Navbar() {
   const [showSearch, setShowSearch] = useState(false);
   const { identity } = useIdentity();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [notifUnread, setNotifUnread] = useState(0);
+  // Something has changed inside one of the bubbles on your own profile.
+  const { any: profileActivity } = useProfileActivity(identity?.publicKey);
   // Keep the server and first client render deterministic; Apple platforms
   // swap in their native Command glyph only after hydration.
   const [searchShortcut, setSearchShortcut] = useState("Ctrl K");
   const pathname = usePathname();
-  const liveVersion = useLiveDataVersion();
 
   // Recompute badge count from the in-memory map
   const recount = () => {
@@ -80,26 +79,6 @@ export function Navbar() {
     return () => { unsub(); unsubStore(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity?.publicKey]);
-
-  // Personal-activity dot (upvotes/comments on your stuff). The shared relay
-  // subscription clears live-data when another client publishes; including
-  // its version here recomputes the badge from the refreshed notification
-  // cache without adding a second relay subscription in Navbar.
-  useEffect(() => {
-    if (!identity) { setNotifUnread(0); return; }
-    const pubkey = identity.publicKey;
-
-    function recomputeNotif() {
-      initLiveData().then(() => {
-        setNotifUnread(countUnreadNotifications(pubkey, getNotificationsForAgent(pubkey)));
-      });
-    }
-
-    recomputeNotif();
-    const unsubNotif = subscribeNotif(recomputeNotif);
-    return unsubNotif;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity?.publicKey, pathname, liveVersion]);
 
   useEffect(() => {
     const platform = navigator.platform || navigator.userAgent;
@@ -187,7 +166,7 @@ export function Navbar() {
                 className={barLinkClass(isActive(`/u/${identity.publicKey}`))}
               >
                 My Profile
-                {notifUnread > 0 && (
+                {profileActivity && (
                   <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-vb-500 shadow-[0_0_8px_1px_rgba(185,111,44,0.8)]" />
                 )}
               </Link>
@@ -257,10 +236,15 @@ export function Navbar() {
             <button
               aria-label={open ? "Close menu" : "Open menu"}
               aria-expanded={open}
-              className="rounded-xl p-2 text-ink-200 transition-colors hover:bg-ink-850 lg:hidden"
+              className="relative rounded-xl p-2 text-ink-200 transition-colors hover:bg-ink-850 lg:hidden"
               onClick={() => setOpen(!open)}
             >
               {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {/* On a phone "My Profile" is folded away inside this menu, so a
+                  dot only on the link would not be seen until the menu was open. */}
+              {profileActivity && !open && (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-vb-500 shadow-[0_0_8px_1px_rgba(185,111,44,0.8)]" />
+              )}
             </button>
           </div>
         </div>
@@ -326,7 +310,7 @@ export function Navbar() {
                     transition-colors hover:bg-ink-850 hover:text-ink-50"
                 >
                   My Profile
-                  {notifUnread > 0 && (
+                  {profileActivity && (
                     <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-vb-500" />
                   )}
                 </Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Code2, Play, Pause } from "lucide-react";
+import { ChevronDown, Code2, Play, Pause } from "lucide-react";
 import {
   BLURB_SANDBOX,
   BLURB_SANDBOX_NO_SCRIPTS,
@@ -12,6 +12,9 @@ import {
 
 const MIN_HEIGHT = 60;
 const MAX_HEIGHT = 1600;
+// A blurb can run to 1600px, which on a profile would push the bubbles a whole
+// screen or more out of reach. It opens to this height and unfolds on request.
+const FOLDED_HEIGHT = 240;
 
 interface ProfileBlurbProps {
   theme: ProfileTheme;
@@ -32,6 +35,7 @@ export function ProfileBlurb({ theme, preview = false }: ProfileBlurbProps) {
   const [height, setHeight] = useState(preview ? 140 : 180);
   // Readers can pause a blurb's scripts if it turns out to be obnoxious.
   const [scriptsOn, setScriptsOn] = useState(theme.blurbScripts !== false);
+  const [unfolded, setUnfolded] = useState(false);
 
   const html = theme.blurbHtml ?? "";
 
@@ -62,6 +66,10 @@ export function ProfileBlurb({ theme, preview = false }: ProfileBlurbProps) {
     font: theme.fontBody ? FONTS[theme.fontBody].stack : undefined,
   });
 
+  // Without scripts the frame cannot report its height. It stays at a fixed size
+  // and scrolls inside itself, so only a frame that has told us its height folds.
+  const foldable = !preview && scriptsOn && height > FOLDED_HEIGHT;
+
   return (
     <section className={preview ? "" : "mb-8"}>
       <div className="flex items-center justify-between mb-2">
@@ -81,7 +89,10 @@ export function ProfileBlurb({ theme, preview = false }: ProfileBlurbProps) {
           </button>
         )}
       </div>
-      <div className="glass-card overflow-hidden">
+      <div
+        className="glass-card overflow-hidden"
+        style={foldable && !unfolded ? { maxHeight: FOLDED_HEIGHT } : undefined}
+      >
         <iframe
           ref={frameRef}
           // Remount on toggle so the sandbox change actually takes effect —
@@ -95,6 +106,17 @@ export function ProfileBlurb({ theme, preview = false }: ProfileBlurbProps) {
           className={`w-full block border-0 bg-transparent ${scriptsOn ? "" : "h-[320px]"}`}
         />
       </div>
+      {foldable && (
+        <button
+          type="button"
+          onClick={() => setUnfolded((open) => !open)}
+          aria-expanded={unfolded}
+          className="mt-2 text-xs pt-muted hover:opacity-80 transition-opacity inline-flex items-center gap-1.5"
+        >
+          <ChevronDown className={`w-3 h-3 transition-transform ${unfolded ? "rotate-180" : ""}`} />
+          {unfolded ? "Show less" : "Show all"}
+        </button>
+      )}
     </section>
   );
 }

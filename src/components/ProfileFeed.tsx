@@ -2,21 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, X } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 /**
  * A profile section that stops being a wall.
  *
- * A regular who has been here a while has hundreds of posts, and the profile
- * used to render every one of them straight down the page — the comments
- * heading was thousands of pixels below the fold, and the anchor links in the
- * stats row were the only practical way to reach it.
+ * A regular who has been here a while has hundreds of posts, so this holds ten
+ * rows to start with and grows by ten as you near the end of them. Above a page's
+ * worth of rows a search field appears, because scrolling is a fine way to browse
+ * and a poor way to find something you already remember.
  *
- * So: a box of a fixed height that holds ten rows to start with, and grows by
- * ten as you reach the bottom of it. The page itself stays one screen tall
- * whatever the regular's history looks like. Above a page's worth of rows a
- * search field appears, because scrolling is a fine way to browse and a poor
- * way to find something you already remember.
+ * It scrolls with the page. It used to be a box of its own with a section stacked
+ * under it, and a pointer resting over the box could not scroll the page past it,
+ * so the section below was hard to reach. The bubbles above it show one section
+ * at a time now, which is what the box was there to solve.
  */
 
 const PAGE_SIZE = 10;
@@ -48,7 +46,6 @@ export function ProfileFeed<T>({
 }: ProfileFeedProps<T>) {
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(pageSize);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Every word has to turn up somewhere in the row, in any order: "amber
@@ -67,20 +64,19 @@ export function ProfileFeed<T>({
     });
   }, [items, terms, match]);
 
-  // A new query is a new list. Start it at the top and at one page.
+  // A new query is a new list. Start it at one page.
   useEffect(() => {
     setVisible(pageSize);
-    scrollRef.current?.scrollTo({ top: 0 });
   }, [query, pageSize]);
 
   // Growing on a sentinel rather than on scroll position covers the case where
-  // a page of rows is shorter than the box — ten one-line comments do not fill
-  // 42rem, so there is no scroll to listen for. The sentinel is simply still
-  // in view, and the next batch lands immediately.
+  // a page of rows is shorter than the window — ten one-line comments may not
+  // fill it, so there is no scroll to listen for. The sentinel is simply still
+  // in view, and the next batch lands immediately. A hidden bubble's sentinel
+  // never intersects, so a section nobody has opened loads nothing more.
   useEffect(() => {
-    const root = scrollRef.current;
     const sentinel = sentinelRef.current;
-    if (!root || !sentinel || visible >= filtered.length) return;
+    if (!sentinel || visible >= filtered.length) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -88,7 +84,7 @@ export function ProfileFeed<T>({
           setVisible((current) => Math.min(current + pageSize, filtered.length));
         }
       },
-      { root, rootMargin: "300px" },
+      { rootMargin: "300px" },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -135,23 +131,7 @@ export function ProfileFeed<T>({
         </div>
       ) : (
         <>
-          {/* tabIndex makes the box reachable by keyboard: a scrollable region
-              that only a mouse wheel can move is a trap for anyone arrowing
-              through the page. */}
-          <div
-            ref={scrollRef}
-            tabIndex={0}
-            role="region"
-            aria-label={`${noun.many}, scrollable`}
-            className={cn(
-              "max-h-[min(70vh,42rem)] overflow-y-auto overscroll-contain",
-              // The gutter keeps the scrollbar off the cards' right edge
-              // without indenting them relative to the rest of the page.
-              "pr-3 -mr-3 rounded-2xl",
-              "focus:outline-none focus-visible:ring-1 focus-visible:ring-vb-500/40",
-              spacing,
-            )}
-          >
+          <div className={spacing}>
             {shown.map((item, index) => (
               <div key={keyOf(item)}>{render(item, index)}</div>
             ))}
