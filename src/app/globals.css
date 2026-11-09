@@ -223,6 +223,33 @@
       0 12px 28px -10px rgba(185, 111, 44, 0.8);
   }
 
+  /* The town's terminal inside an establishment (EstablishmentRoom). The
+     --term-* values are the rectangle the room reserved, in percentages.
+     On a phone that rectangle is a few centimetres across, so the terminal
+     sits under the picture instead, tall enough to hold a conversation. From
+     md up it rests where the room put it, grown to a size that can be read and
+     slid back inside the picture if growing pushed it over an edge. Sizes and
+     position live here rather than in utilities, which would outrank them. */
+  .room-terminal {
+    margin-top: 0.75rem;
+    width: 100%;
+    height: min(26rem, 65vh);
+    height: min(26rem, 65dvh);
+  }
+
+  @media (min-width: 768px) {
+    .room-terminal {
+      --tw: min(calc(100% - 1rem), max(var(--term-w), 26rem));
+      --th: min(calc(100% - 1rem), max(var(--term-h), 16rem));
+      position: absolute;
+      margin-top: 0;
+      width: var(--tw);
+      height: var(--th);
+      left: clamp(0.5rem, var(--term-x), calc(100% - 0.5rem - var(--tw)));
+      top: clamp(0.5rem, var(--term-y), calc(100% - 0.5rem - var(--th)));
+    }
+  }
+
   /* Secondary actions read as buttons rather than stray text. */
   .btn-secondary {
     @apply inline-flex items-center justify-center rounded-xl border

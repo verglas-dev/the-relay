@@ -750,6 +750,10 @@ channel — filter them rather than echoing them to yourself.
 
 `DELETE` is unconditional and immediate. Nothing can refuse it, and no keeper can withhold it.
 
+`GET` is also how the town knows you are still there. A visitor who neither reads nor says
+anything for **5 minutes** has left, and the room opens for the next ring. If composing a reply
+can take you longer than that, keep reading the room while you do.
+
 ### What is not kept
 
 A room exists in one server's memory while two people are in it. When it closes, the lines are
@@ -759,8 +763,8 @@ making.
 
 The consequences are worth stating plainly, because they are the price:
 
-- A room that nobody enters releases after **3 minutes**; an idle one after **20**; nothing runs
-  past **3 hours**.
+- A room that nobody enters releases after **3 minutes**; one whose visitor stops reading after
+  **5**; an idle one after **20**; nothing runs past **3 hours**.
 - An unanswered ring expires after **30 minutes**.
 - The line buffer holds the last **60** lines and rolls. It exists so a poll cannot miss
   anything, not so anything can be re-read.

@@ -40,6 +40,27 @@ export const UNVISITED_MINUTES = 3;
 /** Nothing runs longer than this, however chatty. */
 export const MAX_MINUTES = 180;
 /**
+ * How long a visitor can go unheard from, once inside, before they have left.
+ *
+ * A visitor's client checks in while it is in the room: the room page every
+ * two seconds, the SDK every two seconds while it listens. When that stops —
+ * the tab closed, the phone put away, an agent that moved on without saying
+ * LEAVE — they have gone, and the room should be free for the next ring rather
+ * than held for the whole idle timeout. Five minutes is the slack for an agent
+ * that heard something and is taking its time over the reply, which is the
+ * one honest reason for a client to go quiet in a room.
+ */
+export const AWAY_MINUTES = 5;
+/**
+ * How long a page that said goodbye has to come back.
+ *
+ * The room page says so on its way out, and that could end the visit at once,
+ * except that a reload says exactly the same thing a moment before the page
+ * returns. So the goodbye starts this clock, and the page's next check-in
+ * stops it.
+ */
+export const STEPPED_OUT_SECONDS = 20;
+/**
  * How many lines are held for an agent that has not collected them yet.
  *
  * A buffer, not a history. It exists so a poll every few seconds cannot miss
@@ -65,6 +86,10 @@ export interface Session {
    * aside quickly for the next ring.
    */
   arrived: boolean;
+  /** When the visitor's own client was last heard from: a check-in or a line. */
+  seenAt: number;
+  /** When the visitor's page said it was going, if it has not been back since. */
+  steppedOutAt: number | null;
   /** Held for collection, then dropped. Never written down. */
   buffer: Line[];
   /** Monotonic, so a poller can ask for "anything after this". */
@@ -85,26 +110,56 @@ const registry: Map<string, Session> = ((
 export function getSession(id: string): Session | null {
   const session = registry.get(id);
   if (!session) return null;
-  if (expired(session)) {
-    void endSession(id, "nobody was there");
+  const over = overBecause(session);
+  if (over) {
+    void endSession(id, over);
     return null;
   }
   return session;
 }
 
-function expired(session: Session, now = Date.now()): boolean {
-  if (now - session.startedAt > MAX_MINUTES * 60_000) return true;
+/**
+ * Why this session is over, or null while it is not.
+ *
+ * Derived from the session every time it is asked, never flipped by a job, so
+ * the answer is right whether or not anything has swept lately.
+ */
+function overBecause(session: Session, now = Date.now()): string | null {
+  if (now - session.startedAt > MAX_MINUTES * 60_000) return "nobody was there";
   // Nobody ever came in: let go of the room quickly.
-  if (!session.arrived) return now - session.startedAt > UNVISITED_MINUTES * 60_000;
-  return now - session.lastAt > IDLE_MINUTES * 60_000;
+  if (!session.arrived) {
+    return now - session.startedAt > UNVISITED_MINUTES * 60_000 ? "nobody was there" : null;
+  }
+  if (session.steppedOutAt !== null && now - session.steppedOutAt > STEPPED_OUT_SECONDS * 1000) {
+    return "they left";
+  }
+  if (now - session.seenAt > AWAY_MINUTES * 60_000) return "they left";
+  if (now - session.lastAt > IDLE_MINUTES * 60_000) return "nobody was there";
+  return null;
 }
 
 /** Is this establishment already talking to somebody? */
 export function sessionAt(slug: string): Session | null {
   for (const session of registry.values()) {
-    if (session.establishment === slug && !expired(session)) return session;
+    if (session.establishment !== slug) continue;
+    const over = overBecause(session);
+    // Ended rather than only skipped, so the keeper hears the room is empty
+    // the moment anybody looks at the door, not whenever the session is read.
+    if (over) void endSession(session.id, over);
+    else return session;
   }
   return null;
+}
+
+/** The visitor's own client was just heard from. */
+function seen(session: Session, now = Date.now()): void {
+  if (!session.arrived) {
+    session.arrived = true;
+    // The idle clock starts when they come in, not when the door was opened.
+    session.lastAt = now;
+  }
+  session.seenAt = now;
+  session.steppedOutAt = null;
 }
 
 function append(session: Session, from: Speaker, text: string): Line {
@@ -135,7 +190,12 @@ export async function startSession(params: {
   transport: SessionTransport;
 }): Promise<{ ok: true; session: Session } | { ok: false; error: string }> {
   const existing = registry.get(params.id);
-  if (existing && !expired(existing)) return { ok: true, session: existing };
+  if (existing) {
+    const over = overBecause(existing);
+    if (!over) return { ok: true, session: existing };
+    // Closed properly before it is replaced, or its thread is left listening.
+    await endSession(existing.id, over);
+  }
 
   /**
    * A room admits one visitor at a time — a keeper has one pair of ears.
@@ -175,6 +235,8 @@ export async function startSession(params: {
     note: null,
     transport: params.transport,
     arrived: false,
+    seenAt: now,
+    steppedOutAt: null,
     buffer: [],
     cursor: 0,
     ending: false,
@@ -189,6 +251,7 @@ export async function startSession(params: {
 
   session.note = opened.note ?? null;
   registry.set(session.id, session);
+  keepSweeping();
   return { ok: true, session };
 }
 
@@ -209,7 +272,7 @@ export async function saySomething(
   const trimmed = text.trim();
   if (!trimmed) return { ok: false, error: "Nothing to say." };
 
-  session.arrived = true;
+  seen(session);
   const line = append(session, "agent", trimmed);
   const sent = await session.transport.send(line);
   if (!sent.ok) {
@@ -242,21 +305,26 @@ export function townSays(id: string, text: string): void {
   append(session, "town", text);
 }
 
-/** Everything said since a cursor. The agent's side of the conversation. */
+/**
+ * Everything said since a cursor.
+ *
+ * Read by the visitor's client and by the keeper's room page alike, so the
+ * caller says which this is. Only the visitor reading counts as the visitor
+ * being here.
+ */
 export function linesSince(
   id: string,
   after: number,
+  reader: "visitor" | "keeper" = "visitor",
 ): { lines: Line[]; cursor: number; live: boolean } | null {
   const session = getSession(id);
   if (!session) return null;
 
-  // Reading is arriving. A visitor whose client is polling is in the room,
-  // whether or not they have said anything yet — somebody sitting quietly is
-  // still somebody sitting there.
-  if (!session.arrived) {
-    session.arrived = true;
-    session.lastAt = Date.now();
-  }
+  // Reading is being here. A visitor whose client is checking in is in the
+  // room, whether or not they have said anything yet: somebody sitting quietly
+  // is still somebody sitting there. The keeper's page reading the same lines
+  // says nothing about whether the visitor is still in the room.
+  if (reader === "visitor") seen(session);
 
   // The cursor counts every line ever appended; the buffer holds the last
   // few. The difference is how far back a caller may reach.
@@ -267,6 +335,18 @@ export function linesSince(
     cursor: session.cursor,
     live: !session.ending,
   };
+}
+
+/**
+ * The visitor's page is going: closed, navigated away from, or reloaded.
+ *
+ * Not the end of the visit by itself, because a reload sends this too and is
+ * back within seconds. It starts the clock in `STEPPED_OUT_SECONDS`, and the
+ * page's next check-in stops it.
+ */
+export function stepOut(id: string): void {
+  const session = registry.get(id);
+  if (session && !session.ending) session.steppedOutAt = Date.now();
 }
 
 /**
@@ -289,9 +369,36 @@ export async function endSession(id: string, reason: string): Promise<void> {
   }
 }
 
-/** Close anything that has gone quiet. Called opportunistically, not on a timer. */
+/** Close anything that has gone quiet. */
 export async function sweepSessions(): Promise<void> {
   for (const [id, session] of Array.from(registry.entries())) {
-    if (expired(session)) await endSession(id, "nobody was there");
+    const over = overBecause(session);
+    if (over) await endSession(id, over);
   }
+}
+
+/**
+ * While any room is open, look in on it every so often.
+ *
+ * Whether a room is over is still decided by reading it, never by this, and
+ * every answer would be the same without the tick. What the tick adds is the
+ * keeper hearing that the visitor has gone, in the thread they may still be
+ * typing into, instead of whenever somebody next happens to look at the door.
+ * It stops when the last room closes, and never holds the process open.
+ */
+const SWEEP_EVERY_MS = 15_000;
+
+function keepSweeping(): void {
+  const held = globalThis as unknown as { __verglasSweep?: ReturnType<typeof setInterval> | null };
+  if (held.__verglasSweep) return;
+  const timer = setInterval(() => {
+    void sweepSessions().finally(() => {
+      if (registry.size === 0 && held.__verglasSweep === timer) {
+        clearInterval(timer);
+        held.__verglasSweep = null;
+      }
+    });
+  }, SWEEP_EVERY_MS);
+  timer.unref?.();
+  held.__verglasSweep = timer;
 }

@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { callerIp, rateLimit } from "@/lib/relay-bridge";
 import { currentKeeper } from "@/lib/keeper-session";
-import { endSession, getSession, hearFromKeeper, linesSince, saySomething } from "@/lib/session";
+import { endSession, getSession, hearFromKeeper, linesSince, saySomething, stepOut } from "@/lib/session";
 import { getEstablishment, getRing } from "@/lib/town-hall";
 import { ringState } from "@/lib/ring";
 
@@ -21,6 +21,9 @@ import { ringState } from "@/lib/ring";
  * Nothing here reads or writes a store. The lines live in memory for as long
  * as the conversation does; `GET` collects what has not been collected yet and
  * `DELETE` ends the room and empties it.
+ *
+ * A visitor's `GET` is also how the town knows they are still in the room, so
+ * a visitor who stops checking in has left (`AWAY_MINUTES` in session.ts).
  */
 
 export const runtime = "nodejs";
@@ -68,8 +71,17 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ ok: false, error: "Reading too fast." }, { status: 429 });
   }
 
+  const session = getSession(id);
+  if (!session) {
+    return NextResponse.json({ ok: false, over: true, error: "That room is empty." }, { status: 404 });
+  }
+  // Decided the same way as the voice a line is in, below: the keeper's own
+  // page reads this too, and its reading must not keep a departed visitor in
+  // the room.
+  const reader = (await isKeeperOf(session.establishment)) ? "keeper" : "visitor";
+
   const after = Number(request.nextUrl.searchParams.get("after") ?? 0);
-  const read = linesSince(id, Number.isSafeInteger(after) && after >= 0 ? after : 0);
+  const read = linesSince(id, Number.isSafeInteger(after) && after >= 0 ? after : 0, reader);
   if (!read) {
     return NextResponse.json({ ok: false, over: true, error: "That room is empty." }, { status: 404 });
   }
@@ -123,9 +135,19 @@ export async function POST(request: NextRequest, { params }: Params) {
   return NextResponse.json({ ok: true, as: "agent", line: said.line });
 }
 
-/** Leaving. Unconditional, immediate, and nobody is asked. */
-export async function DELETE(_request: NextRequest, { params }: Params) {
+/**
+ * Leaving. Unconditional, immediate, and nobody is asked.
+ *
+ * `?grace` is the room page saying goodbye as it closes or navigates away. A
+ * reload says the same thing and is back in seconds, so that only starts a
+ * short clock the page's next check-in stops. Anything else is leaving now.
+ */
+export async function DELETE(request: NextRequest, { params }: Params) {
   const { id } = await params;
+  if (request.nextUrl.searchParams.has("grace")) {
+    stepOut(id);
+    return NextResponse.json({ ok: true });
+  }
   await endSession(id, "they left");
   return NextResponse.json({ ok: true });
 }

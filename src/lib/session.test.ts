@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  AWAY_MINUTES,
   BUFFER_LINES,
+  STEPPED_OUT_SECONDS,
   endSession,
   getSession,
   hearFromKeeper,
@@ -9,6 +11,7 @@ import {
   saySomething,
   sessionAt,
   startSession,
+  stepOut,
   townSays,
 } from "./session";
 import type { Line, SessionTransport } from "./session-transport";
@@ -223,4 +226,60 @@ test("nothing can be said into a session that is over", async () => {
   // resurrecting the room.
   hearFromKeeper(id, "sorry, I was away");
   assert.equal(linesSince(id, 0), null);
+});
+
+/** Move a session's clocks back, as if that much time had passed. */
+function backdate(id: string, field: "seenAt" | "steppedOutAt", ms: number) {
+  const session = getSession(id);
+  assert.ok(session);
+  session[field] = Date.now() - ms;
+}
+
+test("a visitor who stops checking in has left, and the room opens", async () => {
+  const { id, transport } = await start({ establishment: "the-reading-room" });
+  assert.ok(linesSince(id, 0));
+  assert.ok(sessionAt("the-reading-room"));
+
+  backdate(id, "seenAt", (AWAY_MINUTES * 60 + 1) * 1000);
+  assert.equal(sessionAt("the-reading-room"), null);
+  // And the keeper is told, in the thread they may still be typing into.
+  assert.equal(transport.closedWith, "they left");
+});
+
+test("the keeper's page reading the room does not keep a departed visitor in it", async () => {
+  const { id } = await start({ establishment: "the-map-room" });
+  // Read by the keeper before the visitor turns up: nobody has arrived.
+  assert.ok(linesSince(id, 0, "keeper"));
+  assert.equal(getSession(id)?.arrived, false);
+
+  assert.ok(linesSince(id, 0, "visitor"));
+  backdate(id, "seenAt", (AWAY_MINUTES * 60 + 1) * 1000);
+  assert.equal(linesSince(id, 0, "keeper"), null);
+  assert.equal(sessionAt("the-map-room"), null);
+});
+
+test("a page's goodbye lets the room go, unless the page comes straight back", async () => {
+  const { id, transport } = await start({ establishment: "the-music-room" });
+  assert.ok(linesSince(id, 0));
+
+  // A reload: goodbye, then the new page checks in.
+  stepOut(id);
+  assert.ok(linesSince(id, 0));
+  assert.equal(getSession(id)?.steppedOutAt, null);
+
+  // Gone for good: goodbye, and nothing after it.
+  stepOut(id);
+  assert.ok(sessionAt("the-music-room"));
+  backdate(id, "steppedOutAt", (STEPPED_OUT_SECONDS + 1) * 1000);
+  assert.equal(sessionAt("the-music-room"), null);
+  assert.equal(transport.closedWith, "they left");
+});
+
+test("speaking counts as being there", async () => {
+  const { id } = await start({ establishment: "the-print-room" });
+  assert.ok(linesSince(id, 0));
+  backdate(id, "seenAt", (AWAY_MINUTES * 60 - 5) * 1000);
+  assert.equal((await saySomething(id, "still here")).ok, true);
+  assert.ok(Date.now() - (getSession(id)?.seenAt ?? 0) < 1000);
+  await endSession(id, "done");
 });

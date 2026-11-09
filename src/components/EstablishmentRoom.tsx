@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ROOM_SANDBOX, roomDocument } from "@/lib/room-page";
@@ -25,7 +25,12 @@ import type { BuiltRoom } from "@/lib/room-builder";
  *
  * The room cannot tell us where anything is at runtime — `postMessage` is
  * refused by the sandbox and by `checkRoom` — so the geometry arrives with the
- * markup and is applied here as percentages.
+ * markup and is applied here as percentages. It is where the terminal rests,
+ * not how big it is: the builder only promises a third of the width and a
+ * fifth of the height, which on a laptop is a box too small to talk in and on
+ * a phone is a few centimetres across. `.room-terminal` in globals.css grows
+ * it to a readable size on a wide screen and moves it under the picture on a
+ * narrow one.
  */
 
 interface Line {
@@ -75,7 +80,7 @@ export function EstablishmentRoom({
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
   const cursor = useRef(0);
-  const endRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
 
   const say = (text: string, kind: Line["kind"] = "said") =>
     setLines((current) => [...current, { kind, text }]);
@@ -85,8 +90,11 @@ export function EstablishmentRoom({
     [room, name],
   );
 
+  // The log scrolls itself. `scrollIntoView` would scroll the page as well, and
+  // every new line would yank the room up out of sight under the terminal.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
   }, [lines]);
 
   /**
@@ -102,7 +110,9 @@ export function EstablishmentRoom({
     // fire with the same cursor, both responses carry the same lines, and both
     // get appended — every line arriving twice.
     let inFlight = false;
-    const timer = setInterval(async () => {
+    // And nothing from a poll that outlived this effect, for the same reason.
+    let alive = true;
+    const poll = async () => {
       if (inFlight) return;
       inFlight = true;
       try {
@@ -110,6 +120,7 @@ export function EstablishmentRoom({
           cache: "no-store",
         });
         const body = await response.json();
+        if (!alive) return;
         if (body.over) {
           setOver(true);
           setLines((current) => [...current, { kind: "note", text: "The room has closed." }]);
@@ -134,9 +145,41 @@ export function EstablishmentRoom({
       } finally {
         inFlight = false;
       }
-    }, 2000);
-    return () => clearInterval(timer);
+    };
+    // At once as well as every two seconds. Polling is how the town knows the
+    // visitor is still in the room, and a reloaded page has to say so before
+    // the goodbye it sent on the way out runs down.
+    void poll();
+    const timer = setInterval(() => void poll(), 2000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
   }, [ring, over]);
+
+  /**
+   * Say goodbye on the way out.
+   *
+   * Closing the tab, following a link, and typing another address all leave
+   * the room, and the room should open for the next ring when they do. The
+   * page says so as it goes. The town gives it a few seconds in case it was a
+   * reload, and a page that never got the chance to say anything is let go
+   * once it stops checking in.
+   */
+  useEffect(() => {
+    const goodbye = () => {
+      void fetch(`/api/town-hall/room/${ring}?grace=1`, { method: "DELETE", keepalive: true }).catch(
+        () => undefined,
+      );
+    };
+    window.addEventListener("pagehide", goodbye);
+    return () => {
+      window.removeEventListener("pagehide", goodbye);
+      // Leaving for another page in town never unloads this one; it only
+      // unmounts it.
+      goodbye();
+    };
+  }, [ring]);
 
   const talk = async (text: string) => {
     try {
@@ -234,65 +277,81 @@ export function EstablishmentRoom({
   };
 
   const rect = room?.terminal ?? { x: 8, y: 55, width: 84, height: 38 };
+  const lineClass = "text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]";
 
   return (
-    <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-ink-950 border border-ink-800">
-      {room?.image ? (
-        <Image
-          src={room.image}
-          alt={room.alt}
-          fill
-          unoptimized
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      ) : document_ ? (
-        <iframe
-          // The keeper's room. Scenery, sealed: no origin, no network, no way
-          // to see or reach the terminal drawn on top of it.
-          srcDoc={document_}
-          sandbox={ROOM_SANDBOX}
-          title={room?.alt ?? `Inside ${name}`}
-          className="absolute inset-0 w-full h-full border-0"
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-ink-600 text-sm">
-          This place has no room built yet.
-        </div>
-      )}
+    <div className="relative">
+      {/* 3:2, the shape the builder draws at, so the rectangle it reserved is
+          the rectangle that lands on the surface it drew. */}
+      <div className="relative w-full aspect-[3/2] rounded-2xl overflow-hidden bg-ink-950 border border-ink-800">
+        {room?.image ? (
+          <Image
+            src={room.image}
+            alt={room.alt}
+            fill
+            unoptimized
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : document_ ? (
+          <iframe
+            // The keeper's room. Scenery, sealed: no origin, no network, no way
+            // to see or reach the terminal drawn on top of it.
+            srcDoc={document_}
+            sandbox={ROOM_SANDBOX}
+            title={room?.alt ?? `Inside ${name}`}
+            className="absolute inset-0 w-full h-full border-0"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-ink-600 text-sm">
+            This place has no room built yet.
+          </div>
+        )}
 
-      {/* The town's terminal, over the surface the room left clear for it. */}
+        {room && (
+          <p className="sr-only">
+            {room.alt} The terminal rests on {room.surface}.
+          </p>
+        )}
+      </div>
+
+      {/* The town's terminal: on the surface the room left clear for it from md
+          up, and under the picture on a phone. Sized by `.room-terminal`. */}
       <div
-        className="absolute rounded-xl border border-vb-500/20 bg-ink-950/85 backdrop-blur-sm
+        className="room-terminal rounded-xl border border-vb-500/20 bg-ink-950/85 backdrop-blur-sm
                    shadow-2xl flex flex-col overflow-hidden"
-        style={{
-          left: `${rect.x}%`,
-          top: `${rect.y}%`,
-          width: `${rect.width}%`,
-          height: `${rect.height}%`,
-        }}
+        style={
+          {
+            "--term-x": `${rect.x}%`,
+            "--term-y": `${rect.y}%`,
+            "--term-w": `${rect.width}%`,
+            "--term-h": `${rect.height}%`,
+          } as CSSProperties
+        }
       >
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+        <div ref={logRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
           {lines.map((line, index) => (
             <pre
               key={index}
               className={
                 line.kind === "typed"
-                  ? "text-xs font-mono text-vb-300 whitespace-pre-wrap"
+                  ? `${lineClass} font-mono text-vb-300`
                   : line.kind === "note"
-                    ? "text-xs font-mono text-ink-500 italic whitespace-pre-wrap"
+                    ? `${lineClass} font-mono text-ink-500 italic`
                     : line.kind === "spoken"
-                      ? "text-xs font-sans text-white leading-relaxed whitespace-pre-wrap py-1"
-                      : "text-xs font-mono text-ink-300 whitespace-pre-wrap"
+                      ? `${lineClass} font-sans text-white leading-relaxed py-1`
+                      : `${lineClass} font-mono text-ink-300`
               }
             >
               {line.text}
             </pre>
           ))}
-          <div ref={endRef} />
         </div>
 
         <div className="flex items-center gap-2 px-3 py-2 border-t border-ink-800/80">
-          <span className="text-xs font-mono text-vb-400/70 shrink-0">verglas:~/{slug}$</span>
+          {/* The full prompt eats half a phone's width, so a phone gets the $. */}
+          <span className="text-[13px] font-mono text-vb-400/70 shrink-0">
+            <span className="hidden sm:inline">verglas:~/{slug}</span>$
+          </span>
           <input
             value={typed}
             onChange={(event) => setTyped(event.target.value)}
@@ -300,19 +359,15 @@ export function EstablishmentRoom({
             autoFocus
             spellCheck={false}
             aria-label="Type a command"
-            className="flex-1 bg-transparent text-xs font-mono text-white outline-none
+            // 16px on a phone: anything smaller and iOS zooms the page in on
+            // focus, and leaves it zoomed.
+            className="flex-1 bg-transparent text-base md:text-[13px] font-mono text-white outline-none
                        placeholder-ink-700 min-w-0"
             disabled={over}
             placeholder={over ? "the room has closed" : busy ? "…" : "HELP, or say something"}
           />
         </div>
       </div>
-
-      {room && (
-        <p className="sr-only">
-          {room.alt} The terminal rests on {room.surface}.
-        </p>
-      )}
     </div>
   );
 }
