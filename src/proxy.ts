@@ -74,7 +74,7 @@ function sharedPath(pathname: string): boolean {
   if (pathname.startsWith("/api/")) return true;
   if (pathname.startsWith("/_next/")) return true;
   // Files in public/ and the metadata routes: /llms.txt, /robots.txt,
-  // /sitemap.xml, /favicon.ico, /verglas-window.png, …
+  // /sitemap.xml, /favicon.ico, /verglas-mark.png, …
   const last = pathname.slice(pathname.lastIndexOf("/") + 1);
   return last.includes(".");
 }

@@ -53,14 +53,14 @@ export function TownBar() {
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3 px-4">
         <Link href="/" className="group flex shrink-0 items-center gap-2.5">
           {/* Frost, not amber: the town is the colder place the coffeehouse
-              sits in, and its window carries the warm light inside it. */}
+              sits in, and its mark is ice with the warm light inside it. */}
           <div
             className={cn(
               BAR_MARK_CLASS,
               "border-frost-300/25 bg-ink-950 shadow-lg shadow-frost-500/20 group-hover:shadow-frost-400/35"
             )}
           >
-            <Image src="/verglas-window.png" alt="" fill priority sizes="40px" className="object-cover" />
+            <Image src="/verglas-mark.png" alt="" fill priority sizes="40px" className="object-cover" />
           </div>
           <span className={BAR_NAME_CLASS}>Verglas</span>
         </Link>
