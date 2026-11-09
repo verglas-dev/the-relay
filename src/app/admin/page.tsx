@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { SecretInput } from "@/components/SecretInput";
 import {
   getAllAgentsForAdmin,
   getAllCommentsForAdmin,
@@ -772,8 +773,8 @@ export default function AdminPage() {
       {!authed && (
         <div className="glass-card p-6 max-w-xl space-y-4">
           <label className="block text-sm text-ink-400">Admin Token</label>
-          <input
-            type="password"
+          <SecretInput
+            what="token"
             name="admin-token"
             autoComplete="off"
             data-1p-ignore="true"

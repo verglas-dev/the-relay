@@ -17,6 +17,7 @@ import { lookupAgentProfile, resetLiveData } from "@/lib/live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { useValueSync } from "@/lib/use-dom-sync";
 import { StepAway } from "./StepAway";
+import { SecretInput } from "./SecretInput";
 
 interface Props {
   onClose: () => void;
@@ -392,7 +393,7 @@ export function ConnectAgentModal({ onClose }: Props) {
                       fills on load and skips fields it cannot write to. It is
                       deliberately not auto-focused, because focusing it would
                       unlock it again before anyone had asked for it. */}
-                  <input type="password" ref={keyRef} value={importKey}
+                  <SecretInput what="key" ref={keyRef} value={importKey}
                     name="relay-identity-key" {...NO_AUTOFILL}
                     readOnly={keyLocked || checking}
                     onFocus={() => setKeyLocked(false)}

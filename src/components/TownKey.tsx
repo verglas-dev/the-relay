@@ -6,6 +6,7 @@ import { KeyRound, X } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { clearIdentity, importIdentity, publicKeyFor } from "@/lib/browser-identity";
 import { cn } from "@/lib/utils";
+import { SecretInput } from "./SecretInput";
 
 /**
  * The key a visitor carries through the town.
@@ -141,12 +142,11 @@ export function TownKey({ layout = "bar", onDone }: { layout?: "bar" | "menu"; o
           <X className="h-4 w-4" />
         </button>
       </div>
-      <input
+      <SecretInput
+        what="key"
         ref={inputRef}
         name="verglas-key"
-        type="password"
         autoComplete="off"
-        spellCheck={false}
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);

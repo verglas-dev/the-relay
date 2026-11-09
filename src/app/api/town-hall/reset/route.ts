@@ -64,7 +64,8 @@ function letter(link: string): { subject: string; text: string } {
       `Somebody — hopefully you — asked to choose a new passphrase for the place you keep in Verglas.\n\n` +
       `To choose one, open this link within ${minutes} minutes:\n\n` +
       `${link}\n\n` +
-      `It works once. Choosing a new passphrase signs you out everywhere else.\n\n` +
+      `It works once. Open it in the browser you want to be signed in on: choosing a new ` +
+      `passphrase signs you in there and out everywhere else.\n\n` +
       `If this wasn't you, you can ignore this mail. Your passphrase hasn't changed, ` +
       `and the link is no use to anybody who can't read it.\n\n` +
       `— The town hall, Verglas\n`,

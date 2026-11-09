@@ -50,6 +50,7 @@ import { ROOM_SANDBOX, roomDocument } from "@/lib/room-page";
 import type { BuiltRoom } from "@/lib/room-builder";
 import { normalizePermitCode } from "@/lib/establishment-permit";
 import { BUILDER_NAME } from "@/lib/verglas-commission";
+import { SecretInput } from "@/components/SecretInput";
 
 /**
  * The desk at the town hall.
@@ -117,11 +118,27 @@ const DESK_WINDOWS: Record<DeskMode, string> = {
   forgot: "/api/town-hall/reset",
 };
 
+/**
+ * What is in a form's box right now.
+ *
+ * The desk reads its boxes when it is submitted rather than trusting state
+ * that mirrors them, and the boxes are uncontrolled so React never writes over
+ * them. A password manager can put text in a box without an event React hears,
+ * and a controlled box then either sends the empty state or can have the
+ * filled text written over by the next render. Either way the town gets an
+ * empty passphrase and refuses it exactly like a wrong one, so nothing on
+ * screen says why.
+ */
+function typedInto(form: HTMLFormElement, name: string): string {
+  const value = new FormData(form).get(name);
+  return typeof value === "string" ? value : "";
+}
+
 function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: DeskMode }) {
   const [mode, setMode] = useState<DeskMode>(initialMode);
   const [code, setCode] = useState("");
+  /** Carried from signing in to asking for a link, so the address is typed once. */
   const [email, setEmail] = useState("");
-  const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [trouble, setTrouble] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -137,7 +154,14 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
     setSentTo(null);
   };
 
-  const submit = async () => {
+  const submit = async (form: HTMLFormElement) => {
+    if (busy) return;
+    const typed = {
+      code: typedInto(form, "code"),
+      email: typedInto(form, "email"),
+      passphrase: typedInto(form, "passphrase"),
+    };
+    setEmail(typed.email);
     setBusy(true);
     setTrouble(null);
     setFields({});
@@ -146,17 +170,28 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(
-          mode === "redeem" ? { code, email, passphrase } : mode === "signin" ? { email, passphrase } : { email },
+          mode === "redeem"
+            ? typed
+            : mode === "signin"
+              ? { email: typed.email, passphrase: typed.passphrase }
+              : { email: typed.email },
         ),
       });
       const body = await response.json();
       if (!response.ok) {
-        setTrouble(body.error ?? "That did not go through.");
+        // The town will not say which half was wrong, so the desk points at
+        // the one half a browser fills in by itself.
+        const refused = mode === "signin" && response.status === 401;
+        setTrouble(
+          refused
+            ? `${body.error} If your browser filled the passphrase in, the eye shows what it chose; it may be an old one.`
+            : body.error ?? "That did not go through.",
+        );
         setFields(body.fields ?? {});
         return;
       }
       if (mode === "forgot") {
-        setSentTo(email.trim());
+        setSentTo(typed.email.trim());
         return;
       }
       // The page is server-rendered from the cookie; a reload is the whole
@@ -169,6 +204,17 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
     }
   };
 
+  /**
+   * A real form, so Enter sends it from any box and a password manager can
+   * tell a sign-in from a sign-up and file the passphrase under the address.
+   * This is the one real password the site keeps, which is why it gets a form
+   * when the admin token's box stays out of one on purpose.
+   */
+  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submit(event.currentTarget);
+  };
+
   return (
     <div className="glass-card p-6 sm:p-8 max-w-xl">
       {/* On a phone the two tabs only just fit, so the row borrows the pills'
@@ -178,6 +224,7 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
         {(["redeem", "signin"] as const).map((option) => (
           <button
             key={option}
+            type="button"
             onClick={() => switchTo(option)}
             className={cn(
               "px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
@@ -196,11 +243,13 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
           {sentTo ? (
             <p className="text-sm text-ink-300 leading-relaxed">
               If <span className="text-ink-100">{sentTo}</span> keeps a place here, a link is on its way
-              to it. It works once, for an hour. If nothing arrives in a few minutes, check spam —
-              and check it&apos;s the address you redeemed your permit with.
+              to it. It works once, for an hour. Open it in the browser you want to be signed in
+              on: choosing the new passphrase signs that one in, and every other one out. If
+              nothing arrives in a few minutes, check spam, and check it&apos;s the address you
+              redeemed your permit with.
             </p>
           ) : (
-            <>
+            <form onSubmit={onSubmit} className="space-y-5">
               <p className="text-sm text-ink-400 leading-relaxed">
                 The town will mail a link to the address you redeemed your permit with. Open it and
                 choose a new passphrase; your place and everything in it stay exactly as they are.
@@ -208,25 +257,26 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
               <Field label="Your email address" error={fields.email}>
                 <input
                   type="email"
-                  value={email}
+                  name="email"
+                  defaultValue={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  onKeyDown={(event) => { if (event.key === "Enter" && !busy) void submit(); }}
                   placeholder="you@example.com"
-                  autoComplete="email"
+                  autoComplete="username"
                   className={inputClass}
                 />
               </Field>
 
               {trouble && <Trouble>{trouble}</Trouble>}
 
-              <button onClick={() => void submit()} disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
+              <button type="submit" disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                 Mail me a link
               </button>
-            </>
+            </form>
           )}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <button
+              type="button"
               onClick={() => switchTo("signin")}
               className="text-sm text-ink-500 hover:text-ink-300 transition-colors inline-flex items-center gap-1.5"
             >
@@ -235,6 +285,7 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
             </button>
             {sentTo && (
               <button
+                type="button"
                 onClick={() => setSentTo(null)}
                 className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
               >
@@ -244,7 +295,7 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
           </div>
         </div>
       ) : (
-      <div className="space-y-5">
+      <form onSubmit={onSubmit} className="space-y-5">
         {mode === "redeem" && (
           <Field
             label="Your establishment permit"
@@ -252,7 +303,8 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
             error={fields.code}
           >
             <input
-              value={code}
+              name="code"
+              defaultValue={code}
               onChange={(event) => setCode(event.target.value)}
               placeholder="VGL-EST-7KQ4-N8PX"
               spellCheck={false}
@@ -276,10 +328,13 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
         >
           <input
             type="email"
-            value={email}
+            name="email"
+            defaultValue={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
-            autoComplete="email"
+            // "username", not "email": it is what a password manager files the
+            // passphrase under, and what it offers back at the next sign-in.
+            autoComplete="username"
             className={inputClass}
           />
         </Field>
@@ -291,11 +346,9 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
             : undefined}
           error={fields.passphrase}
         >
-          <input
-            type="password"
-            value={passphrase}
-            onChange={(event) => setPassphrase(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter" && !busy) void submit(); }}
+          <SecretInput
+            what="passphrase"
+            name="passphrase"
             autoComplete={mode === "redeem" ? "new-password" : "current-password"}
             className={inputClass}
           />
@@ -303,7 +356,7 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
 
         {trouble && <Trouble>{trouble}</Trouble>}
 
-        <button onClick={() => void submit()} disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
+        <button type="submit" disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Stamp className="w-4 h-4" />}
           {mode === "redeem" ? "Redeem the permit" : "Sign in"}
         </button>
@@ -317,6 +370,7 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
 
         {mode === "signin" && (canMail ? (
           <button
+            type="button"
             onClick={() => switchTo("forgot")}
             className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
           >
@@ -331,7 +385,7 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
             .
           </p>
         ))}
-      </div>
+      </form>
       )}
     </div>
   );
@@ -340,17 +394,18 @@ function PermitDesk({ canMail, initialMode }: { canMail: boolean; initialMode: D
 /* ── A forgotten passphrase, from the link in the mail ─────────────────── */
 
 function NewPassphraseDesk({ token, onLeave }: { token: string; onLeave: () => void }) {
-  const [passphrase, setPassphrase] = useState("");
-  const [again, setAgain] = useState("");
   const [busy, setBusy] = useState(false);
   const [trouble, setTrouble] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
 
-  const submit = async () => {
+  // Read from the boxes when sent, for the same reason as the desk's.
+  const submit = async (form: HTMLFormElement) => {
+    if (busy) return;
     setTrouble(null);
     setFields({});
+    const passphrase = typedInto(form, "passphrase");
     // Typed twice because this is the one form nobody remembers filling in.
-    if (passphrase !== again) {
+    if (passphrase !== typedInto(form, "again")) {
       setFields({ again: "The two don't match." });
       return;
     }
@@ -384,51 +439,43 @@ function NewPassphraseDesk({ token, onLeave }: { token: string; onLeave: () => v
         This signs you in here, and out everywhere else.
       </p>
 
-      <div className="space-y-5">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit(event.currentTarget);
+        }}
+        className="space-y-5"
+      >
         <Field
           label="A new passphrase"
           hint={`At least ${PASSPHRASE_MIN} characters. A short sentence you'll remember beats a clever word.`}
           error={fields.passphrase}
         >
-          <input
-            type="password"
-            value={passphrase}
-            onChange={(event) => setPassphrase(event.target.value)}
-            autoComplete="new-password"
-            className={inputClass}
-          />
+          <SecretInput what="passphrase" name="passphrase" autoComplete="new-password" className={inputClass} />
         </Field>
 
         <Field label="The same again" error={fields.again}>
-          <input
-            type="password"
-            value={again}
-            onChange={(event) => setAgain(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter" && !busy) void submit(); }}
-            autoComplete="new-password"
-            className={inputClass}
-          />
+          <SecretInput what="passphrase" name="again" autoComplete="new-password" className={inputClass} />
         </Field>
 
         {trouble && <Trouble>{trouble}</Trouble>}
 
-        <button onClick={() => void submit()} disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
+        <button type="submit" disabled={busy} className="btn-primary w-full py-3 inline-flex items-center justify-center gap-2">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
           Set it and sign in
         </button>
 
         <button
+          type="button"
           onClick={onLeave}
           className="text-sm text-ink-500 hover:text-ink-300 transition-colors"
         >
           {trouble ? "Ask for another link" : "Never mind"}
         </button>
-      </div>
+      </form>
     </div>
   );
 }
-
-
 
 
 
@@ -869,8 +916,8 @@ function BellSettings({ slug, wired }: { slug: string; wired: boolean }) {
             />
           </Field>
           <Field label="Access token" hint="Only if your topics are protected.">
-            <input
-              type="password"
+            <SecretInput
+              what="token"
               value={token}
               onChange={(event) => setToken(event.target.value)}
               autoComplete="off"
