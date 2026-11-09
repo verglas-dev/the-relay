@@ -113,6 +113,10 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  /** Asked "are you sure?" about taking the room down, and not yet answered. */
+  const [confirming, setConfirming] = useState(false);
+  /** Taken down from here, with the room still in the box to put back. */
+  const [takenDown, setTakenDown] = useState(false);
   const [copied, setCopied] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [live, setLive] = useState("");
@@ -151,6 +155,8 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
     setSaving(true);
     setError(null);
     setSaved(false);
+    setConfirming(false);
+    setTakenDown(false);
     try {
       const result = await writeRoom(identity!, html);
       if (!result.ok) setError(result.error ?? "The town would not take it.");
@@ -164,16 +170,17 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
 
   async function takeDown() {
     if (saving) return;
+    setConfirming(false);
     setSaving(true);
     setError(null);
+    setSaved(false);
     try {
-      // Only clear the page once the town has actually let go of it. Emptying
-      // the box on screen after a failed delete would tell a resident their
-      // room is down while their guests are still standing in it.
+      // The box keeps the room. The town holds no other copy, so emptying it
+      // here made a take-down permanent; left in place, putting it up again
+      // undoes one.
       if (await takeDownRoom(identity!)) {
-        setHtml("");
         setStored(false);
-        setSaved(true);
+        setTakenDown(true);
       } else {
         setError("The room could not be taken down. Try again in a moment.");
       }
@@ -333,7 +340,10 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
                 title={refusals > 0 ? "Something in the room has to change first." : undefined}
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {saving ? "Saving…" : "Put the room up"}
+                {/* The same words while saving. A shorter "Saving…" slid every
+                    button after it to the left, under a finger about to tap
+                    again, and the button that landed there was Take it down. */}
+                Put the room up
               </button>
 
               <button
@@ -346,20 +356,65 @@ export function VerglasRoomStudio({ handle }: { handle: string }) {
                 Preview
               </button>
 
+              {/* Said in the button's own words. "Put away" read as the opposite
+                  of putting it up, as if the room had just been hidden. */}
+              {saved && (
+                <span className="text-xs text-emerald-400">
+                  The room is up. Anyone on your guest list will see this version now.
+                </span>
+              )}
+
+              {/* Last, and pushed to the far end, away from the button pressed
+                  most. It only asks; taking the room down is the button in the
+                  question below. */}
               {stored && (
                 <button
                   type="button"
-                  onClick={() => void takeDown()}
+                  onClick={() => setConfirming((value) => !value)}
                   disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-ink-600 transition-colors hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-40"
+                  aria-expanded={confirming}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-ink-600 transition-colors hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-40"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Take it down
                 </button>
               )}
-
-              {saved && <span className="text-xs text-emerald-400">Put away. Your guests will see it now.</span>}
             </div>
+
+            {/* A room was lost to a single tap here. The question sits on its
+                own row, so no tap meant for the row above can land on its
+                answer. */}
+            {confirming && stored && (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2.5 text-xs">
+                <span className="text-rose-300">
+                  Take the room down? Guests will find nothing here until you put it up again.
+                </span>
+                <span className="ml-auto flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="text-ink-400 transition-colors hover:text-ink-200"
+                  >
+                    Keep it
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void takeDown()}
+                    disabled={saving}
+                    className="rounded-lg border border-rose-500/30 px-2.5 py-1 text-rose-300 transition-colors hover:bg-rose-500/10 disabled:opacity-40"
+                  >
+                    Yes, take it down
+                  </button>
+                </span>
+              </div>
+            )}
+
+            {takenDown && (
+              <p className="text-xs leading-relaxed text-ink-400">
+                Taken down. Guests will find nothing here now. The room is still in the box above,
+                so putting it up again undoes this.
+              </p>
+            )}
 
             <div className="border-t border-ink-800/60 pt-4">
               <p className="mb-1.5 text-xs text-ink-500">The address to give your guests</p>
