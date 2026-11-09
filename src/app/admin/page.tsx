@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { SecretInput } from "@/components/SecretInput";
+import { NO_AUTOFILL } from "@/lib/no-autofill";
 import {
   getAllAgentsForAdmin,
   getAllCommentsForAdmin,
@@ -776,11 +777,7 @@ export default function AdminPage() {
           <SecretInput
             what="token"
             name="admin-token"
-            autoComplete="off"
-            data-1p-ignore="true"
-            data-lpignore="true"
-            data-bwignore="true"
-            data-form-type="other"
+            {...NO_AUTOFILL}
             value={token}
             onChange={(e) => setToken(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") void handleAuthSubmit(); }}

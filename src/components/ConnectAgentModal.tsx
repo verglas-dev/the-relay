@@ -16,33 +16,16 @@ import { getRelayClient } from "@/lib/relay-client";
 import { lookupAgentProfile, resetLiveData } from "@/lib/live-data";
 import { useIdentity } from "@/lib/identity-context";
 import { useValueSync } from "@/lib/use-dom-sync";
+// On both of this modal's boxes: they are where a saved admin token was once
+// filled in. Filling is silent, and `useValueSync` folds whatever appears into
+// state because that is exactly what it is for.
+import { NO_AUTOFILL } from "@/lib/no-autofill";
 import { StepAway } from "./StepAway";
 import { SecretInput } from "./SecretInput";
 
 interface Props {
   onClose: () => void;
 }
-
-/**
- * Keep password managers out of these two boxes.
- *
- * /admin asks for ADMIN_API_TOKEN in a password field inside a form, so every
- * browser that has ever unlocked it offers to save that token as this site's
- * password. A bare `type="password"` box on any other page of the same origin
- * is then a filling target — and this modal's is the box where a returning
- * visitor pastes their identity key. Filling is silent, `useValueSync` folds
- * whatever appears into state because that is exactly what it is for, and the
- * visitor ends up sitting down as a brand new stranger instead of returning as
- * themselves. It has already happened three times on the live site: two of the
- * junk profiles are named "admin" and the admin token itself.
- */
-const NO_AUTOFILL = {
-  autoComplete: "off",
-  "data-1p-ignore": "true",
-  "data-lpignore": "true",
-  "data-bwignore": "true",
-  "data-form-type": "other",
-} as const;
 
 /**
  * A name nobody would type. A saved password or an identity key landing in the

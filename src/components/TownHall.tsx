@@ -51,6 +51,7 @@ import type { BuiltRoom } from "@/lib/room-builder";
 import { normalizePermitCode } from "@/lib/establishment-permit";
 import { BUILDER_NAME } from "@/lib/verglas-commission";
 import { SecretInput } from "@/components/SecretInput";
+import { NO_AUTOFILL } from "@/lib/no-autofill";
 
 /**
  * The desk at the town hall.
@@ -838,6 +839,8 @@ function BellSettings({ slug, wired }: { slug: string; wired: boolean }) {
   const [topic, setTopic] = useState("");
   const [server, setServer] = useState("");
   const [token, setToken] = useState("");
+  /** Read-only until somebody touches it; see the box. */
+  const [tokenLocked, setTokenLocked] = useState(true);
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
@@ -896,7 +899,7 @@ function BellSettings({ slug, wired }: { slug: string; wired: boolean }) {
           onChange={(event) => setTopic(event.target.value)}
           placeholder={wired ? "a new topic replaces the current one" : "verglas-thawing-room-8f2k"}
           spellCheck={false}
-          autoComplete="off"
+          {...NO_AUTOFILL}
           className={cn(inputClass, "font-mono")}
         />
       </Field>
@@ -912,15 +915,26 @@ function BellSettings({ slug, wired }: { slug: string; wired: boolean }) {
               onChange={(event) => setServer(event.target.value)}
               placeholder="https://ntfy.example.com"
               spellCheck={false}
+              // The text box before a password box is what a password manager
+              // takes for the username, and it would put the keeper's address here.
+              {...NO_AUTOFILL}
               className={cn(inputClass, "font-mono")}
             />
           </Field>
           <Field label="Access token" hint="Only if your topics are protected.">
+            {/* The one password box on the keeper's page, and the one that
+                leaves the town: it goes to whichever ntfy server is named
+                above. A browser that saved the keeper's passphrase would offer
+                it here, so the box stays read-only, which managers will not
+                fill, until somebody touches it. */}
             <SecretInput
               what="token"
               value={token}
               onChange={(event) => setToken(event.target.value)}
-              autoComplete="off"
+              {...NO_AUTOFILL}
+              readOnly={tokenLocked}
+              onFocus={() => setTokenLocked(false)}
+              onPointerDown={() => setTokenLocked(false)}
               className={inputClass}
             />
           </Field>

@@ -6,6 +6,7 @@ import { KeyRound, X } from "lucide-react";
 import { useIdentity } from "@/lib/identity-context";
 import { clearIdentity, importIdentity, publicKeyFor } from "@/lib/browser-identity";
 import { cn } from "@/lib/utils";
+import { NO_AUTOFILL } from "@/lib/no-autofill";
 import { SecretInput } from "./SecretInput";
 
 /**
@@ -122,12 +123,14 @@ export function TownKey({ layout = "bar", onDone }: { layout?: "bar" | "menu"; o
     );
   }
 
-  const form = (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        carry();
-      }}
+  // Not a form, like the admin token's box: a password box submitted inside a
+  // form is what makes a browser offer to save it as the site's password, and a
+  // house key saved that way is then offered back in the town hall's sign-in.
+  // Not read-only until touched either, unlike the bell's token. It is opened on
+  // purpose and focused at once, and anything filled in here only fails the
+  // check below; it never leaves the browser.
+  const panel = (
+    <div
       className={cn(
         "glass-card space-y-3 p-4 text-left",
         inMenu ? "mt-2 w-full" : "absolute right-0 top-full z-50 mt-2 w-[min(24rem,calc(100vw-2rem))]"
@@ -146,11 +149,14 @@ export function TownKey({ layout = "bar", onDone }: { layout?: "bar" | "menu"; o
         what="key"
         ref={inputRef}
         name="verglas-key"
-        autoComplete="off"
+        {...NO_AUTOFILL}
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
           setError("");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") carry();
         }}
         placeholder="64 characters of hex"
         className="w-full rounded-lg border border-ink-700/60 bg-ink-950/60 px-3 py-2 font-mono text-xs text-ink-100
@@ -160,10 +166,10 @@ export function TownKey({ layout = "bar", onDone }: { layout?: "bar" | "menu"; o
       <p className="text-xs text-ink-600">
         At the coffeehouse it&apos;s under Edit profile on your own page, with a copy button.
       </p>
-      <button type="submit" name="carry-key" className="btn-primary w-full justify-center py-2 text-sm">
+      <button type="button" name="carry-key" onClick={carry} className="btn-primary w-full justify-center py-2 text-sm">
         Carry it in
       </button>
-    </form>
+    </div>
   );
 
   return (
@@ -180,7 +186,7 @@ export function TownKey({ layout = "bar", onDone }: { layout?: "bar" | "menu"; o
         <KeyRound className="h-4 w-4 shrink-0" aria-hidden="true" />
         Bring your key
       </button>
-      {open && form}
+      {open && panel}
     </span>
   );
 }
