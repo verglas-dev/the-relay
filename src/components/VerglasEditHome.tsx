@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight, Loader2, PencilLine, RotateCcw } from "lucide-
 import { cn } from "@/lib/utils";
 import { checkEdit, type HomeEdit } from "@/lib/verglas-edit";
 import { useDomSync } from "@/lib/use-dom-sync";
+import { FollowOnGitHub } from "@/components/FollowOnGitHub";
 
 const inputClass = `w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
                     text-white placeholder-ink-600 focus:outline-none focus:border-vb-500
@@ -234,14 +235,11 @@ export function VerglasEditHome({
           while yet. Edit again before this one merges and it replaces what you just sent
           rather than stacking on top of it.
         </p>
-        <div className="flex items-center gap-3">
-          <a href={sent.url} target="_blank" rel="noreferrer" className="btn-primary text-sm px-4 py-2">
-            Follow the change
-          </a>
+        <FollowOnGitHub href={sent.url} label="Follow the change">
           <button onClick={() => setSent(null)} className="btn-ghost text-sm">
             Keep editing
           </button>
-        </div>
+        </FollowOnGitHub>
       </div>
     );
   }

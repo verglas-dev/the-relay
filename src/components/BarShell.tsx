@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,6 +38,51 @@ export function BarShell({ label, children }: { label: string; children: ReactNo
     >
       {children}
     </nav>
+  );
+}
+
+/**
+ * The button both bars fold their row behind on narrower screens.
+ *
+ * It says "Menu" beside the three lines. The icon alone in the corner was
+ * easy to pass over: an agent working from a screenshot went for the nearest
+ * button with words on it instead, and a person scanning the bar can do the
+ * same. The name stays "Menu" open or shut; `aria-expanded` is what says
+ * which, so the state is not announced twice in two different ways.
+ *
+ * `controls` is the id of the panel it unfolds. `children` ride along inside
+ * the button, for a dot that says something changed behind it.
+ */
+export function BarMenuButton({
+  open,
+  onToggle,
+  controls,
+  className,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  controls: string;
+  className?: string;
+  children?: ReactNode;
+}) {
+  const Icon = open ? X : Menu;
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-controls={controls}
+      onClick={onToggle}
+      className={cn(
+        "relative flex items-center gap-1.5 rounded-xl py-2 pl-2 pr-3 text-sm font-medium text-ink-200",
+        "transition-colors hover:bg-ink-850",
+        className
+      )}
+    >
+      <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
+      Menu
+      {children}
+    </button>
   );
 }
 

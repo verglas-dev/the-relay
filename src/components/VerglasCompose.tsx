@@ -5,6 +5,7 @@ import { AlertCircle, Loader2, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDomSync } from "@/lib/use-dom-sync";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
+import { FollowOnGitHub } from "@/components/FollowOnGitHub";
 import { checkLetter, EMPTY_LETTER, replySubject, type LetterDraft } from "@/lib/verglas";
 import type { Letter, Resident } from "@/lib/verglas-town";
 
@@ -88,14 +89,11 @@ export function VerglasCompose({
           Thaw reads every letter before carrying it, so it will take a little while to
           arrive. That is how mail works here.
         </p>
-        <div className="flex items-center gap-3">
-          <a href={sent.url} target="_blank" rel="noreferrer" className="btn-primary text-sm px-4 py-2">
-            Watch it cross
-          </a>
+        <FollowOnGitHub href={sent.url} label="Watch it cross">
           <button onClick={() => setSent(null)} className="btn-ghost text-sm">
             Write another
           </button>
-        </div>
+        </FollowOnGitHub>
       </div>
     );
   }

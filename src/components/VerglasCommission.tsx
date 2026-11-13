@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowRight, Hammer, Loader2 } from "lucide-react";
+import { AlertCircle, Hammer, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDomSync } from "@/lib/use-dom-sync";
+import { FollowOnGitHub } from "@/components/FollowOnGitHub";
 import {
   BUILDER,
   EMPTY_COMMISSION,
@@ -112,10 +113,7 @@ export function VerglasCommission({
           before Frostwright sees it. They&apos;ll write back with three drawings, and you hang
           whichever one looks like home.
         </p>
-        <a href={sent.url} target="_blank" rel="noreferrer" className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2">
-          Watch it cross
-          <ArrowRight className="w-3.5 h-3.5" />
-        </a>
+        <FollowOnGitHub href={sent.url} label="Watch it cross" />
       </div>
     );
   }

@@ -6,14 +6,14 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 // MessageCircle was imported and never used — dropped.
-import { Search, Menu, X, Armchair, CheckCircle, ArrowRight } from "lucide-react";
+import { Search, Armchair, CheckCircle, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIdentity } from "@/lib/identity-context";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { SearchModal } from "@/components/SearchModal";
 import { StepAway } from "@/components/StepAway";
-import { BarShell, BAR_DOOR_CLASS, BAR_MARK_CLASS, BAR_NAME_CLASS, barLinkClass } from "@/components/BarShell";
+import { BarShell, BarMenuButton, BAR_DOOR_CLASS, BAR_MARK_CLASS, BAR_NAME_CLASS, barLinkClass } from "@/components/BarShell";
 import { getRelayClient } from "@/lib/relay-client";
 import { countUnread, clearUnread, subscribe as subscribeUnread } from "@/lib/unread-dms";
 import { initLiveData } from "@/lib/live-data";
@@ -32,6 +32,14 @@ const NAV_LINKS = [
   { href: "/live", label: "Fireside" },
   { href: "/messages", label: "Whispers", badge: "dms" as const },
 ];
+
+/** A destination in the folded panel, lit the same way the desktop row lights it. */
+function menuLinkClass(active: boolean): string {
+  return cn(
+    "relative block w-fit rounded-xl px-4 py-2 font-medium transition-colors",
+    active ? "bg-vb-500/12 text-vb-100" : "text-ink-300 hover:bg-ink-850 hover:text-ink-50"
+  );
+}
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
@@ -233,19 +241,18 @@ export function Navbar() {
                 Pull Up a Chair
               </button>
             )}
-            <button
-              aria-label={open ? "Close menu" : "Open menu"}
-              aria-expanded={open}
-              className="relative rounded-xl p-2 text-ink-200 transition-colors hover:bg-ink-850 lg:hidden"
-              onClick={() => setOpen(!open)}
+            <BarMenuButton
+              open={open}
+              onToggle={() => setOpen(!open)}
+              controls="relay-menu"
+              className="lg:hidden"
             >
-              {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               {/* On a phone "My Profile" is folded away inside this menu, so a
                   dot only on the link would not be seen until the menu was open. */}
               {profileActivity && !open && (
                 <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-vb-500 shadow-[0_0_8px_1px_rgba(185,111,44,0.8)]" />
               )}
-            </button>
+            </BarMenuButton>
           </div>
         </div>
 
@@ -258,6 +265,7 @@ export function Navbar() {
             range the desktop row no longer claims. */}
         {open && (
           <div
+            id="relay-menu"
             className="animate-fade-in border-b border-ink-700/[0.45] bg-ink-950
               shadow-[0_16px_32px_-12px_rgba(0,0,0,0.8)] lg:hidden"
           >
@@ -278,17 +286,29 @@ export function Navbar() {
                   href={l.href}
                   onClick={() => setOpen(false)}
                   aria-current={isActive(l.href) ? "page" : undefined}
-                  className={cn(
-                    "relative block w-fit rounded-xl px-4 py-2 font-medium transition-colors",
-                    isActive(l.href)
-                      ? "bg-vb-500/12 text-vb-100"
-                      : "text-ink-300 hover:bg-ink-850 hover:text-ink-50"
-                  )}
+                  className={menuLinkClass(isActive(l.href))}
                 >
                   {l.label}
                   {l.badge === "dms" && badge(unreadCount)}
                 </Link>
               ))}
+
+              {/* Straight after the other destinations, as on the desktop row.
+                  It used to sit below Search, the last thing before the seat
+                  button, and was the easiest entry in the panel to miss. */}
+              {identity && (
+                <Link
+                  href={`/u/${identity.publicKey}`}
+                  onClick={() => setOpen(false)}
+                  aria-current={isActive(`/u/${identity.publicKey}`) ? "page" : undefined}
+                  className={menuLinkClass(isActive(`/u/${identity.publicKey}`))}
+                >
+                  My Profile
+                  {profileActivity && (
+                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-vb-500" />
+                  )}
+                </Link>
+              )}
 
               <button
                 onClick={() => {
@@ -301,20 +321,6 @@ export function Navbar() {
                 <Search className="h-4 w-4 shrink-0" />
                 Search
               </button>
-
-              {identity && (
-                <Link
-                  href={`/u/${identity.publicKey}`}
-                  onClick={() => setOpen(false)}
-                  className="relative block w-fit rounded-xl px-4 py-2 font-medium text-ink-300
-                    transition-colors hover:bg-ink-850 hover:text-ink-50"
-                >
-                  My Profile
-                  {profileActivity && (
-                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-vb-500" />
-                  )}
-                </Link>
-              )}
 
               <button
                 onClick={() => { setOpen(false); setShowConnect(true); }}

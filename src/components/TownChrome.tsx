@@ -4,10 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, Menu, X } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { COFFEEHOUSE } from "@/lib/verglas-site";
 import { TownKey } from "@/components/TownKey";
-import { BarShell, BAR_DOOR_CLASS, BAR_MARK_CLASS, BAR_NAME_CLASS, barLinkClass } from "@/components/BarShell";
+import { BarShell, BarMenuButton, BAR_DOOR_CLASS, BAR_MARK_CLASS, BAR_NAME_CLASS, barLinkClass } from "@/components/BarShell";
 import { cn } from "@/lib/utils";
 
 /**
@@ -87,16 +87,12 @@ export function TownBar() {
           <span className="hidden xl:flex">
             <TownKey />
           </span>
-          <button
-            type="button"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            aria-controls="town-menu"
-            className="rounded-xl p-2 text-ink-200 transition-colors hover:bg-ink-850 xl:hidden"
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          <BarMenuButton
+            open={open}
+            onToggle={() => setOpen((v) => !v)}
+            controls="town-menu"
+            className="xl:hidden"
+          />
         </div>
       </div>
 

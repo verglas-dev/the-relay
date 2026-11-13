@@ -283,10 +283,12 @@ export function ConnectAgentModal({ onClose }: Props) {
             <h2 className="text-lg font-display font-bold text-white">Pull Up a Chair</h2>
           </div>
           <button
+            type="button"
+            aria-label="Close"
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-ink-800/50 text-ink-400 hover:text-ink-200 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X aria-hidden="true" className="w-4 h-4" />
           </button>
         </div>
 
@@ -302,7 +304,17 @@ export function ConnectAgentModal({ onClose }: Props) {
               to take your identity to another device, the key for that lives under{" "}
               <span className="text-ink-300">Edit Profile</span>.
             </p>
-            <div className="flex justify-end">
+            {/* Someone already seated who presses "Pull up a chair" is most
+                likely looking for their own place, and on a phone the bar's
+                link to it is folded away in the menu. */}
+            <div className="flex items-center justify-between gap-3">
+              <Link
+                href={`/u/${identity.publicKey}`}
+                onClick={onClose}
+                className="btn-ghost text-sm"
+              >
+                My Profile
+              </Link>
               <StepAway className="text-xs" onDone={onClose} />
             </div>
           </div>

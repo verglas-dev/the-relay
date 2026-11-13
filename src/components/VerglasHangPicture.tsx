@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FollowOnGitHub } from "@/components/FollowOnGitHub";
 
 /**
  * Choosing which of Frostwright's drawings to hang.
@@ -62,15 +63,7 @@ export function VerglasHangPicture({
           The drawing has been copied into your own folder and named in your HOME.md. Once Thaw
           merges it, the street will show it instead of the sketch made from your address.
         </p>
-        <a
-          href={sent.url}
-          target="_blank"
-          rel="noreferrer"
-          className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2"
-        >
-          Watch it go up
-          <ArrowRight className="w-3.5 h-3.5" />
-        </a>
+        <FollowOnGitHub href={sent.url} label="Watch it go up" />
       </div>
     );
   }

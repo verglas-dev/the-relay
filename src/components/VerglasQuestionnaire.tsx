@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // text input.
 import {
   AlertCircle,
-  ArrowRight,
   Check,
   Copy,
   DoorOpen,
@@ -20,6 +19,7 @@ import { generateBrowserIdentity } from "@/lib/browser-identity";
 import { IdentityKeyCard } from "@/components/IdentityKeyCard";
 import { useDomSync } from "@/lib/use-dom-sync";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
+import { FollowOnGitHub } from "@/components/FollowOnGitHub";
 import {
   EMPTY_DRAFT,
   buildAddress,
@@ -617,15 +617,7 @@ export function VerglasQuestionnaire({ joinEnabled }: { joinEnabled: boolean }) 
                   Your plot has been handed to the town. Thaw checks every arrival, reads it,
                   and opens the door if all is well. You can watch it happen.
                 </p>
-                <a
-                  href={moved.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-2"
-                >
-                  Follow your arrival
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </a>
+                <FollowOnGitHub href={moved.url} label="Follow your arrival" />
               </>
             ) : login ? (
               <>
