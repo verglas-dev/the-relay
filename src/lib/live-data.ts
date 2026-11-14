@@ -76,6 +76,11 @@ export interface AdminAgentView extends Agent {
    * today still freezes the field against the agent's next edit.
    */
   pinned: PinnableProfileField[];
+  /**
+   * The agent has published a profile of their own. Without one, a released
+   * pin has nothing to fall back to, and the member would be left nameless.
+   */
+  ownProfile: boolean;
   /** The agent has published a kind-10002 theme, suppressed or not. */
   hasTheme: boolean;
   themeDisabled: boolean;
@@ -107,6 +112,7 @@ let deletedProfilePubkeys: Set<string> | null = null;
 let deletedProfileOverlays: Map<string, AdminProfileRecord> | null = null;
 let overriddenProfilePubkeys: Set<string> | null = null;
 let pinnedFieldsByPubkey: Map<string, PinnableProfileField[]> | null = null;
+let publishedProfilePubkeys: Set<string> | null = null;
 // Every published theme, whether or not an admin has suppressed it — the
 // admin list needs to show that a suppressed theme still exists.
 let themeByPubkey: Map<string, ProfileTheme> | null = null;
@@ -163,6 +169,7 @@ async function _doInit(): Promise<void> {
   deletedProfileOverlays = new Map();
   overriddenProfilePubkeys = new Set();
   pinnedFieldsByPubkey = new Map();
+  publishedProfilePubkeys = new Set();
   themeByPubkey = new Map();
   themeDisabledPubkeys = new Set();
   postModerationById = new Map(adminPosts.map((post) => [post.id, post]));
@@ -180,6 +187,7 @@ async function _doInit(): Promise<void> {
     const profile = profileFields(event.content);
     if (!profile) continue;
     latestProfileTimestamp.set(event.pubkey, event.created_at);
+    publishedProfilePubkeys.add(event.pubkey);
     agentCache.set(event.pubkey, {
       pubkey: event.pubkey,
       displayName: profile.displayName || event.pubkey.slice(0, 8) + "...",
@@ -924,6 +932,7 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
         hidden: false,
         hasOverride: overriddenProfilePubkeys?.has(agent.pubkey) ?? false,
         pinned: pinnedFieldsByPubkey?.get(agent.pubkey) ?? [],
+        ownProfile: publishedProfilePubkeys?.has(agent.pubkey) ?? false,
         hasTheme: themeByPubkey?.has(agent.pubkey) ?? false,
         themeDisabled: themeDisabledPubkeys?.has(agent.pubkey) ?? false,
       });
@@ -943,6 +952,7 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
         hidden: true,
         hasOverride: true,
         pinned: [],
+        ownProfile: publishedProfilePubkeys?.has(overlay.pubkey) ?? false,
         hasTheme: themeByPubkey?.has(overlay.pubkey) ?? false,
         themeDisabled: themeDisabledPubkeys?.has(overlay.pubkey) ?? false,
       });
@@ -1128,6 +1138,7 @@ export function resetLiveData() {
   deletedProfileOverlays = null;
   overriddenProfilePubkeys = null;
   pinnedFieldsByPubkey = null;
+  publishedProfilePubkeys = null;
   themeByPubkey = null;
   themeDisabledPubkeys = null;
   postModerationById = null;

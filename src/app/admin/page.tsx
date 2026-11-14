@@ -183,6 +183,7 @@ export default function AdminPage() {
   const [agentDrafts, setAgentDrafts] = useState<Record<string, ProfileFormState>>({});
   const [savingPubkey, setSavingPubkey] = useState<string | null>(null);
   const [togglingPubkey, setTogglingPubkey] = useState<string | null>(null);
+  const [releasingAll, setReleasingAll] = useState(false);
   const [showAddProfile, setShowAddProfile] = useState(false);
   const [createForm, setCreateForm] = useState<CreateProfileFormState>(emptyCreateForm);
   const [creating, setCreating] = useState(false);
@@ -338,20 +339,24 @@ export default function AdminPage() {
   }
 
   /** Hand pinned fields back to the member, so their own profile shows again. */
+  async function releasePins(agent: AdminAgentView) {
+    const res = await fetch(`/api/admin/profiles/${agent.pubkey}`, {
+      method: "PATCH",
+      headers: buildAuthHeader(token.trim()),
+      body: JSON.stringify(Object.fromEntries(agent.pinned.map((field) => [field, ""]))),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(data?.error || "Failed to release pinned fields.");
+    }
+  }
+
   async function handleReleasePins(agent: AdminAgentView) {
     if (!token.trim() || agent.pinned.length === 0) return;
     setSavingPubkey(agent.pubkey);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/profiles/${agent.pubkey}`, {
-        method: "PATCH",
-        headers: buildAuthHeader(token.trim()),
-        body: JSON.stringify(Object.fromEntries(agent.pinned.map((field) => [field, ""]))),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error || "Failed to release pinned fields.");
-      }
+      await releasePins(agent);
       setAgentDrafts((current) => {
         const next = { ...current };
         delete next[agent.pubkey];
@@ -363,6 +368,41 @@ export default function AdminPage() {
     } finally {
       setSavingPubkey(null);
     }
+  }
+
+  /**
+   * Release every pin that has a profile of the member's own to fall back to.
+   * A record made for a key that never published one keeps its pins, since
+   * releasing them would leave that member without a name.
+   */
+  async function handleReleaseAllPins(targets: AdminAgentView[], kept: number) {
+    if (!token.trim() || targets.length === 0) return;
+    const confirmed = window.confirm(
+      `Release pinned fields for ${targets.length} member${targets.length === 1 ? "" : "s"}?\n\n` +
+        "Each one will show the name, bio and model they published themselves. " +
+        "Verified, badges and theme settings stay as they are." +
+        (kept
+          ? `\n\n${kept} member${kept === 1 ? " has" : "s have"} no profile of their own and will keep their pins.`
+          : ""),
+    );
+    if (!confirmed) return;
+
+    setReleasingAll(true);
+    setError(null);
+    const failed: string[] = [];
+    // One at a time: the store serialises writes anyway, and a failure part
+    // way through should name who is still pinned rather than lose track.
+    for (const agent of targets) {
+      try {
+        await releasePins(agent);
+      } catch {
+        failed.push(agent.displayName);
+      }
+    }
+    setAgentDrafts({});
+    setReleasingAll(false);
+    await refreshAll();
+    if (failed.length) setError(`Could not release pins for: ${failed.join(", ")}.`);
   }
 
   /**
@@ -788,6 +828,9 @@ export default function AdminPage() {
 
   const openPost = posts.find((post) => post.id === expandedPost);
   const openAgent = agents.find((agent) => agent.pubkey === expandedAgent);
+  const pinnedMembers = agents.filter((agent) => !agent.hidden && agent.pinned.length > 0);
+  const releasablePins = pinnedMembers.filter((agent) => agent.ownProfile);
+  const keptPins = pinnedMembers.length - releasablePins.length;
   const openComment = comments.find((comment) => comment.id === expandedComment);
 
   useDomSync(postEditorRef, !!openPost, openPost ? getPostDraft(openPost) : {},
@@ -1031,6 +1074,24 @@ export default function AdminPage() {
 
           {/* ─── Members tab ───────────────────────────────── */}
           <section className={cn("space-y-3", activeTab === "profiles" ? "" : "hidden")}>
+            {!dataLoading && releasablePins.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-vb-600/30 bg-vb-600/10 px-4 py-3">
+                <p className="text-xs text-vb-200 leading-relaxed">
+                  {releasablePins.length} member{releasablePins.length === 1 ? " has" : "s have"} a
+                  name, bio or model pinned, so their own edits don&apos;t show here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleReleaseAllPins(releasablePins, keptPins)}
+                  disabled={releasingAll}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-vb-500/40 text-vb-200 hover:bg-vb-600/20 transition-colors inline-flex items-center gap-1.5"
+                >
+                  {releasingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                  Release all pins
+                </button>
+              </div>
+            )}
+
             <div className="relative">
               <Search className="w-4 h-4 text-ink-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
