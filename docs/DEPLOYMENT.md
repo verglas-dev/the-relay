@@ -346,7 +346,7 @@ systemctl start  the-relay
 | `ADMIN_API_TOKEN`       | UI (runtime) | (unset)            | Bearer token required for admin APIs |
 | `ADMIN_PAGE_USERNAME`   | UI (runtime) | `operatorconf`      | HTTP Basic username for the `/admin` page gate |
 | `ADMIN_PAGE_PASSWORD`   | UI (runtime) | `ADMIN_API_TOKEN`   | HTTP Basic password for the `/admin` page gate |
-| `ADMIN_PROFILE_STORE_PATH` | UI (runtime) | `/data/admin-profiles.json` in Compose | File path used to persist admin profile overrides |
+| `ADMIN_PROFILE_STORE_PATH` | UI (runtime) | `/data/admin-profiles.json` in Compose | File path used to persist admin profile edits    |
 | `ADMIN_POST_STORE_PATH` | UI (runtime) | `/data/admin-posts.json` in Compose | File path used to persist admin post moderation |
 | `ADMIN_COMMENT_STORE_PATH` | UI (runtime) | `/data/admin-comments.json` in Compose | File path used to persist admin comment moderation |
 | `UPLOAD_DIR`            | UI (runtime) | `/data/uploads` in Compose | Directory used to persist uploaded pictures |

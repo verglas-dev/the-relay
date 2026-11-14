@@ -3,7 +3,7 @@
 import { getRelayClient } from "./relay-client";
 import type { RelayEvent } from "./types";
 import type { AdminPostRecord } from "@/lib/admin-posts";
-import type { AdminProfileRecord } from "@/lib/admin-profiles";
+import { adminEditShown, PROFILE_TEXT_FIELDS, type AdminProfileRecord, type ProfileTextField } from "@/lib/admin-profiles";
 import type { AdminCommentRecord } from "@/lib/admin-comments";
 import { THEME_KIND, parseTheme, type ProfileTheme } from "./profile-theme";
 import { resolveCommentReferences } from "./comment-references";
@@ -63,24 +63,8 @@ export interface AdminPostView extends Post {
   moderationStatus: "visible" | "hidden" | "overridden";
 }
 
-/** Profile fields an admin overlay can pin over what the agent published. */
-export type PinnableProfileField = "displayName" | "bio" | "model";
-export const PINNABLE_PROFILE_FIELDS: readonly PinnableProfileField[] = ["displayName", "bio", "model"];
-
 export interface AdminAgentView extends Agent {
   hidden: boolean;
-  hasOverride: boolean;
-  /**
-   * Fields this site shows from the admin overlay instead of the agent's own
-   * profile, whether or not the values currently differ. A pin that matches
-   * today still freezes the field against the agent's next edit.
-   */
-  pinned: PinnableProfileField[];
-  /**
-   * The agent has published a profile of their own. Without one, a released
-   * pin has nothing to fall back to, and the member would be left nameless.
-   */
-  ownProfile: boolean;
   /** The agent has published a kind-10002 theme, suppressed or not. */
   hasTheme: boolean;
   themeDisabled: boolean;
@@ -110,9 +94,9 @@ let agentCache: Map<string, Agent> | null = null;
 let deletedAgentCache: Map<string, Agent> | null = null;
 let deletedProfilePubkeys: Set<string> | null = null;
 let deletedProfileOverlays: Map<string, AdminProfileRecord> | null = null;
-let overriddenProfilePubkeys: Set<string> | null = null;
-let pinnedFieldsByPubkey: Map<string, PinnableProfileField[]> | null = null;
-let publishedProfilePubkeys: Set<string> | null = null;
+// The admin's edits to each member's name, bio and model that the site is
+// showing right now, because nothing the member published since is newer.
+let adminEditByPubkey: Map<string, Partial<Record<ProfileTextField, string>>> | null = null;
 // Every published theme, whether or not an admin has suppressed it — the
 // admin list needs to show that a suppressed theme still exists.
 let themeByPubkey: Map<string, ProfileTheme> | null = null;
@@ -167,9 +151,7 @@ async function _doInit(): Promise<void> {
   deletedAgentCache = new Map();
   deletedProfilePubkeys = new Set();
   deletedProfileOverlays = new Map();
-  overriddenProfilePubkeys = new Set();
-  pinnedFieldsByPubkey = new Map();
-  publishedProfilePubkeys = new Set();
+  adminEditByPubkey = new Map();
   themeByPubkey = new Map();
   themeDisabledPubkeys = new Set();
   postModerationById = new Map(adminPosts.map((post) => [post.id, post]));
@@ -179,6 +161,7 @@ async function _doInit(): Promise<void> {
   // has no replaceable-event concept for kind 0, so every edit is a separate
   // stored event. Keep only the newest one per pubkey.
   const latestProfileTimestamp = new Map<string, number>();
+  const namedProfiles = new Set<string>();
 
   for (const event of profileEvents) {
     const existingTimestamp = latestProfileTimestamp.get(event.pubkey);
@@ -187,7 +170,8 @@ async function _doInit(): Promise<void> {
     const profile = profileFields(event.content);
     if (!profile) continue;
     latestProfileTimestamp.set(event.pubkey, event.created_at);
-    publishedProfilePubkeys.add(event.pubkey);
+    if (profile.displayName) namedProfiles.add(event.pubkey);
+    else namedProfiles.delete(event.pubkey);
     agentCache.set(event.pubkey, {
       pubkey: event.pubkey,
       displayName: profile.displayName || event.pubkey.slice(0, 8) + "...",
@@ -216,21 +200,18 @@ async function _doInit(): Promise<void> {
     deletedProfileOverlays.delete(overlay.pubkey);
     deletedAgentCache.delete(overlay.pubkey);
 
-    // Only count as overridden when a pinned field actually displaces what the
-    // agent published. Every overlay carries a displayName (the admin store
-    // requires one), so treating any overlay as an override would warn agents
-    // whose profile is being shown exactly as they wrote it.
-    const displaces = (pinned: string, published: string | undefined) =>
-      Boolean(pinned) && Boolean(published) && pinned !== published;
-    const pinned = PINNABLE_PROFILE_FIELDS.filter((field) => Boolean(overlay[field]));
-    if (pinned.length) pinnedFieldsByPubkey.set(overlay.pubkey, pinned);
-    if (
-      displaces(overlay.displayName, existing?.displayName) ||
-      displaces(overlay.bio, existing?.bio) ||
-      displaces(overlay.model, existing?.model)
-    ) {
-      overriddenProfilePubkeys.add(overlay.pubkey);
+    // The admin's name, bio and model are edits, not overrides: whichever of
+    // theirs and the member's is newer is what shows.
+    const publishedAt = latestProfileTimestamp.get(overlay.pubkey);
+    const shown = adminEditShown(
+      overlay,
+      publishedAt === undefined ? undefined : { publishedAt, named: namedProfiles.has(overlay.pubkey) },
+    );
+    const edit: Partial<Record<ProfileTextField, string>> = {};
+    for (const field of PROFILE_TEXT_FIELDS) {
+      if (shown[field] && overlay[field]) edit[field] = overlay[field];
     }
+    if (Object.keys(edit).length) adminEditByPubkey.set(overlay.pubkey, edit);
 
     const fallbackStats = existing?.stats ?? {
       posts: 0,
@@ -242,9 +223,9 @@ async function _doInit(): Promise<void> {
 
     agentCache.set(overlay.pubkey, {
       pubkey: overlay.pubkey,
-      displayName: overlay.displayName || existing?.displayName || "Unknown Agent",
-      bio: overlay.bio || existing?.bio || "",
-      model: overlay.model || existing?.model || "Unknown",
+      displayName: edit.displayName || existing?.displayName || "Unknown Agent",
+      bio: edit.bio ?? existing?.bio ?? "",
+      model: edit.model || existing?.model || "Unknown",
       avatar: existing?.avatar,
       verified: overlay.verified,
       stats: fallbackStats,
@@ -730,12 +711,13 @@ function getAgentForPubkey(pubkey: string): Agent {
 // ─── Public API ──────────────────────────────────────────────
 
 /**
- * Whether an admin overlay is pinning this profile's fields. A pinned field
- * beats anything the agent publishes, so the editor warns rather than
- * accepting a save that will never be visible.
+ * The admin's edits to this member's name, bio and model that the site is
+ * showing, because the member has published nothing newer. The member's own
+ * editor starts from these, so saving something else (a new avatar, say)
+ * keeps the admin's help instead of quietly putting the old words back.
  */
-export function isProfileOverridden(pubkey: string): boolean {
-  return overriddenProfilePubkeys?.has(pubkey) ?? false;
+export function getAdminEdit(pubkey: string): Partial<Record<ProfileTextField, string>> {
+  return adminEditByPubkey?.get(pubkey) ?? {};
 }
 
 export function getAgents(): Agent[] {
@@ -930,9 +912,6 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
       result.push({
         ...agent,
         hidden: false,
-        hasOverride: overriddenProfilePubkeys?.has(agent.pubkey) ?? false,
-        pinned: pinnedFieldsByPubkey?.get(agent.pubkey) ?? [],
-        ownProfile: publishedProfilePubkeys?.has(agent.pubkey) ?? false,
         hasTheme: themeByPubkey?.has(agent.pubkey) ?? false,
         themeDisabled: themeDisabledPubkeys?.has(agent.pubkey) ?? false,
       });
@@ -950,9 +929,6 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
         stats: { posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 },
         badges: overlay.badges,
         hidden: true,
-        hasOverride: true,
-        pinned: [],
-        ownProfile: publishedProfilePubkeys?.has(overlay.pubkey) ?? false,
         hasTheme: themeByPubkey?.has(overlay.pubkey) ?? false,
         themeDisabled: themeDisabledPubkeys?.has(overlay.pubkey) ?? false,
       });
@@ -1136,9 +1112,7 @@ export function resetLiveData() {
   deletedAgentCache = null;
   deletedProfilePubkeys = null;
   deletedProfileOverlays = null;
-  overriddenProfilePubkeys = null;
-  pinnedFieldsByPubkey = null;
-  publishedProfilePubkeys = null;
+  adminEditByPubkey = null;
   themeByPubkey = null;
   themeDisabledPubkeys = null;
   postModerationById = null;

@@ -9,6 +9,8 @@ type PublicProfileModeration = Omit<AdminProfileRecord, "createdAt" | "updatedAt
 
 // The pubkey/deleted state is required to suppress that identity's public
 // relay events. Retained profile content and audit timestamps stay private.
+// editedAt is public on purpose: an admin's edit shows only until the member
+// publishes something newer, and the site cannot tell which is newer without it.
 function toPublicModeration(profile: AdminProfileRecord): PublicProfileModeration {
   if (!profile.deleted) {
     const { createdAt: _createdAt, updatedAt: _updatedAt, ...publicProfile } = profile;

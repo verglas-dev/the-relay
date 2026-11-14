@@ -3,12 +3,17 @@ import test from "node:test";
 import type { AdminProfileRecord } from "./admin-profiles";
 import type { RelayEvent } from "./types";
 import { getRelayClient } from "./relay-client";
-import { getAgent, getAllAgentsForAdmin, initLiveData, isProfileOverridden, resetLiveData } from "./live-data";
+import { getAdminEdit, getAgent, initLiveData, resetLiveData } from "./live-data";
 
 const key = (seed: string) => seed.repeat(64).slice(0, 64);
-const VERIFIED = key("a"); // verified, and the old Save copied their profile
-const RELEASED = key("b"); // verified with nothing pinned
-const ADMIN_ONLY = key("c"); // a record for a key that never published
+const HELPED = key("a"); // an admin fixed their bio, and they have not published since
+const MOVED_ON = key("b"); // published after the admin's edit
+const UNNAMED = key("c"); // given a name by an admin, publishes without one
+const NEVER = key("d"); // never published a profile
+
+// Relay times are seconds. Every profile below is published at about 2023-11-14.
+const BEFORE = "2023-01-01T00:00:00.000Z";
+const AFTER = "2024-06-01T00:00:00.000Z";
 
 let counter = 0;
 function profile(author: string, fields: Record<string, string>): RelayEvent {
@@ -25,11 +30,13 @@ function profile(author: string, fields: Record<string, string>): RelayEvent {
 }
 
 const stored: RelayEvent[] = [
-  profile(VERIFIED, { name: "Amber", about: "a refreshed bio", model: "" }),
-  profile(RELEASED, { name: "Basil", about: "Basil's own bio", model: "m2" }),
+  profile(HELPED, { name: "Amber", about: "her first try", model: "m1" }),
+  profile(MOVED_ON, { name: "Basil", about: "Basil's own bio", model: "" }),
+  profile(UNNAMED, { about: "a bio, but still no name" }),
 ];
 
-const overlay = (fields: Partial<AdminProfileRecord> & { pubkey: string }): AdminProfileRecord => ({
+// As the public feed serves them: no createdAt or updatedAt, an editedAt when edited.
+const record = (fields: Partial<AdminProfileRecord> & { pubkey: string }): AdminProfileRecord => ({
   displayName: "",
   bio: "",
   model: "",
@@ -99,40 +106,44 @@ function serve(t: test.TestContext, overlays: AdminProfileRecord[]) {
   });
 }
 
-test("the admin list says what is pinned, and whether there is a profile to release it to", async (t) => {
+test("an admin's edit shows until the member publishes something newer", async (t) => {
   serve(t, [
-    overlay({ pubkey: VERIFIED, displayName: "Amber", bio: "an old bio", model: "an old model" }),
-    overlay({ pubkey: RELEASED }),
-    overlay({ pubkey: ADMIN_ONLY, displayName: "Only an admin knows me", verified: false }),
+    record({ pubkey: HELPED, bio: "the bio an admin wrote for her", editedAt: AFTER }),
+    record({ pubkey: MOVED_ON, displayName: "Basil", bio: "an old copy", model: "an old model", editedAt: BEFORE }),
+    record({ pubkey: UNNAMED, displayName: "Coffeehouse Shadowagent no. 2", editedAt: BEFORE }),
+    record({ pubkey: NEVER, displayName: "Only an admin knows me", bio: "set here", verified: false, editedAt: BEFORE }),
   ]);
   resetLiveData();
   await initLiveData();
 
-  const byKey = new Map(getAllAgentsForAdmin().map((agent) => [agent.pubkey, agent]));
+  const helped = getAgent(HELPED);
+  assert.equal(helped?.bio, "the bio an admin wrote for her", "the admin's edit is the newer one");
+  assert.equal(helped?.displayName, "Amber", "a field the admin left alone is hers");
+  assert.equal(helped?.model, "m1");
+  assert.deepEqual(getAdminEdit(HELPED), { bio: "the bio an admin wrote for her" }, "her editor starts from it");
 
-  assert.deepEqual(byKey.get(VERIFIED)?.pinned, ["displayName", "bio", "model"]);
-  assert.equal(byKey.get(VERIFIED)?.ownProfile, true);
-  assert.equal(getAgent(VERIFIED)?.bio, "an old bio", "the pin still wins until released");
-  assert.equal(isProfileOverridden(VERIFIED), true);
+  const movedOn = getAgent(MOVED_ON);
+  assert.equal(movedOn?.bio, "Basil's own bio", "his newer profile wins over the old copy");
+  assert.equal(movedOn?.model, "Unknown", "and a model he removed stays removed");
+  assert.equal(movedOn?.verified, true, "verified is not part of the edit");
+  assert.deepEqual(getAdminEdit(MOVED_ON), {});
 
-  assert.deepEqual(byKey.get(RELEASED)?.pinned, []);
-  assert.equal(getAgent(RELEASED)?.bio, "Basil's own bio");
-  assert.equal(getAgent(RELEASED)?.verified, true, "verified without pinning anything");
-  assert.equal(isProfileOverridden(RELEASED), false);
+  const unnamed = getAgent(UNNAMED);
+  assert.equal(unnamed?.displayName, "Coffeehouse Shadowagent no. 2", "no name of their own keeps the given one");
+  assert.equal(unnamed?.bio, "a bio, but still no name");
 
-  assert.deepEqual(byKey.get(ADMIN_ONLY)?.pinned, ["displayName"]);
-  assert.equal(byKey.get(ADMIN_ONLY)?.ownProfile, false, "nothing to fall back to");
+  assert.equal(getAgent(NEVER)?.displayName, "Only an admin knows me");
+  assert.equal(getAgent(NEVER)?.bio, "set here");
 });
 
-test("once released, the member's own bio shows and a removed model stays removed", async (t) => {
-  serve(t, [overlay({ pubkey: VERIFIED })]);
+test("verifying a member with no edits leaves their profile exactly as they published it", async (t) => {
+  serve(t, [record({ pubkey: MOVED_ON, badges: ["regular"] })]);
   resetLiveData();
   await initLiveData();
 
-  const amber = getAgent(VERIFIED);
-  assert.equal(amber?.displayName, "Amber");
-  assert.equal(amber?.bio, "a refreshed bio");
-  assert.equal(amber?.model, "Unknown", "the cache's blank, which the profile page does not print");
-  assert.equal(amber?.verified, true);
-  assert.equal(isProfileOverridden(VERIFIED), false);
+  const basil = getAgent(MOVED_ON);
+  assert.equal(basil?.displayName, "Basil");
+  assert.equal(basil?.bio, "Basil's own bio");
+  assert.equal(basil?.verified, true);
+  assert.deepEqual(basil?.badges, ["regular"]);
 });

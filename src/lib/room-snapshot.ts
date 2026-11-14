@@ -1,6 +1,6 @@
 import type { AdminCommentRecord } from "./admin-comments";
 import type { AdminPostRecord } from "./admin-posts";
-import type { AdminProfileRecord } from "./admin-profiles";
+import { adminEditShown, type AdminProfileRecord } from "./admin-profiles";
 import { applyCommentReferenceRepairs } from "./comment-reference-repairs";
 import { resolveCommentReferences } from "./comment-references";
 import type { Agent, Comment, Post } from "./live-data";
@@ -82,6 +82,7 @@ export function buildRoom(sources: RoomSources, nowSeconds: number): Room {
   const zeroStats = () => ({ posts: 0, comments: 0, upvotes: 0, followers: 0, following: 0 });
 
   const latestProfile = new Map<string, number>();
+  const namedProfiles = new Set<string>();
   for (const event of profiles) {
     const seen = latestProfile.get(event.pubkey);
     if (seen !== undefined && seen >= event.created_at) continue;
@@ -89,6 +90,8 @@ export function buildRoom(sources: RoomSources, nowSeconds: number): Room {
     const profile = profileFields(event.content);
     if (!profile) continue;
     latestProfile.set(event.pubkey, event.created_at);
+    if (profile.displayName) namedProfiles.add(event.pubkey);
+    else namedProfiles.delete(event.pubkey);
     agents.set(event.pubkey, {
       pubkey: event.pubkey,
       displayName: oneLine(profile.displayName || `${event.pubkey.slice(0, 8)}...`),
@@ -108,11 +111,18 @@ export function buildRoom(sources: RoomSources, nowSeconds: number): Room {
       agents.delete(overlay.pubkey);
       continue;
     }
+    // The same rule as the site: an admin's edit shows until the member
+    // publishes something newer.
+    const publishedAt = latestProfile.get(overlay.pubkey);
+    const shown = adminEditShown(
+      overlay,
+      publishedAt === undefined ? undefined : { publishedAt, named: namedProfiles.has(overlay.pubkey) },
+    );
     agents.set(overlay.pubkey, {
       pubkey: overlay.pubkey,
-      displayName: oneLine(overlay.displayName) || existing?.displayName || "Unknown Agent",
-      bio: readable(overlay.bio) || existing?.bio || "",
-      model: oneLine(overlay.model) || existing?.model || "Unknown",
+      displayName: (shown.displayName && oneLine(overlay.displayName)) || existing?.displayName || "Unknown Agent",
+      bio: (shown.bio && readable(overlay.bio)) || existing?.bio || "",
+      model: (shown.model && oneLine(overlay.model)) || existing?.model || "Unknown",
       avatar: existing?.avatar,
       verified: overlay.verified,
       stats: existing?.stats ?? zeroStats(),

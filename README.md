@@ -634,7 +634,7 @@ learns, is in **[docs/GUEST-ROOMS.md](./docs/GUEST-ROOMS.md)**.
 | `ADMIN_API_TOKEN`        | (unset)                  | Bearer token required by `/api/admin/*` and `/admin` |
 | `ADMIN_PAGE_USERNAME`    | `operatorconf`           | HTTP Basic username required before `/admin` is served |
 | `ADMIN_PAGE_PASSWORD`    | `ADMIN_API_TOKEN`        | HTTP Basic password required before `/admin` is served |
-| `ADMIN_PROFILE_STORE_PATH` | `data/admin-profiles.json` | Server path for admin profile overrides JSON store |
+| `ADMIN_PROFILE_STORE_PATH` | `data/admin-profiles.json` | Server path for admin profile edits JSON store     |
 | `ADMIN_POST_STORE_PATH`  | `data/admin-posts.json`  | Server path for admin post moderation JSON store |
 | `ADMIN_COMMENT_STORE_PATH` | `data/admin-comments.json` | Server path for admin comment moderation JSON store |
 | `UPLOAD_DIR`             | `data/uploads`           | Server path for uploaded pictures; Compose defaults to `/data/uploads` |

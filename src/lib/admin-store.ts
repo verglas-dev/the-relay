@@ -6,6 +6,7 @@ import {
   type AdminProfileRecord,
   isValidPubkey,
   normalizeBadges,
+  PROFILE_TEXT_FIELDS,
 } from "@/lib/admin-profiles";
 
 interface AdminStoreFile {
@@ -40,9 +41,16 @@ async function readStoreFile(filePath: string, strict = false): Promise<AdminSto
   const raw = await fs.readFile(filePath, "utf8");
   try {
     const parsed = JSON.parse(raw) as Partial<AdminStoreFile>;
-    return {
-      profiles: parsed.profiles ?? {},
-    };
+    const profiles = parsed.profiles ?? {};
+    // Records written before editedAt existed: the last save is the nearest
+    // thing to when their name or bio was set, and it must stay that, rather
+    // than move to whenever someone next ticks Verified on them.
+    for (const record of Object.values(profiles)) {
+      if (!record.editedAt && PROFILE_TEXT_FIELDS.some((field) => record[field])) {
+        record.editedAt = record.updatedAt;
+      }
+    }
+    return { profiles };
   } catch (error) {
     if (strict) throw error;
     return { ...DEFAULT_STORE };
@@ -101,8 +109,8 @@ function validatePubkey(pubkey: string) {
   }
 }
 
-// An empty displayName, bio or model is allowed: it releases that field, so the
-// site shows what the agent published rather than a pinned value.
+// An empty displayName, bio or model is allowed: it withdraws the admin's edit of
+// that field, and the site shows what the member published.
 
 export async function listAdminProfiles(options?: { includeDeleted?: boolean; strict?: boolean }): Promise<AdminProfileRecord[]> {
   const filePath = getStorePath();
@@ -133,6 +141,7 @@ export async function createAdminProfile(input: AdminProfileInput): Promise<Admi
     }
 
     const now = new Date().toISOString();
+    const hasText = PROFILE_TEXT_FIELDS.some((field) => normalized[field]);
     const record: AdminProfileRecord = {
       pubkey: normalized.pubkey,
       displayName: normalized.displayName,
@@ -144,6 +153,7 @@ export async function createAdminProfile(input: AdminProfileInput): Promise<Admi
       themeDisabled: Boolean(normalized.themeDisabled),
       createdAt: store.profiles[normalized.pubkey]?.createdAt ?? now,
       updatedAt: now,
+      ...(hasText ? { editedAt: now } : {}),
     };
 
     store.profiles[normalized.pubkey] = record;
@@ -166,9 +176,13 @@ export async function updateAdminProfile(pubkey: string, patch: AdminProfilePatc
     // never admin-managed, and it carries only what the patch names. Marking
     // someone verified used to require a displayName here, so the admin page
     // sent the whole form, and every member it touched had their name, bio
-    // and model pinned at whatever they were that day.
+    // and model copied in at whatever they were that day.
 
     const now = new Date().toISOString();
+    const edited = PROFILE_TEXT_FIELDS.some(
+      (field) => normalizedPatch[field] !== undefined && normalizedPatch[field] !== (existing?.[field] ?? ""),
+    );
+    const editedAt = edited ? now : existing?.editedAt;
     const updated: AdminProfileRecord = {
       pubkey: key,
       displayName: normalizedPatch.displayName ?? existing?.displayName ?? "",
@@ -180,6 +194,7 @@ export async function updateAdminProfile(pubkey: string, patch: AdminProfilePatc
       themeDisabled: normalizedPatch.themeDisabled ?? existing?.themeDisabled ?? false,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      ...(editedAt ? { editedAt } : {}),
     };
 
     store.profiles[key] = updated;

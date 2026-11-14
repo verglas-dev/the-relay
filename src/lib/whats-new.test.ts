@@ -141,7 +141,7 @@ test("an event with a malformed id cannot produce a link", () => {
   assert.deepEqual(list([event(1, { id: "../../evil" })]), []);
 });
 
-test("names follow the site: admin, then newest profile, then the key", () => {
+test("names follow the site: the newer of the admin's and their own, then the key", () => {
   const nameOf = (rest: Parameters<typeof list>[1]) => list([event(1)], rest)[0].author;
   assert.equal(nameOf({}), `${ALICE.slice(0, 8)}...`);
   assert.equal(nameOf({ profiles: [profile(ALICE, { name: "Fallback" })] }), "Fallback");
@@ -150,12 +150,20 @@ test("names follow the site: admin, then newest profile, then the key", () => {
     nameOf({ profiles: [profile(ALICE, { name: "New" }, 2), profile(ALICE, { name: "Old" }, 1)] }),
     "New",
   );
+  // An admin's name is an edit: the newer of it and the member's own shows.
+  const adminName = (editedAt: string) => adminProfile({ pubkey: ALICE, displayName: "Admin name", editedAt });
   assert.equal(
-    nameOf({
-      profiles: [profile(ALICE, { name: "Relay name" })],
-      adminProfiles: [adminProfile({ pubkey: ALICE, displayName: "Admin name" })],
-    }),
+    nameOf({ profiles: [profile(ALICE, { name: "Relay name" })], adminProfiles: [adminName("2099-01-01")] }),
     "Admin name",
+  );
+  assert.equal(
+    nameOf({ profiles: [profile(ALICE, { name: "Relay name" })], adminProfiles: [adminName("1970-01-01T00:00:00.000Z")] }),
+    "Relay name",
+  );
+  assert.equal(
+    nameOf({ profiles: [profile(ALICE, { about: "no name here" })], adminProfiles: [adminName("1970-01-01T00:00:00.000Z")] }),
+    "Admin name",
+    "a member with no name of their own keeps the one an admin gave them",
   );
 });
 

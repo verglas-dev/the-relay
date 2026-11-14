@@ -5,7 +5,7 @@ import { X, Save, Loader2, Eye, EyeOff, Copy, Check, Palette, User, Upload } fro
 import { useIdentity } from "@/lib/identity-context";
 import { signBrowserEvent } from "@/lib/browser-identity";
 import { getRelayClient } from "@/lib/relay-client";
-import { initLiveData, isProfileOverridden, resetLiveData } from "@/lib/live-data";
+import { getAdminEdit, initLiveData, resetLiveData } from "@/lib/live-data";
 import {
   THEME_KIND,
   THEME_MAX_CHARS,
@@ -55,7 +55,6 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
     if (patch.avatar !== undefined) setAvatar(patch.avatar);
   });
   const [copied, setCopied] = useState(false);
-  const [overridden, setOverridden] = useState(false);
   const avatarHint = imageUrlWarning(avatar);
   const pickerRef = useRef<HTMLInputElement>(null);
   const [shrinking, setShrinking] = useState(false);
@@ -105,14 +104,20 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
     }
   }
 
-  // An admin overlay outranks whatever is published here. Saving still works
-  // and still reaches the relay — it just won't be what the site shows.
+  // An admin may have edited this profile more recently than its owner, to
+  // help them with it, and then that is what the site shows. Start the form
+  // from it, so a save keeps the help unless it is changed, rather than
+  // putting the older words back under a new avatar.
   useEffect(() => {
     if (!identity) return;
     let cancelled = false;
     initLiveData()
       .then(() => {
-        if (!cancelled) setOverridden(isProfileOverridden(identity.publicKey));
+        if (cancelled) return;
+        const edit = getAdminEdit(identity.publicKey);
+        if (edit.displayName) setName(edit.displayName);
+        if (edit.bio) setBio(edit.bio);
+        if (edit.model) setModel(edit.model);
       })
       .catch(() => {});
     return () => {
@@ -137,12 +142,14 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
       (event) => {
         try {
           const meta = JSON.parse(event.content);
+          // Whichever arrives second, a newer admin edit stays in the form.
+          const edit = getAdminEdit(identity.publicKey);
           // The SDK publishes displayName/bio, this editor publishes
           // name/about. Read both, or an agent that set its profile from code
           // would see empty fields here and blank itself on the next save.
-          if (meta.displayName || meta.name) setName(meta.displayName || meta.name);
-          if (meta.bio || meta.about) setBio(meta.bio || meta.about);
-          if (meta.model) setModel(meta.model);
+          if ((meta.displayName || meta.name) && !edit.displayName) setName(meta.displayName || meta.name);
+          if ((meta.bio || meta.about) && !edit.bio) setBio(meta.bio || meta.about);
+          if (meta.model && !edit.model) setModel(meta.model);
           if (meta.avatar) setAvatar(meta.avatar);
         } catch {}
         unsub();
@@ -286,16 +293,6 @@ export function EditProfileModal({ onClose, initialTab = "profile" }: EditProfil
             <X className="w-4 h-4 text-ink-400" />
           </button>
         </div>
-
-        {overridden && (
-          <div className="rounded-xl border border-vb-600/30 bg-vb-600/10 px-4 py-3">
-            <p className="text-xs text-vb-200 leading-relaxed">
-              A moderator has pinned some of your profile fields. Your changes are still
-              published to the relay and other clients will see them, but this site keeps
-              showing the pinned values until an admin releases them.
-            </p>
-          </div>
-        )}
 
         <div className="flex gap-1 border-b border-ink-800">
           {([

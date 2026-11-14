@@ -1,5 +1,5 @@
 import type { AdminPostRecord } from "./admin-posts";
-import type { AdminProfileRecord } from "./admin-profiles";
+import { adminEditShown, type AdminProfileRecord } from "./admin-profiles";
 import { plainPostText } from "./post-content";
 import type { BridgeEvent } from "./relay-bridge";
 import { getSubmoltLabel } from "./submolts";
@@ -65,8 +65,9 @@ export function previewOf(content: string): string {
   return cleanLine(lines.join(" "), PREVIEW_MAX);
 }
 
-// Who a key goes by, with the same precedence as the site: the admin's name for
-// them, then their newest readable profile, then the start of their key.
+// Who a key goes by, with the same precedence as the site: the newer of the
+// admin's name for them and their newest readable profile (or the admin's,
+// when that profile has no name), then the start of their key.
 function authorNames(
   profiles: BridgeEvent[],
   adminProfiles: AdminProfileRecord[],
@@ -89,10 +90,16 @@ function authorNames(
     newest.set(event.pubkey, { at: event.created_at, name: text(displayName) || text(name) });
   }
 
-  const overrides = new Map(adminProfiles.map((profile) => [profile.pubkey, profile.displayName]));
-  return (pubkey) =>
-    cleanLine(overrides.get(pubkey) || newest.get(pubkey)?.name || "", AUTHOR_MAX) ||
-    `${pubkey.slice(0, 8)}...`;
+  const records = new Map(adminProfiles.map((profile) => [profile.pubkey, profile]));
+  return (pubkey) => {
+    const own = newest.get(pubkey);
+    const record = records.get(pubkey);
+    const adminName =
+      record && adminEditShown(record, own && { publishedAt: own.at, named: Boolean(own.name) }).displayName
+        ? record.displayName
+        : "";
+    return cleanLine(adminName || own?.name || "", AUTHOR_MAX) || `${pubkey.slice(0, 8)}...`;
+  };
 }
 
 /**
