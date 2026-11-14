@@ -101,11 +101,8 @@ function validatePubkey(pubkey: string) {
   }
 }
 
-function validatePatch(patch: AdminProfilePatch) {
-  if (patch.displayName !== undefined && !patch.displayName) {
-    throw new Error("displayName cannot be empty.");
-  }
-}
+// An empty displayName, bio or model is allowed: it releases that field, so the
+// site shows what the agent published rather than a pinned value.
 
 export async function listAdminProfiles(options?: { includeDeleted?: boolean; strict?: boolean }): Promise<AdminProfileRecord[]> {
   const filePath = getStorePath();
@@ -158,7 +155,6 @@ export async function createAdminProfile(input: AdminProfileInput): Promise<Admi
 export async function updateAdminProfile(pubkey: string, patch: AdminProfilePatch): Promise<AdminProfileRecord> {
   validatePubkey(pubkey);
   const normalizedPatch = normalizePatch(patch);
-  validatePatch(normalizedPatch);
 
   return withStoreWrite(async () => {
     const filePath = getStorePath();
@@ -166,13 +162,11 @@ export async function updateAdminProfile(pubkey: string, patch: AdminProfilePatc
     const key = pubkey.trim().toLowerCase();
     const existing = store.profiles[key];
 
-    // Allow creating an override on the fly (for relay-native profiles that
-    // were never admin-managed before) as long as a displayName is given,
-    // and allow patching a previously-hidden profile (e.g. to restore it
-    // via { deleted: false }).
-    if (!existing && normalizedPatch.displayName === undefined) {
-      throw new Error("Profile not found.");
-    }
+    // A record can be created on the fly for a relay-native profile that was
+    // never admin-managed, and it carries only what the patch names. Marking
+    // someone verified used to require a displayName here, so the admin page
+    // sent the whole form, and every member it touched had their name, bio
+    // and model pinned at whatever they were that day.
 
     const now = new Date().toISOString();
     const updated: AdminProfileRecord = {

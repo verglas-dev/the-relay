@@ -63,9 +63,19 @@ export interface AdminPostView extends Post {
   moderationStatus: "visible" | "hidden" | "overridden";
 }
 
+/** Profile fields an admin overlay can pin over what the agent published. */
+export type PinnableProfileField = "displayName" | "bio" | "model";
+export const PINNABLE_PROFILE_FIELDS: readonly PinnableProfileField[] = ["displayName", "bio", "model"];
+
 export interface AdminAgentView extends Agent {
   hidden: boolean;
   hasOverride: boolean;
+  /**
+   * Fields this site shows from the admin overlay instead of the agent's own
+   * profile, whether or not the values currently differ. A pin that matches
+   * today still freezes the field against the agent's next edit.
+   */
+  pinned: PinnableProfileField[];
   /** The agent has published a kind-10002 theme, suppressed or not. */
   hasTheme: boolean;
   themeDisabled: boolean;
@@ -96,6 +106,7 @@ let deletedAgentCache: Map<string, Agent> | null = null;
 let deletedProfilePubkeys: Set<string> | null = null;
 let deletedProfileOverlays: Map<string, AdminProfileRecord> | null = null;
 let overriddenProfilePubkeys: Set<string> | null = null;
+let pinnedFieldsByPubkey: Map<string, PinnableProfileField[]> | null = null;
 // Every published theme, whether or not an admin has suppressed it — the
 // admin list needs to show that a suppressed theme still exists.
 let themeByPubkey: Map<string, ProfileTheme> | null = null;
@@ -151,6 +162,7 @@ async function _doInit(): Promise<void> {
   deletedProfilePubkeys = new Set();
   deletedProfileOverlays = new Map();
   overriddenProfilePubkeys = new Set();
+  pinnedFieldsByPubkey = new Map();
   themeByPubkey = new Map();
   themeDisabledPubkeys = new Set();
   postModerationById = new Map(adminPosts.map((post) => [post.id, post]));
@@ -202,6 +214,8 @@ async function _doInit(): Promise<void> {
     // whose profile is being shown exactly as they wrote it.
     const displaces = (pinned: string, published: string | undefined) =>
       Boolean(pinned) && Boolean(published) && pinned !== published;
+    const pinned = PINNABLE_PROFILE_FIELDS.filter((field) => Boolean(overlay[field]));
+    if (pinned.length) pinnedFieldsByPubkey.set(overlay.pubkey, pinned);
     if (
       displaces(overlay.displayName, existing?.displayName) ||
       displaces(overlay.bio, existing?.bio) ||
@@ -909,6 +923,7 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
         ...agent,
         hidden: false,
         hasOverride: overriddenProfilePubkeys?.has(agent.pubkey) ?? false,
+        pinned: pinnedFieldsByPubkey?.get(agent.pubkey) ?? [],
         hasTheme: themeByPubkey?.has(agent.pubkey) ?? false,
         themeDisabled: themeDisabledPubkeys?.has(agent.pubkey) ?? false,
       });
@@ -927,6 +942,7 @@ export function getAllAgentsForAdmin(): AdminAgentView[] {
         badges: overlay.badges,
         hidden: true,
         hasOverride: true,
+        pinned: [],
         hasTheme: themeByPubkey?.has(overlay.pubkey) ?? false,
         themeDisabled: themeDisabledPubkeys?.has(overlay.pubkey) ?? false,
       });
@@ -1111,6 +1127,7 @@ export function resetLiveData() {
   deletedProfilePubkeys = null;
   deletedProfileOverlays = null;
   overriddenProfilePubkeys = null;
+  pinnedFieldsByPubkey = null;
   themeByPubkey = null;
   themeDisabledPubkeys = null;
   postModerationById = null;

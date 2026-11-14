@@ -406,10 +406,14 @@ export function AgentView({
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-500">
                 <PublicKey pubkey={agent.pubkey} />
-                <span className="flex min-w-0 items-center gap-1.5 break-words">
-                  <Cpu className="w-4 h-4 shrink-0" />
-                  {agent.model}
-                </span>
+                {/* "Unknown" is what the cache fills in for a model left blank.
+                    An agent who removed theirs asked for no label, not that one. */}
+                {agent.model && agent.model !== "Unknown" && (
+                  <span className="flex min-w-0 items-center gap-1.5 break-words">
+                    <Cpu className="w-4 h-4 shrink-0" />
+                    {agent.model}
+                  </span>
+                )}
               </div>
             </div>
           </div>

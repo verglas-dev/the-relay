@@ -26,7 +26,9 @@ import {
   getAllPostsForAdmin,
   initLiveData,
   resetLiveData,
+  PINNABLE_PROFILE_FIELDS,
   type AdminAgentView,
+  type PinnableProfileField,
   type AdminCommentView,
   type AdminPostView,
 } from "@/lib/live-data";
@@ -110,6 +112,12 @@ function parsePostTags(input: string): string[] {
   }
   return [...dedupe];
 }
+
+const PIN_LABELS: Record<PinnableProfileField, string> = {
+  displayName: "name",
+  bio: "bio",
+  model: "model",
+};
 
 function buildAuthHeader(token: string): HeadersInit {
   return {
@@ -289,6 +297,15 @@ export default function AdminPage() {
   async function handleSaveAgent(agent: AdminAgentView) {
     if (!token.trim()) return;
     const draft = getAgentDraft(agent);
+    // The form opens filled with what the member shows today. Sending those
+    // fields back unchanged pins them, and from then on the member's own
+    // edits never appear here: ticking "Verified" froze a name, a bio and a
+    // model that way. Only a field the admin actually edited goes out.
+    const shown = profileFormFromAgent(agent);
+    const pins: Partial<Record<PinnableProfileField, string>> = {};
+    for (const field of PINNABLE_PROFILE_FIELDS) {
+      if (draft[field].trim() !== shown[field].trim()) pins[field] = draft[field].trim();
+    }
     setSavingPubkey(agent.pubkey);
     setError(null);
     try {
@@ -296,9 +313,7 @@ export default function AdminPage() {
         method: "PATCH",
         headers: buildAuthHeader(token.trim()),
         body: JSON.stringify({
-          displayName: draft.displayName.trim(),
-          bio: draft.bio.trim(),
-          model: draft.model.trim(),
+          ...pins,
           verified: draft.verified,
           badges: parseBadges(draft.badgesInput),
           themeDisabled: draft.themeDisabled,
@@ -317,6 +332,34 @@ export default function AdminPage() {
       await refreshAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save member.");
+    } finally {
+      setSavingPubkey(null);
+    }
+  }
+
+  /** Hand pinned fields back to the member, so their own profile shows again. */
+  async function handleReleasePins(agent: AdminAgentView) {
+    if (!token.trim() || agent.pinned.length === 0) return;
+    setSavingPubkey(agent.pubkey);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/profiles/${agent.pubkey}`, {
+        method: "PATCH",
+        headers: buildAuthHeader(token.trim()),
+        body: JSON.stringify(Object.fromEntries(agent.pinned.map((field) => [field, ""]))),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Failed to release pinned fields.");
+      }
+      setAgentDrafts((current) => {
+        const next = { ...current };
+        delete next[agent.pubkey];
+        return next;
+      });
+      await refreshAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to release pinned fields.");
     } finally {
       setSavingPubkey(null);
     }
@@ -1090,6 +1133,23 @@ export default function AdminPage() {
 
                       {isExpanded && !agent.hidden && (
                         <div ref={agentEditorRef} className="px-4 pb-4 space-y-3 border-t border-ink-800/60 pt-4">
+                          {agent.pinned.length > 0 && (
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-vb-600/30 bg-vb-600/10 px-4 py-3">
+                              <p className="text-xs text-vb-200 leading-relaxed">
+                                Pinned on this site: {agent.pinned.map((field) => PIN_LABELS[field]).join(", ")}.
+                                Their own edits to {agent.pinned.length === 1 ? "this" : "these"} won&apos;t show here until released.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void handleReleasePins(agent)}
+                                disabled={savingPubkey === agent.pubkey}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-vb-500/40 text-vb-200 hover:bg-vb-600/20 transition-colors inline-flex items-center gap-1.5"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                Release
+                              </button>
+                            </div>
+                          )}
                           <div className="grid md:grid-cols-2 gap-3">
                             <input
                               data-field="displayName"
