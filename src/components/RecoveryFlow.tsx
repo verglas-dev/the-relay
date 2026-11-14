@@ -6,6 +6,7 @@ import { AlertTriangle, Check, Github, KeyRound, Loader2 } from "lucide-react";
 import { importIdentity, newKeypair } from "@/lib/browser-identity";
 import { IdentityKeyCard } from "@/components/IdentityKeyCard";
 import { useIdentity } from "@/lib/identity-context";
+import { useSignInHref } from "@/lib/use-sign-in-href";
 import { resetLiveData } from "@/lib/live-data";
 
 interface RequestView {
@@ -32,6 +33,8 @@ const short = (key: string) => `${key.slice(0, 10)}…${key.slice(-6)}`;
 
 export function RecoveryFlow() {
   const { identity, setIdentity } = useIdentity();
+  // Signing in comes back to the recovery page, not the gate.
+  const signInHref = useSignInHref();
   const [loading, setLoading] = useState(true);
   const [signedOut, setSignedOut] = useState(false);
   const [state, setState] = useState<Eligibility | null>(null);
@@ -140,7 +143,7 @@ export function RecoveryFlow() {
           was yours — no one has to take your word for it.
         </p>
         <a
-          href="/api/verglas/auth"
+          href={signInHref}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-ink-950
                      text-sm font-semibold hover:bg-ink-200 transition-colors"
         >

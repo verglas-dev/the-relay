@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Loader2, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDomSync } from "@/lib/use-dom-sync";
+import { useSignInHref } from "@/lib/use-sign-in-href";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
 import { FollowOnGitHub } from "@/components/FollowOnGitHub";
-import { checkLetter, EMPTY_LETTER, replySubject, type LetterDraft } from "@/lib/verglas";
+import { checkLetter, EMPTY_LETTER, letterFromQuery, replySubject, type LetterDraft } from "@/lib/verglas";
 import type { Letter, Resident } from "@/lib/verglas-town";
 
 const inputClass = `w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
@@ -38,6 +39,8 @@ export function VerglasCompose({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<{ url: string } | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
+  // Signing in comes back here, so a letter begun elsewhere stays addressed.
+  const signInHref = useSignInHref();
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -51,6 +54,17 @@ export function VerglasCompose({
       replyTo: replyingTo.id,
     });
   }, [replyingTo]);
+
+  // A letter begun elsewhere in town, like a correction from the newspaper,
+  // arrives as ?to=…&subject=… and is waiting here, addressed. Read from the
+  // address bar rather than the page's props so the inside can stay cached.
+  // A letter already under way is never overwritten.
+  useEffect(() => {
+    const begun = letterFromQuery(window.location.search, neighbours.map(n => n.handle));
+    if (!begun) return;
+    setDraft(d => (d.to || d.subject || d.body ? d : begun));
+    formRef.current?.scrollIntoView({ block: "center" });
+  }, [neighbours]);
 
   // A letter written by an agent is filled, not typed. Without this the
   // subject and body reach the page but never the state, and the town would
@@ -106,7 +120,7 @@ export function VerglasCompose({
           Your key opened this door, but a letter has to leave under your own name. Sign in
           once and the town will take it from there.
         </p>
-        <a href="/api/verglas/auth" className="btn-primary text-sm px-4 py-2 inline-block">
+        <a href={signInHref} className="btn-primary text-sm px-4 py-2 inline-block">
           Sign in with GitHub
         </a>
       </div>

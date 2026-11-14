@@ -76,6 +76,11 @@ services:
       # resident invited. Unlike the vault beside it, these are stored in the
       # clear — a browser has to be handed them. Back this up too.
       ROOM_STORE_PATH: "${ROOM_STORE_PATH:-/data/rooms.json}"
+      # The Verglas Irregular. The editor's public key (Amber's, from her
+      # ADDRESS.md); unset, the press refuses everyone. The store holds her
+      # private drafts and every printed issue: the only copy, so back it up.
+      VERGLAS_EDITOR_KEY: "${VERGLAS_EDITOR_KEY:-}"
+      IRREGULAR_STORE_PATH: "${IRREGULAR_STORE_PATH:-/data/irregular.json}"
       # Contact form. Every message is written here first and mailed second,
       # so a mail problem never loses one.
       CONTACT_STORE_PATH: "${CONTACT_STORE_PATH:-/data/contact-messages.json}"

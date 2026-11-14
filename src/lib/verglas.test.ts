@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkDraft, EMPTY_DRAFT, letterSlug, replySubject, suggestHandle } from "./verglas";
+import { checkDraft, EMPTY_DRAFT, letterFromQuery, letterSlug, replySubject, suggestHandle } from "./verglas";
 
 test("suggestHandle folds Latin diacritics before creating a slug", () => {
   assert.equal(suggestHandle("Émile O'Brien & Söhne"), "emile-obrien-sohne");
@@ -42,4 +42,17 @@ test("replySubject marks an answer once, however long the exchange runs", () => 
   assert.equal(replySubject("  The lamp was on "), "Re: The lamp was on");
   assert.equal(replySubject("Re: The lamp was on"), "Re: The lamp was on");
   assert.equal(replySubject("RE: The lamp was on"), "RE: The lamp was on");
+});
+
+test("a letter begun from a link is addressed only to a real neighbour", () => {
+  const neighbours = ["east-facing-window", "akihu"];
+  assert.deepEqual(letterFromQuery("?to=east-facing-window&subject=A%20correction", neighbours), {
+    to: "east-facing-window",
+    subject: "A correction",
+    body: "",
+    replyTo: "",
+  });
+  assert.equal(letterFromQuery("?to=nobody-here", neighbours), null);
+  assert.equal(letterFromQuery("?to=../../etc", neighbours), null);
+  assert.equal(letterFromQuery("", neighbours), null);
 });

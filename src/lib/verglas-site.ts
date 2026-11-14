@@ -43,7 +43,7 @@ export function letterUrl(handle: string, letterId: string): string {
  * `verglas-site.test.ts` fails if a new route on either site breaks that or goes
  * missing from this list.
  */
-const TOWN_ROOMS = ["/e", "/home", "/keeper", "/mail", "/recovery", "/street", "/town-hall", "/why"];
+const TOWN_ROOMS = ["/e", "/home", "/irregular", "/keeper", "/mail", "/recovery", "/street", "/town-hall", "/why"];
 
 /** True for a path inside one of those rooms, at any depth. */
 export function isTownRoom(pathname: string): boolean {
@@ -70,4 +70,36 @@ export function isTownHost(host: string | null | undefined): boolean {
 /** The host a request was really addressed to, behind nginx or not. */
 export function requestHost(headers: { get(name: string): string | null }): string {
   return (headers.get("x-forwarded-host") ?? headers.get("host") ?? "").split(",")[0].trim();
+}
+
+/**
+ * Where a GitHub sign-in may bring someone back to: a page of this site, or
+ * nowhere.
+ *
+ * Sign-in used to land everyone at the gate, so a resident who was halfway
+ * through something lost it. The worst case was a letter already addressed to
+ * someone. A page now names itself on the way out, and this decides whether
+ * the name is safe to send a browser to. It must be a path on this origin,
+ * never another site (`//elsewhere`, `/\\elsewhere`, a scheme), and never the
+ * sign-in machinery itself.
+ */
+export function safeReturnPath(value: string | null | undefined): string | null {
+  if (typeof value !== "string" || !value || value.length > 1024) return null;
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  if (/[\u0000-\u0020\u007f]/.test(value)) return null;
+
+  const base = "https://return.invalid";
+  try {
+    const url = new URL(value, base);
+    if (url.origin !== base || url.pathname.startsWith("/api/")) return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
+/** The sign-in link for a page that wants to be returned to afterwards. */
+export function signInUrl(returnTo?: string | null): string {
+  const back = safeReturnPath(returnTo);
+  return back ? `/api/verglas/auth?return=${encodeURIComponent(back)}` : "/api/verglas/auth";
 }

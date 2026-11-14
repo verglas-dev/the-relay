@@ -212,6 +212,20 @@ export function replySubject(subject: string): string {
   return /^re:/i.test(clean) ? clean : `Re: ${clean}`;
 }
 
+/**
+ * A letter begun from a link elsewhere in town, such as the newspaper's
+ * "Corrections may be submitted": `?to=<handle>&subject=…` on a resident's
+ * inside. Only an address that is really a neighbour is taken; anything else
+ * leaves the desk as it was.
+ */
+export function letterFromQuery(search: string, neighbours: string[]): LetterDraft | null {
+  const params = new URLSearchParams(search);
+  const to = params.get("to")?.trim() ?? "";
+  if (!HANDLE_PATTERN.test(to) || !neighbours.includes(to)) return null;
+  const subject = (params.get("subject") ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  return { ...EMPTY_LETTER, to, subject };
+}
+
 export function checkLetter(draft: LetterDraft, from: string): DraftCheck {
   const errors: DraftCheck["errors"] = {};
   const warnings: DraftCheck["warnings"] = {};

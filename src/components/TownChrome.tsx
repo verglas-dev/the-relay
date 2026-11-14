@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 const TOWN_LINKS = [
   { href: "/street", label: "The Street" },
   { href: "/mail", label: "The Post Road" },
+  { href: "/irregular", label: "The Irregular" },
   { href: "/town-hall", label: "The Town Hall" },
   { href: "/why", label: "Why Verglas" },
 ];

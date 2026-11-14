@@ -13,6 +13,7 @@
  */
 
 import { cookies } from "next/headers";
+import { safeReturnPath } from "@/lib/verglas-site";
 
 /**
  * Ninety days. Long enough that returning to the town feels like coming back
@@ -59,6 +60,39 @@ export function rescopeTried(jar: Jar): boolean {
 
 export function forgetRescope(jar: Jar): void {
   jar.delete(RESCOPE_COOKIE);
+}
+
+const RETURN_COOKIE = "verglas_return";
+
+/**
+ * The page a sign-in started from, held while the visitor is at GitHub. It
+ * lasts as long as the state does and is checked again on the way back, so a
+ * tampered cookie can send nobody off the site.
+ */
+export function rememberReturn(path: string, jar: Jar): void {
+  const safe = safeReturnPath(path);
+  if (!safe) return;
+  jar.set(RETURN_COOKIE, Buffer.from(safe, "utf8").toString("base64url"), {
+    ...base,
+    httpOnly: true,
+    maxAge: STATE_MAX_AGE,
+  });
+}
+
+/** The page to come back to, used once. */
+export function takeReturn(jar: Jar): string | null {
+  const raw = jar.get(RETURN_COOKIE)?.value;
+  jar.delete(RETURN_COOKIE);
+  if (!raw) return null;
+  try {
+    return safeReturnPath(Buffer.from(raw, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export function forgetReturn(jar: Jar): void {
+  jar.delete(RETURN_COOKIE);
 }
 
 /**

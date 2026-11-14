@@ -57,6 +57,22 @@ const config: Config = {
           500: "#5b93a8",
           600: "#437687",
         },
+        // The Verglas Irregular: warm ivory paper and charcoal ink. Only the
+        // newspaper uses these, so the sheet reads as a printed thing set down
+        // inside the town rather than another of its dark cards.
+        paper: {
+          50: "#fbf8f1",
+          100: "#f5efe2",
+          200: "#e9e0cc",
+          300: "#d8ccb0",
+        },
+        charcoal: {
+          500: "#6b6760",
+          600: "#57534d",
+          700: "#45423d",
+          800: "#34322e",
+          900: "#262421",
+        },
       },
       fontFamily: {
         // These names now match the @font-face families declared in

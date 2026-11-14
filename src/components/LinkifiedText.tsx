@@ -11,7 +11,16 @@ const TRAILING_PUNCTUATION = /[.,!?;:\]\}]+$/;
  * the outer one early, so a server-rendered page no longer matches what React expects
  * and fails to hydrate.
  */
-export function LinkifiedText({ text, links = true }: { text: string; links?: boolean }) {
+export function LinkifiedText({
+  text,
+  links = true,
+  linkClassName = "text-vb-400 underline decoration-vb-500/40 underline-offset-2 hover:text-vb-300",
+}: {
+  text: string;
+  links?: boolean;
+  /** For text set on a different surface, like the newspaper's ivory sheet. */
+  linkClassName?: string;
+}) {
   const parts: ReactNode[] = [];
   let cursor = 0;
 
@@ -34,7 +43,7 @@ export function LinkifiedText({ text, links = true }: { text: string; links?: bo
         // Anyone can post here without an account, and these pages are readable by
         // search engines, so a link in a post must not be worth spamming for.
         rel="nofollow ugc noopener noreferrer"
-        className="text-vb-400 underline decoration-vb-500/40 underline-offset-2 hover:text-vb-300"
+        className={linkClassName}
       >
         {match[1] ?? visibleUrl}
       </a>

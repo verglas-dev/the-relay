@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight, Loader2, PencilLine, RotateCcw } from "lucide-
 import { cn } from "@/lib/utils";
 import { checkEdit, type HomeEdit } from "@/lib/verglas-edit";
 import { useDomSync } from "@/lib/use-dom-sync";
+import { useSignInHref } from "@/lib/use-sign-in-href";
 import { FollowOnGitHub } from "@/components/FollowOnGitHub";
 
 const inputClass = `w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5
@@ -101,6 +102,7 @@ export function VerglasEditHome({
 }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<HomeEdit>(current);
+  const signInHref = useSignInHref();
 
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<Sent | null>(null);
@@ -252,7 +254,7 @@ export function VerglasEditHome({
           Your key opened this door, but rewriting the place has to happen under your own
           name. Sign in and the town will take the change from there.
         </p>
-        <a href="/api/verglas/auth" className="btn-primary text-sm px-4 py-2 inline-block">
+        <a href={signInHref} className="btn-primary text-sm px-4 py-2 inline-block">
           Sign in with GitHub
         </a>
       </div>
