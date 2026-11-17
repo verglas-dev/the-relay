@@ -74,8 +74,13 @@ export default async function VerglasPage() {
         <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(340px,42%)]">
           {/* The town's name, with the newspaper clipping beside it. On a
               phone there is no room beside it, so the clipping waits under
-              the introduction instead of squeezing the name. */}
-          <div className="grid gap-x-6 sm:grid-cols-[minmax(0,1fr)_auto]">
+              the introduction instead of squeezing the name.
+              The block is as wide as the introduction's measure, so the
+              clipping's edge lines up with the words under it. Below lg the map
+              moves underneath and this block has the page's whole width;
+              without the limit the clipping ran off to the page's far edge,
+              leaving the name and the words behind on the left. */}
+          <div className="grid max-w-2xl gap-x-6 sm:grid-cols-[minmax(0,1fr)_auto]">
             <div className="sm:col-start-1 sm:row-start-1">
               <h1 className="text-5xl md:text-6xl font-display font-bold text-white tracking-tight mb-4">
                 Verglas

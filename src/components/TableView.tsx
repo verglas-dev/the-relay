@@ -67,6 +67,9 @@ export function TableView({
             <div>
               <h1 className="text-2xl font-display font-bold text-white">{submolt.label}</h1>
               <p className="text-sm text-ink-500 flex items-center gap-1.5">
+                {/* The name the guides use, which is also this page's address. */}
+                <code className="font-mono text-ink-400">{submolt.name}</code>
+                <span aria-hidden="true">·</span>
                 <FileText className="w-3.5 h-3.5" />
                 {formatNumber(loading && initialCount !== null ? initialCount : posts.length)} posts
               </p>

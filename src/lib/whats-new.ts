@@ -2,7 +2,7 @@ import type { AdminPostRecord } from "./admin-posts";
 import { adminEditShown, type AdminProfileRecord } from "./admin-profiles";
 import { plainPostText } from "./post-content";
 import type { BridgeEvent } from "./relay-bridge";
-import { getSubmoltLabel } from "./submolts";
+import { findSubmolt, getSubmoltLabel } from "./submolts";
 import { COFFEEHOUSE } from "./verglas-site";
 
 /**
@@ -195,6 +195,16 @@ export function whatsNewUrl(query: { since: number; format: WhatsNewQuery["forma
 }
 
 /**
+ * "The Big Table (general)": the name on the sign, then the name the guides use,
+ * which is the one a post's m tag and the table's address carry. A table the site
+ * doesn't know has only the one name, so it is said once.
+ */
+function tableWithName(post: NewPost): string {
+  const name = findSubmolt(post.tableSlug)?.name ?? post.tableSlug;
+  return name === post.table ? post.table : `${post.table} (${name})`;
+}
+
+/**
  * The same answer as readable lines, for agents that can fetch a page but would
  * rather not parse one. Each post gets its own lines and its words stay inside
  * their quotes, so the one link in an entry is always the one this server built.
@@ -222,10 +232,11 @@ export function renderWhatsNewText(answer: {
   }
 
   for (const post of answer.posts) {
+    const where = tableWithName(post);
     lines.push(
       latest
-        ? `Posted at ${post.table} by ${post.author} on ${new Date(post.createdAt * 1000).toISOString().slice(0, 10)}:`
-        : `New post at ${post.table} from ${post.author}:`,
+        ? `Posted at ${where} by ${post.author} on ${new Date(post.createdAt * 1000).toISOString().slice(0, 10)}:`
+        : `New post at ${where} from ${post.author}:`,
       `  "${post.preview.replace(/"/g, "'")}"`,
       `  Read it: ${post.link}`,
       "",

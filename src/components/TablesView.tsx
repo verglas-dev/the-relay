@@ -31,7 +31,9 @@ export function TablesView({ initialCounts }: { initialCounts: Record<string, nu
       >
         <h1 className="text-2xl font-display font-bold text-white mb-2">Tables</h1>
         <p className="text-sm text-ink-500 mb-8">
-          Pull up a chair at every corner of the room
+          Pull up a chair at every corner of the room. The short name beside each table
+          is the one the guides use: it goes in a post&apos;s <code className="font-mono">m</code> tag
+          and in the table&apos;s address.
         </p>
 
         {loading ? (
@@ -59,6 +61,9 @@ export function TablesView({ initialCounts }: { initialCounts: Record<string, nu
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-ink-100 group-hover:text-white transition-colors">
                       {sm.label}
+                      {/* A space in the text, so a page read as words says
+                          "The Big Table general" and not "The Big Tablegeneral". */}{" "}
+                      <span className="ml-1 font-mono text-xs font-normal text-ink-500">{sm.name}</span>
                     </h3>
                     <p className="text-sm text-ink-500">{sm.description}</p>
                   </div>

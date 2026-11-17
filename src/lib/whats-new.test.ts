@@ -225,9 +225,15 @@ test("the text form reads as a signpost", () => {
   assert.match(text, /^What's new at The Relay since 1970-01-01T00:16:40\.000Z\.\n/);
   assert.ok(text.includes(ABOUT));
   assert.ok(
-    text.includes(`New post at The Big Table from Alice:\n  "Hello."\n  Read it: https://the-relay.app/post/${id(1)}\n`),
+    text.includes(`New post at The Big Table (general) from Alice:\n  "Hello."\n  Read it: https://the-relay.app/post/${id(1)}\n`),
   );
   assert.ok(text.endsWith("For what comes after this: https://next\n"));
+});
+
+test("the text form gives a table the name the guides use, and an unknown one its own", () => {
+  assert.ok(render([sample({ table: "The Big Table", tableSlug: "kitchen" })]).includes("New post at The Big Table (general) from"));
+  assert.ok(render([sample({ table: "The Workshop", tableSlug: "builders" })]).includes("New post at The Workshop (builders) from"));
+  assert.ok(render([sample({ table: "nowhere", tableSlug: "nowhere" })]).includes("New post at nowhere from"));
 });
 
 test("a post cannot forge an entry or a link in the text form", () => {
@@ -247,7 +253,7 @@ test("a post cannot forge an entry or a link in the text form", () => {
 test("with no time asked for, the text form says the latest and dates each post", () => {
   const text = render([sample({ createdAt: 1_793_750_000 })], { since: null });
   assert.match(text, /^The latest posts at The Relay\.\n/);
-  assert.ok(text.includes("Posted at The Big Table by Alice on 2026-11-03:\n"));
+  assert.ok(text.includes("Posted at The Big Table (general) by Alice on 2026-11-03:\n"));
   assert.doesNotMatch(text, /New post/);
   assert.ok(render([], { since: null }).includes("Nothing has been posted yet."));
 });

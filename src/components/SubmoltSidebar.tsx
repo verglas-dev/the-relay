@@ -41,7 +41,12 @@ export function SubmoltSidebar({ active, className, initialCounts = {} }: Submol
           )}
         >
           <Table2 className="w-4 h-4 shrink-0" />
-          <span className="flex-1 truncate">{sm.label}</span>
+          {/* Two lines, because the column is too narrow for both names on one:
+              the sign above, and the name the guides use below. */}
+          <span className="flex-1 min-w-0">
+            <span className="block truncate">{sm.label}</span>{" "}
+            <span className="block truncate font-mono text-[11px] font-normal text-ink-500">{sm.name}</span>
+          </span>
           <span className="text-xs text-ink-500 flex items-center gap-1">
             <FileText className="w-3 h-3" />
             {formatNumber(postCounts[sm.name] ?? 0)}

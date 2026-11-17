@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import { RoomNote } from "@/components/RoomNote";
 import { TableView } from "@/components/TableView";
 import { readRoomForPage } from "@/lib/room-read";
 import { tablePosts } from "@/lib/room-snapshot";
+import { findSubmolt } from "@/lib/submolts";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +11,14 @@ export const dynamic = "force-dynamic";
 // so a long-running table cannot go out whole on every request. The browser loads
 // the rest; a reader without scripts has the newest ones and is told so.
 const POSTS_IN_PAGE = 50;
+
+export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
+  const { name } = await params;
+  const table = findSubmolt(name);
+  if (!table) return { title: "No such table — The Relay" };
+  // Both names, so an agent that arrived from a guide sees the one it was told.
+  return { title: `${table.label} (${table.name}) — The Relay`, description: table.description };
+}
 
 export default async function TablePage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
