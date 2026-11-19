@@ -11,6 +11,8 @@
  * Server-side only. The client secret must never reach the browser.
  */
 
+import { thawComment, type CrossingFacts, type GitHubComment } from "./verglas-crossing";
+
 const GITHUB_API = "https://api.github.com";
 
 export const VERGLAS_REPO = process.env.VERGLAS_REPO ?? "verglas-dev/verglas";
@@ -359,6 +361,96 @@ export async function openLetterPullRequest(
   }
 
   throw new Error(`Could not send the letter (${created.status}).`);
+}
+
+/** GitHub said no. `status` is GitHub's own, so a caller can tell an expired sign-in from an outage. */
+export class GitHubAnswer extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
+/** Thaw's workflow, as GitHub names a run of it. */
+const THAW_WORKFLOW = ".github/workflows/thaw.yml";
+
+/**
+ * What GitHub knows about one letter's pull request, for following it across
+ * town. verglas-crossing.ts decides what it means.
+ *
+ * Read with the sender's own sign-in. GitHub allows each person 5,000
+ * requests an hour, while anonymous requests from this server would share 60
+ * between everyone it speaks for. Two or three requests a look. Null when the
+ * number isn't a letter in the town.
+ */
+export async function letterCrossingFacts(token: string, number: number): Promise<CrossingFacts | null> {
+  const response = await api(token, `/repos/${VERGLAS_REPO}/pulls/${number}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new GitHubAnswer(response.status, `GitHub GET pull ${number} failed (${response.status})`);
+  const pull = await response.json();
+
+  // The site names a letter's branch and title, and Thaw's gate holds to the
+  // same shape. Anything else at that number isn't a letter.
+  const id = String(pull.head?.ref ?? "").match(/^letter\/([A-Za-z0-9._-]+)$/)?.[1];
+  if (!id) return null;
+  const sender = String(pull.title ?? "").match(/^letter: ([a-z0-9-]+) writes to [a-z0-9-]+$/)?.[1] ?? null;
+
+  const facts: CrossingFacts = {
+    url: String(pull.html_url),
+    state: pull.state === "closed" ? "closed" : "open",
+    merged: pull.merged === true,
+    mergedAt: pull.merged_at ?? null,
+    createdAt: String(pull.created_at),
+    labels: Array.isArray(pull.labels) ? pull.labels.map((label: { name?: string }) => String(label.name ?? "")) : [],
+    run: null,
+    comment: null,
+    receipt: null,
+  };
+
+  if (facts.merged) {
+    facts.receipt = sender ? await letterReceipt(token, sender, id) : null;
+    return facts;
+  }
+
+  const [run, comments] = await Promise.all([
+    facts.state === "open" ? thawRun(token, String(pull.head.sha)) : Promise.resolve(null),
+    expectJson<GitHubComment[]>(token, `/repos/${VERGLAS_REPO}/issues/${number}/comments?per_page=100`),
+  ]);
+  facts.run = run;
+  facts.comment = thawComment(Array.isArray(comments) ? comments : []);
+  return facts;
+}
+
+async function expectJson<T>(token: string, path: string): Promise<T> {
+  const response = await api(token, path);
+  if (!response.ok) throw new GitHubAnswer(response.status, `GitHub GET ${path} failed (${response.status})`);
+  return response.json() as Promise<T>;
+}
+
+/** Thaw's latest run for this version of the letter, if one has started. */
+async function thawRun(token: string, sha: string): Promise<CrossingFacts["run"]> {
+  const found = await expectJson<{ workflow_runs?: { path?: string; status: string; conclusion: string | null; created_at: string }[] }>(
+    token,
+    `/repos/${VERGLAS_REPO}/actions/runs?head_sha=${encodeURIComponent(sha)}&event=pull_request_target&per_page=20`,
+  );
+  const latest = (found.workflow_runs ?? [])
+    .filter((run) => run.path === THAW_WORKFLOW)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  return latest ? { status: latest.status, conclusion: latest.conclusion, createdAt: latest.created_at } : null;
+}
+
+/**
+ * The delivered copy in the sender's `sent/`, which is Thaw's receipt: it
+ * gains `delivered:` only once the letter has been carried. Read through the
+ * API rather than raw.githubusercontent.com, whose copies can be minutes old.
+ */
+async function letterReceipt(token: string, sender: string, id: string): Promise<CrossingFacts["receipt"]> {
+  const response = await api(token, `/repos/${VERGLAS_REPO}/contents/residents/${sender}/sent/${id}.md?ref=${VERGLAS_BRANCH}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new GitHubAnswer(response.status, `GitHub GET receipt for ${id} failed (${response.status})`);
+  const file = await response.json();
+  const text = Buffer.from(String(file.content ?? ""), "base64").toString("utf8");
+  const delivered = text.match(/^delivered:\s*["']?([^"'\n]+?)["']?\s*$/m)?.[1];
+  return delivered ? { url: String(file.html_url), delivered } : null;
 }
 
 /**

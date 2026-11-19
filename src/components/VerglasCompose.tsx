@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useDomSync } from "@/lib/use-dom-sync";
 import { useSignInHref } from "@/lib/use-sign-in-href";
 import { VerglasSignOut } from "@/components/VerglasSignOut";
-import { FollowOnGitHub } from "@/components/FollowOnGitHub";
+import { LetterCrossing, recallTrip, rememberTrip, type Trip } from "@/components/LetterCrossing";
 import { checkLetter, EMPTY_LETTER, letterFromQuery, replySubject, type LetterDraft } from "@/lib/verglas";
 import type { Letter, Resident } from "@/lib/verglas-town";
 
@@ -37,7 +37,10 @@ export function VerglasCompose({
 }) {
   const [draft, setDraft] = useState<LetterDraft>(EMPTY_LETTER);
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState<{ url: string } | null>(null);
+  // The letter on its way, followed until it arrives. Kept for this tab, so a
+  // reload doesn't lose it.
+  const [sent, setSent] = useState<Trip | null>(null);
+  const tripKey = `verglas:crossing:${from}`;
   const [trouble, setTrouble] = useState<string | null>(null);
   // Signing in comes back here, so a letter begun elsewhere stays addressed.
   const signInHref = useSignInHref();
@@ -45,15 +48,21 @@ export function VerglasCompose({
   const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const trip = recallTrip(tripKey);
+    if (trip) setSent(trip);
+  }, [tripKey]);
+
+  useEffect(() => {
     if (!replyingTo) return;
     setSent(null);
+    rememberTrip(tripKey, null);
     setDraft({
       ...EMPTY_LETTER,
       to: replyingTo.from,
       subject: replySubject(replyingTo.subject),
       replyTo: replyingTo.id,
     });
-  }, [replyingTo]);
+  }, [replyingTo, tripKey]);
 
   // A letter begun elsewhere in town, like a correction from the newspaper,
   // arrives as ?to=…&subject=… and is waiting here, addressed. Read from the
@@ -85,7 +94,9 @@ export function VerglasCompose({
       });
       const body = await response.json();
       if (!response.ok) return setTrouble(body.error ?? "The letter did not get out.");
-      setSent(body);
+      const trip: Trip = { url: body.url, number: body.number, to: draft.to.trim() };
+      setSent(trip);
+      rememberTrip(tripKey, trip);
       setDraft(EMPTY_LETTER);
       onClearReply?.();
     } catch {
@@ -96,19 +107,19 @@ export function VerglasCompose({
   };
 
   if (sent) {
+    const name = neighbours.find(neighbour => neighbour.handle === sent.to)?.name || sent.to;
     return (
-      <div className="glass-card p-6">
-        <h3 className="font-display text-lg text-white mb-2">Your letter is on the road.</h3>
-        <p className="text-sm text-ink-400 leading-relaxed mb-4">
-          Thaw reads every letter before carrying it, so it will take a little while to
-          arrive. That is how mail works here.
-        </p>
-        <FollowOnGitHub href={sent.url} label="Watch it cross">
-          <button onClick={() => setSent(null)} className="btn-ghost text-sm">
-            Write another
-          </button>
-        </FollowOnGitHub>
-      </div>
+      <LetterCrossing pull={sent} to={name} onSettled={() => rememberTrip(tripKey, null)}>
+        <button
+          onClick={() => {
+            rememberTrip(tripKey, null);
+            setSent(null);
+          }}
+          className="btn-ghost text-sm"
+        >
+          Write another
+        </button>
+      </LetterCrossing>
     );
   }
 

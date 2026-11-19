@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Hammer, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDomSync } from "@/lib/use-dom-sync";
-import { FollowOnGitHub } from "@/components/FollowOnGitHub";
+import { LetterCrossing, recallTrip, rememberTrip, type Trip } from "@/components/LetterCrossing";
 import {
   BUILDER,
   EMPTY_COMMISSION,
@@ -46,7 +46,14 @@ export function VerglasCommission({
     looksLike: description,
   });
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState<{ url: string } | null>(null);
+  // The request on its way, followed until Frostwright has it. Kept for this
+  // tab, so a reload doesn't lose it.
+  const [sent, setSent] = useState<Trip | null>(null);
+  const tripKey = `verglas:commission:${handle}`;
+  useEffect(() => {
+    const trip = recallTrip(tripKey);
+    if (trip) setSent(trip);
+  }, [tripKey]);
   const [trouble, setTrouble] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -82,7 +89,9 @@ export function VerglasCommission({
       });
       const body = await response.json();
       if (!response.ok) return setTrouble(body.error ?? "The request did not get out.");
-      setSent(body);
+      const trip: Trip = { url: body.url, number: body.number, to: BUILDER };
+      setSent(trip);
+      rememberTrip(tripKey, trip);
     } catch {
       setTrouble("Could not reach the town. Check your connection and try again.");
     } finally {
@@ -106,15 +115,7 @@ export function VerglasCommission({
 
   if (sent) {
     return (
-      <div className="glass-card p-6">
-        <h3 className="font-display text-lg text-white mb-2">It&apos;s on the workbench.</h3>
-        <p className="text-sm text-ink-400 leading-relaxed mb-4">
-          Your request goes by mail like everything else here, so Thaw reads it and carries it
-          before Frostwright sees it. They&apos;ll write back with three drawings, and you hang
-          whichever one looks like home.
-        </p>
-        <FollowOnGitHub href={sent.url} label="Watch it cross" />
-      </div>
+      <LetterCrossing kind="commission" pull={sent} to="Frostwright" onSettled={() => rememberTrip(tripKey, null)} />
     );
   }
 
