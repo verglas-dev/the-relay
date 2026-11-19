@@ -6,6 +6,7 @@ highly unpredictable editor.*
 | Where | What |
 |---|---|
 | `verglas.town/` | A clipping beside the town's name showing the newest issue: number, date, headline. Below the introduction on a phone. Absent until the first issue is printed. |
+| `the-relay.app/` | A small card at the foot of the coffeehouse's hero, just beneath "Or just read for a while": **The Irregular**, *A little fiction. A few things left unsaid.*, the newest issue's number and date, its excerpt (or its headline, until one is chosen), and **Read the paper →** to that issue. It never announces a new issue. Absent until the first issue is printed. |
 | `verglas.town/irregular` | The archive: every issue on display, newest first. The bar and the footer link here as **The Irregular**. |
 | `verglas.town/irregular/<n>` | Issue No. *n*, with previous and next. A withdrawn issue keeps its address and says only that it was withdrawn. |
 | `verglas.town/irregular/desk` | The editor's desk. Empty to everyone but the editor. |
@@ -52,7 +53,8 @@ update `VERGLAS_EDITOR_KEY` and restart.
 
 ## Printing all at once
 
-The issue page, the archive and the gate's clipping all read one file
+The issue page, the archive, the gate's clipping and the coffeehouse's card
+all read one file
 (`IRREGULAR_STORE_PATH`, default `/data/irregular.json` in the container).
 Printing checks the draft, settles its number, writes the issue and clears the
 draft, then renames the new file into place. That rename is the only moment
@@ -70,7 +72,16 @@ content = {
   layout: "story" | "columns",
   pieces: [{ headline: string, body: string, alone: boolean }],  // 1–12
 }
+
+excerpt: string            // optional, ≤ 160, one line; beside content, not in it
 ```
+
+- The **excerpt** is a line she lifts out of the issue for The Relay's card,
+  shown there exactly as written and with no explanation (`“It doesn’t
+  fold.”`). It isn't printed on the sheet, so it isn't part of `content`: a
+  draft carries it and printing copies it, and on a printed issue
+  `issue.excerpt` changes it without marking the issue updated or moving its
+  revision. A correction leaves it alone. Blank, the card shows the headline.
 
 - `story` sets the pieces in one comfortable column; `columns` sets separate
   pieces in two columns on a wide screen. Phones always get one column.
@@ -109,11 +120,12 @@ second would look like a copy of one.
 |---|---|---|
 | `desk` | | `drafts`, `issues` (withdrawn included), `nextNumber`, `editor` (her handle) |
 | `draft.open` | `id` | `draft` |
-| `draft.save` | `id?`, `revision?`, `number` (or `null`), `content` | `draft` |
+| `draft.save` | `id?`, `revision?`, `number` (or `null`), `content`, `excerpt?` | `draft` (leave out `excerpt` to keep the one it had) |
 | `draft.discard` | `id` | |
 | `publish` | `id`, `revision` | `issue`, `url` |
 | `issue.open` | `number` | `issue`, `url` |
 | `issue.correct` | `number`, `revision`, `content`, `note` | `issue`, `url` |
+| `issue.excerpt` | `number`, `excerpt` (`""` for the headline) | `issue`, `url` |
 | `issue.withdraw` / `issue.restore` | `number` | `issue`, `url` |
 
 `revision` is the `updatedAt` of the draft you are changing or printing, or for
@@ -148,7 +160,7 @@ draft = press({"action": "draft.save", "number": None, "content": {
     "headline": "Two Men, Three Shoes, and a Troubling Amount of Tea",
     "standfirst": "", "date": "2026-11-13", "layout": "story",
     "pieces": [{"headline": "", "body": "…only the words to print…", "alone": False}],
-}})["draft"]
+}, "excerpt": ""})["draft"]
 # Preview it at the desk before printing.
 printed = press({"action": "publish", "id": draft["id"], "revision": draft["updatedAt"]})
 print(printed["url"])   # https://verglas.town/irregular/<n>

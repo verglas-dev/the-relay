@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ExternalLink, FilePlus2, Lock, Newspaper, Trash2 } from "lucide-react";
+import { IrregularCard } from "@/components/IrregularCard";
 import { IssueSheet } from "@/components/IrregularSheet";
 import { useIdentity } from "@/lib/identity-context";
 import { loadIdentity } from "@/lib/browser-identity";
@@ -27,6 +28,7 @@ import {
   openDesk,
   publishDraft,
   saveDraft,
+  setIssueExcerpt,
   withdrawIssue,
   type DeskData,
   type Identity,
@@ -62,6 +64,9 @@ function when(iso: string): string {
 
 const same = (a: IssueContent, b: IssueContent) => JSON.stringify(contentOf(a)) === JSON.stringify(contentOf(b));
 
+/** As the press keeps it: one line, no spare spaces. */
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+
 export function IrregularDesk() {
   const { identity } = useIdentity();
   const [mounted, setMounted] = useState(false);
@@ -72,6 +77,9 @@ export function IrregularDesk() {
   const [content, setContent] = useState<IssueContent>(() => emptyContent());
   const [numberText, setNumberText] = useState("");
   const [note, setNote] = useState("");
+  // The line The Relay's card quotes. Saved with a draft; on a printed issue it
+  // has its own button, because changing it isn't a correction.
+  const [excerpt, setExcerpt] = useState("");
   const [tab, setTab] = useState<"write" | "preview">("write");
   const [previewed, setPreviewed] = useState(false);
 
@@ -103,17 +111,28 @@ export function IrregularDesk() {
 
   /* ── What is open, and whether it has changed ──────────────────────────── */
 
-  const baseline = useMemo<{ content: IssueContent; number: string; note: string } | null>(() => {
+  const baseline = useMemo<{ content: IssueContent; number: string; note: string; excerpt: string } | null>(() => {
     if (!editing) return null;
-    if (editing.kind === "issue") return { content: contentOf(editing.issue), number: "", note: editing.issue.correction };
-    if (!editing.draft) return { content: emptyContent(), number: "", note: "" };
-    return { content: contentOf(editing.draft), number: editing.draft.number ? String(editing.draft.number) : "", note: "" };
+    if (editing.kind === "issue") {
+      return { content: contentOf(editing.issue), number: "", note: editing.issue.correction, excerpt: editing.issue.excerpt ?? "" };
+    }
+    if (!editing.draft) return { content: emptyContent(), number: "", note: "", excerpt: "" };
+    return {
+      content: contentOf(editing.draft),
+      number: editing.draft.number ? String(editing.draft.number) : "",
+      note: "",
+      excerpt: editing.draft.excerpt ?? "",
+    };
   }, [editing]);
 
+  const tidyExcerpt = oneLine(excerpt);
+  const excerptChanged = !!baseline && baseline.excerpt !== tidyExcerpt;
+
+  // For a printed issue the excerpt is left out: it isn't part of a correction.
   const dirty =
     !!baseline &&
     (!same(baseline.content, content) || baseline.number !== numberText || baseline.note !== note ||
-      (editing?.kind === "draft" && !editing.draft));
+      (editing?.kind === "draft" && (excerptChanged || !editing.draft)));
 
   // What the press would make of this, checked as she types.
   const tidy = useMemo(() => readContent(content), [content]);
@@ -135,11 +154,20 @@ export function IrregularDesk() {
       setContent(contentOf(next.issue));
       setNumberText("");
       setNote(next.issue.correction);
+      setExcerpt(next.issue.excerpt ?? "");
     } else {
       setContent(next.draft ? contentOf(next.draft) : emptyContent());
       setNumberText(next.draft?.number ? String(next.draft.number) : "");
       setNote("");
+      setExcerpt(next.draft?.excerpt ?? "");
     }
+  }
+
+  /** The same issue after a change to it, keeping an excerpt she has typed but not yet put on the card. */
+  function reopen(issue: Issue) {
+    const typed = excerpt;
+    open({ kind: "issue", issue });
+    setExcerpt(typed);
   }
 
   function edit(change: Partial<IssueContent>) {
@@ -189,6 +217,7 @@ export function IrregularDesk() {
       revision: editing.draft?.updatedAt,
       number,
       content: tidy,
+      excerpt: tidyExcerpt,
     });
     setBusy(false);
     if (!answer.ok || !answer.data) {
@@ -198,6 +227,7 @@ export function IrregularDesk() {
     const draft = answer.data.draft;
     setEditing({ kind: "draft", draft });
     setContent(contentOf(draft));
+    setExcerpt(draft.excerpt ?? "");
     setMessage({ tone: "ok", text: `Saved ${when(draft.updatedAt)}.` });
     void refresh();
     return draft;
@@ -246,8 +276,31 @@ export function IrregularDesk() {
     setConfirming(null);
     if (!answer.ok || !answer.data) return failed(answer.error, answer.problems);
     const issue = answer.data.issue;
-    open({ kind: "issue", issue });
+    reopen(issue);
     setPrinted({ number: issue.number, url: answer.data.url, verb: "is corrected" });
+    void refresh();
+  }
+
+  /**
+   * Put a printed issue's excerpt on The Relay's card. No confirmation: it
+   * changes nothing on the sheet, and a different line can go up at any time.
+   * A correction she is partway through stays as it is.
+   */
+  async function saveExcerpt() {
+    if (!key || editing?.kind !== "issue") return;
+    setBusy(true);
+    const answer = await setIssueExcerpt(key, editing.issue.number, tidyExcerpt);
+    setBusy(false);
+    if (!answer.ok || !answer.data) return failed(answer.error);
+    const issue = answer.data.issue;
+    setEditing({ kind: "issue", issue });
+    setExcerpt(issue.excerpt ?? "");
+    setMessage({
+      tone: "ok",
+      text: issue.excerpt
+        ? `The Relay’s card for No. ${issue.number} now quotes your excerpt.`
+        : `The Relay’s card for No. ${issue.number} shows its headline again.`,
+    });
     void refresh();
   }
 
@@ -258,7 +311,7 @@ export function IrregularDesk() {
     setBusy(false);
     setConfirming(null);
     if (!answer.ok || !answer.data) return failed(answer.error);
-    open({ kind: "issue", issue: answer.data.issue });
+    reopen(answer.data.issue);
     setPrinted({
       number: issue.number,
       url: answer.data.url,
@@ -652,6 +705,56 @@ export function IrregularDesk() {
                     </p>
                   </div>
 
+                  {/* Not part of the sheet: what the coffeehouse's card quotes. */}
+                  <div className="rounded-xl border border-ink-700/40 bg-ink-950/30 p-4">
+                    <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_17.5rem] md:items-start">
+                      <div>
+                        <label htmlFor="irr-excerpt" className={LABEL}>
+                          An excerpt for The Relay <span className="normal-case tracking-normal text-ink-500">(optional)</span>
+                        </label>
+                        <input
+                          id="irr-excerpt"
+                          value={excerpt}
+                          maxLength={LIMITS.excerpt}
+                          onChange={(e) => {
+                            setExcerpt(e.target.value);
+                            setConfirming(null);
+                          }}
+                          placeholder="“It doesn’t fold.”"
+                          className={cn(FIELD, "font-display")}
+                        />
+                        <p className="mt-1.5 text-xs leading-relaxed text-ink-500">
+                          One short line from the issue, shown on The Relay’s front page with no explanation, exactly as
+                          you type it. Left blank, the card shows the headline. It isn’t printed on the sheet, so
+                          changing it later isn’t a correction and the issue isn’t marked as updated.
+                        </p>
+                        {editing.kind === "issue" && (
+                          <button
+                            type="button"
+                            className="btn-secondary mt-3 py-1.5 text-sm disabled:opacity-40"
+                            disabled={busy || !excerptChanged}
+                            onClick={() => void saveExcerpt()}
+                          >
+                            {excerptChanged ? "Put it on the card" : "On the card"}
+                          </button>
+                        )}
+                      </div>
+                      <div>
+                        <span className={cn(LABEL, "md:text-center")}>On The Relay</span>
+                        <IrregularCard
+                          link={false}
+                          issue={{
+                            number: printsAs,
+                            date: tidy.date,
+                            headline: tidy.headline || "Untitled",
+                            excerpt: tidyExcerpt,
+                          }}
+                          className="mx-auto"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {editing.kind === "issue" && (
                     <div>
                       <label htmlFor="irr-note" className={LABEL}>
@@ -742,8 +845,8 @@ export function IrregularDesk() {
                     <>
                       <p>
                         Print this as <span className="text-ink-100">No. {printsAs}</span>? It appears at{" "}
-                        <span className="font-mono text-ink-200">{townUrl(issuePath(printsAs))}</span>, at the gate, and
-                        in the archive, all at once.
+                        <span className="font-mono text-ink-200">{townUrl(issuePath(printsAs))}</span>, at the gate, on
+                        The Relay’s front page, and in the archive, all at once.
                       </p>
                       {!previewed && <p className="text-amber-200/90">You haven’t looked at the preview of this version.</p>}
                     </>
@@ -761,7 +864,7 @@ export function IrregularDesk() {
                   {confirming === "withdraw" && editing.kind === "issue" && (
                     <p>
                       Take No. {editing.issue.number} off display? Its page and its place in the archive will say only
-                      that it was withdrawn, and it leaves the gate until you put it back.
+                      that it was withdrawn, and it leaves the gate and The Relay’s front page until you put it back.
                     </p>
                   )}
                   <div className="flex flex-wrap gap-2">

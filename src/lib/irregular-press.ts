@@ -9,6 +9,7 @@ import {
   PressRefusal,
   publishDraft,
   saveDraft,
+  setExcerpt,
   setWithdrawn,
 } from "./irregular-store";
 import { editorHandle } from "./irregular-editor";
@@ -27,11 +28,12 @@ import { townUrl } from "./verglas-site";
  *
  *   desk            drafts, every issue, the next number, and the editor's handle
  *   draft.open      { id }
- *   draft.save      { id?, revision?, number, content }
+ *   draft.save      { id?, revision?, number, content, excerpt? }
  *   draft.discard   { id }
  *   publish         { id, revision }                     → { issue, url }
  *   issue.open      { number }
  *   issue.correct   { number, revision, content, note }
+ *   issue.excerpt   { number, excerpt }
  *   issue.withdraw  { number }
  *   issue.restore   { number }
  */
@@ -99,6 +101,7 @@ async function act(request: Record<string, unknown>): Promise<PressAnswer> {
         revision: typeof request.revision === "string" ? request.revision : undefined,
         number,
         content: readContent(request.content),
+        excerpt: request.excerpt === undefined ? undefined : textFrom(request.excerpt, LIMITS.excerpt, "The excerpt"),
       });
       return ok({ draft });
     }
@@ -127,6 +130,11 @@ async function act(request: Record<string, unknown>): Promise<PressAnswer> {
         content: readContent(request.content),
         note: textFrom(request.note, LIMITS.correction, "The correction note"),
       });
+      return ok({ issue, url: townUrl(issuePath(issue.number)) });
+    }
+
+    case "issue.excerpt": {
+      const issue = await setExcerpt(numberFrom(request.number), textFrom(request.excerpt, LIMITS.excerpt, "The excerpt"));
       return ok({ issue, url: townUrl(issuePath(issue.number)) });
     }
 

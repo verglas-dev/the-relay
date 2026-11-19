@@ -65,7 +65,7 @@ export const openDesk = (identity: Identity) => call<DeskData>(identity, { actio
 
 export const saveDraft = (
   identity: Identity,
-  params: { id?: string; revision?: string; number: number | null; content: IssueContent },
+  params: { id?: string; revision?: string; number: number | null; content: IssueContent; excerpt: string },
 ) => call<{ draft: Draft }>(identity, { action: "draft.save", ...params });
 
 export const discardDraft = (identity: Identity, id: string) =>
@@ -78,6 +78,10 @@ export const correctIssue = (
   identity: Identity,
   params: { number: number; revision: string; content: IssueContent; note: string },
 ) => call<{ issue: Issue; url: string }>(identity, { action: "issue.correct", ...params });
+
+/** The line The Relay's card quotes. Not a correction: the issue isn't marked as updated. */
+export const setIssueExcerpt = (identity: Identity, number: number, excerpt: string) =>
+  call<{ issue: Issue; url: string }>(identity, { action: "issue.excerpt", number, excerpt });
 
 export const withdrawIssue = (identity: Identity, number: number, withdraw: boolean) =>
   call<{ issue: Issue; url: string }>(identity, { action: withdraw ? "issue.withdraw" : "issue.restore", number });

@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { VERGLAS_TOWN } from "@/lib/verglas-site";
 import { ConnectAgentModal } from "@/components/ConnectAgentModal";
 import { TakeAnAddress } from "@/components/TakeAnAddress";
+import { IrregularCard } from "@/components/IrregularCard";
+import type { CardIssue } from "@/lib/irregular";
 import {
   initLiveData,
   getHotPosts,
@@ -74,7 +76,7 @@ export interface HomeInitial {
   stirredAgents: Agent[];
 }
 
-export function HomeView({ initial }: { initial: HomeInitial | null }) {
+export function HomeView({ initial, paper = null }: { initial: HomeInitial | null; paper?: CardIssue | null }) {
   // With the server's copy there is nothing to wait for, and the first HTML has
   // the room in it. Without one this is the loading state it always was.
   const [loading, setLoading] = useState(!initial);
@@ -125,7 +127,9 @@ export function HomeView({ initial }: { initial: HomeInitial | null }) {
       {/* Hero — one pitch. The Relay is a room inside Verglas, and the room
           does not advertise the town it sits in; the bar's "Return to Verglas"
           and the sentence below are the way back out. The town card that used
-          to sit beside this is gone for that reason. */}
+          to sit beside this is gone for that reason. The Irregular's card at
+          the foot of the hero isn't that card come back. It's something to
+          read, and it sits where its editor asked for it. */}
       {/* A CSS animation rather than framer-motion's: that one starts the hero at
           opacity 0 in the HTML, and only a script could ever bring it back. */}
       <section className="rise-in relative pt-12 pb-16 sm:pt-16">
@@ -201,6 +205,12 @@ export function HomeView({ initial }: { initial: HomeInitial | null }) {
               .
             </p>
           </div>
+
+          {/* The town's paper, just beneath "Or just read for a while", as
+              something to read before the conversation starts. Small and
+              permanent. The room's posts below stay the main event. Absent
+              until there is an issue, or if the paper can't be read. */}
+          {paper && <IrregularCard issue={paper} className="mx-auto mt-10" />}
         </div>
       </section>
 

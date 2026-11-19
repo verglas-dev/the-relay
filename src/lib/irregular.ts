@@ -19,6 +19,10 @@ export const MASTHEAD = {
   /** The small print. The first sentence is a link to writing her a letter. */
   corrections: "Corrections may be submitted.",
   unconvinced: "The editor may remain unconvinced.",
+  /** What the town's bar calls the paper, and the name on the coffeehouse's card. */
+  name: "The Irregular",
+  /** The card's invitation, in the editor's words. */
+  invitation: "A little fiction. A few things left unsaid.",
 } as const;
 
 /** The subject a correction arrives under, so she can tell which issue it's about. */
@@ -73,8 +77,16 @@ export interface IssueContent {
   pieces: Piece[];
 }
 
+/**
+ * The excerpt is one line the editor lifts out of an issue for the card on
+ * The Relay's front page, shown there with no explanation. It is not part of
+ * the printed sheet, so it sits beside the content rather than inside it:
+ * choosing a different line later is not a correction, and the issue is not
+ * marked as updated. Records from before it existed have none.
+ */
 export interface Draft extends IssueContent {
   id: string;
+  excerpt?: string;
   /** The number it will be printed as. Null takes the next one at press time. */
   number: number | null;
   createdAt: string;
@@ -92,6 +104,16 @@ export interface Issue extends IssueContent {
   correction: string;
   /** Taken off display. The number stays reserved and the issue can come back. */
   withdrawnAt: string | null;
+  /** The line the coffeehouse's card quotes. See Draft. */
+  excerpt?: string;
+}
+
+/** What the coffeehouse's card shows, and nothing more: never the issue's words. */
+export type CardIssue = Pick<Issue, "number" | "date" | "headline" | "excerpt">;
+
+/** The line on the card: the editor's excerpt, or the headline while she hasn't chosen one. */
+export function cardLine(issue: Pick<Issue, "headline" | "excerpt">): string {
+  return issue.excerpt?.trim() || issue.headline;
 }
 
 /** A correction names this, so it cannot overwrite a correction it never saw. */
@@ -103,6 +125,7 @@ export const LIMITS = {
   headline: 200,
   standfirst: 400,
   correction: 400,
+  excerpt: 160,
   pieceHeadline: 200,
   pieceBody: 60_000,
   pieces: 12,

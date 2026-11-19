@@ -78,11 +78,13 @@ test("a validly signed request from anyone but the editor is refused, for every 
     { action: "issue.open", number: issue.number },
     { action: "issue.withdraw", number: issue.number },
     { action: "issue.correct", number: issue.number, revision: issue.publishedAt, content: STORY, note: "" },
+    { action: "issue.excerpt", number: issue.number, excerpt: "Something the editor never chose." },
   ]) {
     const answer = await as(STRANGER, request);
     assert.equal(answer.status, 403, request.action);
   }
   assert.equal((await latestIssue())?.number, issue.number, "nothing the stranger asked for happened");
+  assert.equal((await latestIssue())?.excerpt, "", "the card still shows only what the editor chose");
 });
 
 test("drafts stay off the public paper until printed, and printing makes a fixed copy", async (t) => {
@@ -157,6 +159,45 @@ test("a correction keeps the address and says it was updated", async (t) => {
   // A second window still holding the first revision cannot overwrite it.
   const stale = await as(EDITOR, { action: "issue.correct", number: 3, revision: issue.publishedAt, content: STORY, note: "" });
   assert.equal(stale.status, 409);
+});
+
+test("the excerpt prints with its issue, and choosing another later is not a correction", async (t) => {
+  await withPaper(t);
+  const saved = await as(EDITOR, { action: "draft.save", number: 3, content: STORY, excerpt: "  “It doesn’t\n fold.”  " });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  const draft = saved.body.draft as { id: string; updatedAt: string; excerpt: string };
+  assert.equal(draft.excerpt, "“It doesn’t fold.”", "kept as one line");
+
+  // A tool that has never heard of the excerpt saves the draft again.
+  const resaved = await as(EDITOR, { action: "draft.save", id: draft.id, revision: draft.updatedAt, number: 3, content: STORY });
+  const kept = resaved.body.draft as { id: string; updatedAt: string; excerpt: string };
+  assert.equal(kept.excerpt, "“It doesn’t fold.”", "leaving it out doesn't erase it");
+
+  const printed = await as(EDITOR, { action: "publish", id: kept.id, revision: kept.updatedAt });
+  assert.equal(printed.status, 200, JSON.stringify(printed.body));
+  const issue = printed.body.issue as { publishedAt: string };
+  assert.equal((await latestIssue())?.excerpt, "“It doesn’t fold.”", "on the card the moment it prints");
+
+  const changed = await as(EDITOR, { action: "issue.excerpt", number: 3, excerpt: "Those are good joints." });
+  assert.equal(changed.status, 200, JSON.stringify(changed.body));
+  const found = await readIssue(3);
+  assert.equal(found?.issue.excerpt, "Those are good joints.");
+  assert.equal(found?.issue.updatedAt, null, "the sheet doesn't say it was updated");
+  assert.equal(found?.issue.correction, "");
+
+  // A correction opened before the excerpt changed still prints, and leaves the excerpt alone.
+  const corrected = await as(EDITOR, { action: "issue.correct", number: 3, revision: issue.publishedAt, content: STORY, note: "" });
+  assert.equal(corrected.status, 200, JSON.stringify(corrected.body));
+  assert.equal((await readIssue(3))?.issue.excerpt, "Those are good joints.");
+
+  const cleared = await as(EDITOR, { action: "issue.excerpt", number: 3, excerpt: "" });
+  assert.equal(cleared.status, 200);
+  assert.equal((await latestIssue())?.excerpt, "", "blank puts the headline back on the card");
+
+  const long = await as(EDITOR, { action: "issue.excerpt", number: 3, excerpt: "x".repeat(161) });
+  assert.equal(long.status, 400);
+  const missing = await as(EDITOR, { action: "issue.excerpt", number: 4, excerpt: "No such issue." });
+  assert.equal(missing.status, 404);
 });
 
 test("a withdrawn issue leaves the archive and the gate, keeps its number, and can come back", async (t) => {

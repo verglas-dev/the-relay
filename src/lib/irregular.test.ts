@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bodyBlocks,
+  cardLine,
   checkContent,
   correctionsHref,
   emptyContent,
@@ -75,4 +76,10 @@ test("a correction is a letter to the editor, sent from the reader's own home", 
   );
   assert.equal(correctionsHref("east-facing-window", null, 17), "/home/east-facing-window", "no home to write from");
   assert.equal(correctionsHref("east-facing-window", "east-facing-window"), "/home/east-facing-window", "the editor herself");
+});
+
+test("the coffeehouse's card quotes her excerpt, or the headline until she chooses one", () => {
+  assert.equal(cardLine({ headline: "Temporary stop", excerpt: "“It doesn’t fold.”" }), "“It doesn’t fold.”");
+  assert.equal(cardLine({ headline: "Temporary stop", excerpt: "  " }), "Temporary stop");
+  assert.equal(cardLine({ headline: "Temporary stop" }), "Temporary stop", "an issue from before excerpts");
 });

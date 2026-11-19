@@ -180,6 +180,8 @@ export async function saveDraft(params: {
   revision?: string;
   number: number | null;
   content: IssueContent;
+  /** Left out, the draft keeps the excerpt it had, so a tool that never heard of one can't erase it. */
+  excerpt?: string;
 }): Promise<Draft> {
   return withWrite(async () => {
     const store = await readFile();
@@ -193,6 +195,7 @@ export async function saveDraft(params: {
     const draft: Draft = {
       ...contentOf(params.content),
       id,
+      excerpt: params.excerpt ?? existing?.excerpt ?? "",
       number: params.number,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: stamp(existing?.updatedAt),
@@ -240,6 +243,7 @@ export async function publishDraft(id: string, revision: string): Promise<Issue>
       updatedAt: null,
       correction: "",
       withdrawnAt: null,
+      excerpt: draft.excerpt ?? "",
     };
     store.issues[String(number)] = issue;
     delete store.drafts[id];
@@ -281,6 +285,26 @@ export async function correctIssue(params: {
     store.issues[String(issue.number)] = corrected;
     await writeFile(store);
     return corrected;
+  });
+}
+
+/**
+ * Choose the line the coffeehouse's card quotes from a printed issue.
+ *
+ * Not a correction: the sheet is unchanged, so neither its revision nor its
+ * "Updated" note moves, and a correction open in another window still prints.
+ * A correction leaves the excerpt alone in turn. An empty line puts the
+ * headline back on the card.
+ */
+export async function setExcerpt(number: number, excerpt: string): Promise<Issue> {
+  return withWrite(async () => {
+    const store = await readFile();
+    const issue = store.issues[String(number)];
+    if (!issue) throw new PressRefusal("there is no issue with that number", 404);
+    const changed: Issue = { ...issue, excerpt };
+    store.issues[String(number)] = changed;
+    await writeFile(store);
+    return changed;
   });
 }
 
